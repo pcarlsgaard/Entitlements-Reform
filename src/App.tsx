@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Area,
   AreaChart,
@@ -15,6 +15,7 @@ import { sources } from './data/sources'
 import { defaultAssumptions } from './model/defaults'
 import { reconciliationErrors } from './model/audit'
 import { compareScenarios } from './model/scenarios'
+import { validateModelAssumptions } from './model/validation'
 import type {
   FiscalObjective,
   ModelAssumptions,
@@ -45,6 +46,9 @@ function NumericInput({
   step = 1,
   suffix,
   note,
+  min,
+  max,
+  integer = false,
 }: {
   label: string
   value: number
@@ -52,19 +56,62 @@ function NumericInput({
   step?: number
   suffix?: string
   note?: string
+  min?: number
+  max?: number
+  integer?: boolean
 }) {
+  const [draft, setDraft] = useState(String(value))
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    setDraft(String(value))
+    setError(null)
+  }, [value])
+
+  const commit = () => {
+    const parsed = Number(draft)
+    let message: string | null = null
+    if (draft.trim() === '' || !Number.isFinite(parsed)) message = 'Enter a number.'
+    else if (integer && !Number.isInteger(parsed)) message = 'Enter a whole number.'
+    else if (min !== undefined && parsed < min) message = `Minimum: ${min}.`
+    else if (max !== undefined && parsed > max) message = `Maximum: ${max}.`
+
+    if (message) {
+      setError(message)
+      return
+    }
+    setError(null)
+    onChange(parsed)
+  }
+
   return (
-    <label className="field">
+    <label className={`field${error ? ' invalid' : ''}`}>
       <span>{label}</span>
       <div className="input-wrap">
         <input
           type="number"
-          value={value}
+          value={draft}
           step={step}
-          onChange={(event) => onChange(Number(event.target.value))}
+          min={min}
+          max={max}
+          aria-invalid={error ? true : undefined}
+          onChange={(event) => {
+            setDraft(event.target.value)
+            setError(null)
+          }}
+          onBlur={commit}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') event.currentTarget.blur()
+            if (event.key === 'Escape') {
+              setDraft(String(value))
+              setError(null)
+              event.currentTarget.blur()
+            }
+          }}
         />
         {suffix && <span className="suffix">{suffix}</span>}
       </div>
+      {error && <small className="field-error">{error} The model kept the last valid value.</small>}
       {note && <small>{note}</small>}
     </label>
   )
@@ -82,6 +129,10 @@ function PolicyPanel({
 }) {
   return (
     <div className="panel-grid">
+      <section className="card edit-note">
+        <strong>Edit freely, then press Enter or leave the field.</strong>
+        <span>The simulator validates the entry and runs the full comparison once—not once per digit.</span>
+      </section>
       <section className="card policy-card">
         <div className="eyebrow">Social Security</div>
         <h2>Retirement-cohort benefit design</h2>
@@ -90,24 +141,35 @@ function PolicyPanel({
           value={assumptions.benefitPhaseInYears}
           onChange={(value) => update('benefitPhaseInYears', value)}
           suffix="years"
+          min={1}
+          max={100}
+          integer
         />
         <NumericInput
           label="Flat benefit"
           value={assumptions.flatBenefitFPLMultiple * 100}
           onChange={(value) => update('flatBenefitFPLMultiple', value / 100)}
           suffix="% FPL"
+          min={0}
+          max={1_000}
         />
         <NumericInput
           label="Full retirement age"
           value={assumptions.fullRetirementAge}
           onChange={(value) => update('fullRetirementAge', value)}
           suffix="years"
+          min={50}
+          max={90}
+          integer
         />
         <NumericInput
           label="Vesting"
           value={assumptions.vestingYears}
           onChange={(value) => update('vestingYears', value)}
           suffix="years"
+          min={0}
+          max={60}
+          integer
           note="The first-pass fiscal score assumes participants are fully vested."
         />
         <div className="locked-row">
@@ -152,6 +214,8 @@ function PolicyPanel({
           onChange={(value) => update('realEndowmentYield', value / 100)}
           step={0.1}
           suffix="%"
+          min={-5}
+          max={15}
         />
         <div className="callout quiet">
           Endowments are calculated from promised SS and Medicare streams. There is no arbitrary prefunding %GDP input.
@@ -167,6 +231,8 @@ function PolicyPanel({
           onChange={(value) => update('premiumSupport2026', value)}
           step={500}
           suffix="$/person"
+          min={0}
+          max={100_000}
         />
         <NumericInput
           label="Real benefit growth"
@@ -174,16 +240,24 @@ function PolicyPanel({
           onChange={(value) => update('premiumSupportRealGrowth', value / 100)}
           step={0.1}
           suffix="%"
+          min={-5}
+          max={10}
         />
         <NumericInput
           label="Year A · all new entrants"
           value={assumptions.medicareYearA}
           onChange={(value) => update('medicareYearA', value)}
+          min={assumptions.reformYear}
+          max={assumptions.medicareYearB}
+          integer
         />
         <NumericInput
           label="Year B · all seniors"
           value={assumptions.medicareYearB}
           onChange={(value) => update('medicareYearB', value)}
+          min={assumptions.medicareYearA}
+          max={assumptions.endYear}
+          integer
         />
         <small className="block-note">The $19,000 default is gross and includes expected risk adjustment, community rating, and reinsurance.</small>
       </section>
@@ -210,12 +284,16 @@ function PolicyPanel({
           value={assumptions.matureDebtTargetGDP * 100}
           onChange={(value) => update('matureDebtTargetGDP', value / 100)}
           suffix="% GDP"
+          min={1}
+          max={500}
         />
         <NumericInput
           label="Debt-rate pass-through"
           value={assumptions.debtRatePassThrough * 100}
           onChange={(value) => update('debtRatePassThrough', value / 100)}
           suffix="%/year"
+          min={0}
+          max={100}
           note="Refinancing speed: the share of the remaining target-rate gap closed each year."
         />
         <div className="locked-row">
@@ -340,7 +418,26 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('results')
   const [scenarioChoice, setScenarioChoice] = useState<ScenarioChoice>(assumptions.prefundingEnabled ? 'prefunded' : 'paygo')
   const [scheduleChoice, setScheduleChoice] = useState<ScheduleChoice>('permanent')
-  const comparison = useMemo(() => compareScenarios(assumptions), [assumptions])
+  const deferredAssumptions = useDeferredValue(assumptions)
+  const calculating = deferredAssumptions !== assumptions
+  const comparisonAttempt = useMemo(() => {
+    const validationIssues = validateModelAssumptions(deferredAssumptions)
+    if (validationIssues.length > 0) {
+      return { comparison: null, error: validationIssues[0]!.message }
+    }
+    try {
+      return { comparison: compareScenarios(deferredAssumptions), error: null }
+    } catch (error) {
+      return {
+        comparison: null,
+        error: error instanceof Error ? error.message : 'The model could not evaluate those assumptions.',
+      }
+    }
+  }, [deferredAssumptions])
+  const lastValidComparison = useRef(comparisonAttempt.comparison)
+  if (comparisonAttempt.comparison) lastValidComparison.current = comparisonAttempt.comparison
+  const comparison = comparisonAttempt.comparison ?? lastValidComparison.current
+  if (!comparison) throw new Error('Default assumptions did not produce a scenario comparison.')
   const update = <K extends keyof ModelAssumptions>(key: K, value: ModelAssumptions[K]) => {
     setAssumptions((current) => ({ ...current, [key]: value }))
     if (key === 'prefundingEnabled') setScenarioChoice(value ? 'prefunded' : 'paygo')
@@ -349,8 +446,9 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <header className="topbar"><div className="brand"><div className="brand-mark">ER</div><div><strong>Entitlements Reform</strong><span>Cohort fiscal simulator · 2026 reform</span></div></div><nav>{(['policy', 'results', 'audit', 'sources'] as Tab[]).map((item) => <button key={item} className={tab === item ? 'active' : ''} onClick={() => setTab(item)}>{item === 'sources' ? 'Model & Sources' : item}</button>)}</nav><div className={`solver-status ${comparison.paygo.permanent.converged && comparison.prefunded.permanent.converged && comparison.paygo.twoRate.converged && comparison.prefunded.twoRate.converged ? 'ok' : 'warn'}`}><span />{comparison.paygo.twoRate.converged && comparison.prefunded.twoRate.converged ? 'Solvers converged' : 'Check solver bounds'}</div></header>
+      <header className="topbar"><div className="brand"><div className="brand-mark">ER</div><div><strong>Entitlements Reform</strong><span>Cohort fiscal simulator · 2026 reform</span></div></div><nav>{(['policy', 'results', 'audit', 'sources'] as Tab[]).map((item) => <button key={item} className={tab === item ? 'active' : ''} onClick={() => setTab(item)}>{item === 'sources' ? 'Model & Sources' : item}</button>)}</nav><div aria-live="polite" className={`solver-status ${!calculating && comparison.paygo.permanent.converged && comparison.prefunded.permanent.converged && comparison.paygo.twoRate.converged && comparison.prefunded.twoRate.converged ? 'ok' : 'warn'}`}><span />{calculating ? 'Calculating…' : comparison.paygo.twoRate.converged && comparison.prefunded.twoRate.converged ? 'Solvers converged' : 'Check solver bounds'}</div></header>
       <main>
+        {comparisonAttempt.error && <section className="card model-error"><strong>Those assumptions could not be calculated.</strong><span>{comparisonAttempt.error} Showing the last valid results.</span></section>}
         {tab === 'policy' && <PolicyPanel assumptions={assumptions} update={update} />}
         {tab === 'results' && <ResultsPanel comparison={comparison} scenarioChoice={scenarioChoice} setScenarioChoice={setScenarioChoice} scheduleChoice={scheduleChoice} setScheduleChoice={setScheduleChoice} />}
         {tab === 'audit' && <AuditPanel scenario={selectedScenario} scheduleChoice={scheduleChoice} />}
