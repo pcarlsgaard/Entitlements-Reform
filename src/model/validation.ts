@@ -1,4 +1,5 @@
 import type { ModelAssumptions } from './types'
+import { fundingStrategies } from './fundingStrategy'
 
 export interface AssumptionValidationIssue {
   key: keyof ModelAssumptions
@@ -56,6 +57,10 @@ export function validateModelAssumptions(
     if (!Number.isFinite(assumptions[key])) add(key, 'Enter a finite number.')
   }
   if (issues.length > 0) return issues
+
+  if (!fundingStrategies.includes(assumptions.fundingStrategy)) {
+    add('fundingStrategy', 'Select a recognized financing strategy.')
+  }
 
   if (assumptions.endYear <= assumptions.reformYear) {
     add('endYear', 'The simulation end year must follow the reform year.')

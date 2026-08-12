@@ -76,10 +76,14 @@ input[type="number"], select { width: 100%; min-width: 0; border: 1px solid #d8d
 .comparison-table th:first-child { text-align: left; }
 .comparison-table tbody th { color: #566273; font-size: 13px; font-weight: 600; }
 .comparison-table tbody td { font-weight: 750; }
+.strategy-card { overflow: hidden; }
+.strategy-card > .section-heading { padding: 22px 24px 10px; }
+.strategy-card > .section-heading > span { max-width: 440px; color: #6f7c8b; font-size: 11px; text-align: right; }
 .view-controls { display: flex; justify-content: space-between; gap: 16px; margin: 18px 0; }
 .segmented { display: inline-flex; padding: 4px; border: 1px solid #dce2e7; border-radius: 11px; background: white; }
 .segmented button { border: 0; padding: 8px 13px; border-radius: 8px; color: #687586; background: transparent; font-size: 12px; font-weight: 700; }
 .segmented button.active { color: white; background: #1e334e; }
+.strategy-segmented { flex-wrap: wrap; }
 .chart-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
 .chart-card { padding: 20px; min-width: 0; }
 .chart-card p { margin-bottom: 0; color: #748091; font-size: 12px; }

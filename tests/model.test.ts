@@ -55,7 +55,7 @@ describe('Social Security retirement cohort transition', () => {
   })
 })
 
-describe('Prefunding cohort dates and toggle', () => {
+describe('Prefunding cohort dates and financing strategy', () => {
   it('age-18 funding produces first Medicare cohort in 2073', () => {
     expect(
       firstPrefundedMedicareEligibilityYear(
@@ -78,18 +78,18 @@ describe('Prefunding cohort dates and toggle', () => {
     expect(firstPrefundedSSRetirementYear(assumptions)).toBe(2096)
   })
 
-  it('prefunding OFF produces zero annual expenditure', () => {
+  it('both benefits PAYGO produces zero annual prefunding', () => {
     expect(
       annualPrefundingBillions(
         2026,
-        withAssumptions({ prefundingEnabled: false }),
+        withAssumptions({ fundingStrategy: 'paygo' }),
       ),
     ).toBe(0)
   })
 
-  it('turning prefunding OFF does not change benefit shares', () => {
-    const on = withAssumptions({ prefundingEnabled: true })
-    const off = withAssumptions({ prefundingEnabled: false })
+  it('financing strategy does not change benefit shares', () => {
+    const on = withAssumptions({ fundingStrategy: 'both' })
+    const off = withAssumptions({ fundingStrategy: 'paygo' })
     expect(socialSecurityBenefitShares(2036, on)).toEqual(
       socialSecurityBenefitShares(2036, off),
     )
@@ -102,11 +102,11 @@ describe('Prefunding cohort dates and toggle', () => {
     const base = withAssumptions({ endYear: 2100 })
     const on = socialSecurityForYear(2080, {
       ...base,
-      prefundingEnabled: true,
+      fundingStrategy: 'both',
     }).cohorts.find((cohort) => cohort.retirementYear === 2078)
     const off = socialSecurityForYear(2080, {
       ...base,
-      prefundingEnabled: false,
+      fundingStrategy: 'paygo',
     }).cohorts.find((cohort) => cohort.retirementYear === 2078)
     expect(on?.flatShare).toBe(off?.flatShare)
     expect(on?.flatPaygoBillions).toBe(0)

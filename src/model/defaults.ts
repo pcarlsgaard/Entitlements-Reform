@@ -12,7 +12,7 @@ export const defaultAssumptions: ModelAssumptions = {
   vestingYears: 35,
   currentLawSSBenefit2026: 24_500,
   currentLawSSBenefitRealGrowth: 0.005,
-  prefundingEnabled: true,
+  fundingStrategy: 'both',
   prefundingStartAge: 18,
   realEndowmentYield: 0.025,
   medicareEligibilityAge: 65,

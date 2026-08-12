@@ -1,4 +1,5 @@
 import { simulate, simulateConstantRevenue } from './simulate'
+import { hasAnyPrefunding } from './fundingStrategy'
 import type {
   FiscalObjective,
   ModelAssumptions,
@@ -120,7 +121,7 @@ export function solvePermanentRevenueRate(
 export function calculateMatureSystemYear(
   assumptions: ModelAssumptions,
 ): number {
-  if (assumptions.prefundingEnabled) {
+  if (hasAnyPrefunding(assumptions.fundingStrategy)) {
     const youngestUnfundedAgeAtEnactment = assumptions.prefundingStartAge + 1
     return (
       assumptions.reformYear +

@@ -1,4 +1,7 @@
-import { annualPrefundingBillions, calculateEndowmentPerPerson } from './endowment'
+import {
+  calculateEndowmentPerPerson,
+  fundingPlanForAssumptions,
+} from './endowment'
 import { nonDefenseDiscretionaryBillions } from './budget'
 import {
   nominalGDPGrowth,
@@ -44,6 +47,7 @@ export function simulate(
   const years: SimulationYear[] = []
   const socialSecurityByYear = new Map()
   const medicareByYear = new Map()
+  const fundingPlan = fundingPlanForAssumptions(assumptions)
   const gdpGrowth = nominalGDPGrowth(assumptions)
   let nominalGDP = assumptions.startingNominalGDPBillions
   let beginningDebt =
@@ -59,7 +63,19 @@ export function simulate(
     year += 1
   ) {
     const socialSecurity = socialSecurityForYear(year, assumptions)
-    const medicare = medicareForYear(year, assumptions)
+    const medicare = medicareForYear(
+      year,
+      assumptions,
+      (eligibilityYear) => {
+        const fundingYear =
+          eligibilityYear -
+          (assumptions.medicareEligibilityAge -
+            assumptions.prefundingStartAge)
+        return fundingPlan.get(fundingYear)?.medicarePrefundedShare ?? 0
+      },
+    )
+    const funding = fundingPlan.get(year)
+    if (!funding) throw new Error(`Missing funding plan for ${year}.`)
     socialSecurityByYear.set(year, socialSecurity)
     medicareByYear.set(year, medicare)
 
@@ -74,7 +90,7 @@ export function simulate(
         year,
         assumptions,
       ),
-      newCohortPrefunding: annualPrefundingBillions(year, assumptions),
+      newCohortPrefunding: funding.totalPrefunding,
       otherPrimarySpending: assumptions.otherPrimaryGDP * nominalGDP,
     }
     const totalPrimarySpending = primaryComponentSum(components)
@@ -108,6 +124,13 @@ export function simulate(
     years.push({
       year,
       nominalGDP,
+      socialSecurityPrefunding: funding.socialSecurityPrefunding,
+      medicarePrefunding: funding.medicarePrefunding,
+      fullMedicarePrefundingCost: funding.fullMedicarePrefundingCost,
+      avoidedSocialSecurityPaygo: funding.avoidedSocialSecurityPaygo,
+      socialSecurityPrefundingDividend:
+        funding.socialSecurityPrefundingDividend,
+      medicarePrefundedShare: funding.medicarePrefundedShare,
       ...components,
       totalPrimarySpending,
       revenue,
@@ -140,6 +163,14 @@ export function simulate(
     endowment2026: calculateEndowmentPerPerson(assumptions),
     cumulativePrefundingBillions: years.reduce(
       (sum, row) => sum + row.newCohortPrefunding,
+      0,
+    ),
+    cumulativeSocialSecurityPrefundingBillions: years.reduce(
+      (sum, row) => sum + row.socialSecurityPrefunding,
+      0,
+    ),
+    cumulativeMedicarePrefundingBillions: years.reduce(
+      (sum, row) => sum + row.medicarePrefunding,
       0,
     ),
   }

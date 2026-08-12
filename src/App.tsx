@@ -13,6 +13,10 @@ import {
 } from 'recharts'
 import { sources } from './data/sources'
 import { defaultAssumptions } from './model/defaults'
+import {
+  fundingStrategies,
+  fundingStrategyLabels,
+} from './model/fundingStrategy'
 import { reconciliationErrors } from './model/audit'
 import { compareScenarios } from './model/scenarios'
 import {
@@ -22,6 +26,7 @@ import {
 import { validateModelAssumptions } from './model/validation'
 import type {
   FiscalObjective,
+  FundingStrategy,
   ModelAssumptions,
   ScenarioResult,
   SimulationResult,
@@ -29,7 +34,7 @@ import type {
 } from './model/types'
 
 type Tab = 'policy' | 'results' | 'audit' | 'sources'
-type ScenarioChoice = 'paygo' | 'prefunded'
+type ScenarioChoice = FundingStrategy
 type ScheduleChoice = 'permanent' | 'twoRate'
 
 const percent = (value: number, digits = 2) =>
@@ -190,19 +195,25 @@ function PolicyPanel({
 
       <section className="card policy-card">
         <div className="eyebrow">Financing</div>
-        <h2>New-cohort prefunding</h2>
-        <label className="switch-row">
-          <div>
-            <strong>Prefund new cohorts</strong>
-            <small>Controls the detailed scenario; comparison always calculates both.</small>
-          </div>
-          <input
-            type="checkbox"
-            checked={assumptions.prefundingEnabled}
+        <h2>Program financing strategy</h2>
+        <label className="field">
+          <span>Detailed scenario</span>
+          <select
+            value={assumptions.fundingStrategy}
             onChange={(event) =>
-              update('prefundingEnabled', event.target.checked)
+              update(
+                'fundingStrategy',
+                event.target.value as FundingStrategy,
+              )
             }
-          />
+          >
+            {fundingStrategies.map((strategy) => (
+              <option key={strategy} value={strategy}>
+                {fundingStrategyLabels[strategy]}
+              </option>
+            ))}
+          </select>
+          <small>Results always calculate all five strategies using the same benefit promise.</small>
         </label>
         <label className="field">
           <span>Funding age</span>
@@ -226,7 +237,7 @@ function PolicyPanel({
           max={15}
         />
         <div className="callout quiet">
-          Endowments are calculated from promised SS and Medicare streams. There is no arbitrary prefunding %GDP input.
+          SS-first uses only a positive annual Social Security prefunding dividend to buy that year’s Medicare sleeve. Partial Medicare funding follows the cohort into retirement.
         </div>
       </section>
 
@@ -465,27 +476,32 @@ function PolicyPanel({
   )
 }
 
-function ComparisonTable({ paygo, prefunded }: { paygo: ScenarioResult; prefunded: ScenarioResult }) {
-  const rows: Array<[string, string, string]> = [
-    ['Permanent revenue rate', percent(paygo.permanent.rate), percent(prefunded.permanent.rate)],
-    ['Transition revenue rate', percent(paygo.twoRate.transitionRate), percent(prefunded.twoRate.transitionRate)],
-    ['Mature revenue rate', percent(paygo.twoRate.matureRate), percent(prefunded.twoRate.matureRate)],
-    ['Peak debt / GDP', percent(paygo.permanent.peakDebtGDP, 1), percent(prefunded.permanent.peakDebtGDP, 1)],
-    ['Peak year', String(paygo.permanent.peakYear), String(prefunded.permanent.peakYear)],
-    ['Mature-system year', String(paygo.matureSystemYear), String(prefunded.matureSystemYear)],
-    ['Handoff debt target', percent(paygo.twoRate.handoffDebtTargetGDP, 1), percent(prefunded.twoRate.handoffDebtTargetGDP, 1)],
-    ['Mature primary spending', percent(paygo.maturePrimarySpendingGDP), percent(prefunded.maturePrimarySpendingGDP)],
-    ['Mature net interest', percent(paygo.matureNetInterestGDP), percent(prefunded.matureNetInterestGDP)],
-    ['Mature total spending', percent(paygo.matureTotalSpendingGDP), percent(prefunded.matureTotalSpendingGDP)],
-    ['Combined endowment / person', '— · PAYGO', personDollars(prefunded.endowment.totalPV)],
-    ['SS endowment / person', '— · PAYGO', personDollars(prefunded.endowment.socialSecurityPV)],
-    ['Medicare endowment / person', '— · PAYGO', personDollars(prefunded.endowment.medicarePV)],
-  ]
+function yearOrDash(value: number | null): string {
+  return value === null ? 'Not by horizon' : String(value)
+}
+
+function ComparisonTable({ comparison }: { comparison: ReturnType<typeof compareScenarios> }) {
   return (
     <div className="table-scroll">
       <table className="comparison-table">
-        <thead><tr><th>Metric</th><th>PAYGO reform</th><th>Prefunded reform</th></tr></thead>
-        <tbody>{rows.map(([label, a, b]) => <tr key={label}><th>{label}</th><td>{a}</td><td>{b}</td></tr>)}</tbody>
+        <thead><tr><th>Financing strategy</th><th>Permanent rate</th><th>Transition rate</th><th>Mature rate</th><th>Peak debt</th><th>System maturity</th><th>SS dividend positive</th><th>Medicare deposits begin</th><th>First funded cohort enters Medicare</th><th>First 100%-funded Medicare cohort</th></tr></thead>
+        <tbody>{fundingStrategies.map((strategy) => {
+          const scenario = comparison.scenarios[strategy]
+          return (
+            <tr key={strategy}>
+              <th>{scenario.label}</th>
+              <td>{percent(scenario.permanent.rate)}</td>
+              <td>{percent(scenario.twoRate.transitionRate)}</td>
+              <td>{percent(scenario.twoRate.matureRate)}</td>
+              <td>{percent(scenario.permanent.peakDebtGDP, 1)}</td>
+              <td>{scenario.matureSystemYear}</td>
+              <td>{yearOrDash(scenario.firstPositiveSocialSecurityDividendYear)}</td>
+              <td>{yearOrDash(scenario.firstMedicarePrefundingYear)}</td>
+              <td>{yearOrDash(scenario.firstMedicarePrefundedEligibilityYear)}</td>
+              <td>{yearOrDash(scenario.firstFullMedicarePrefundingYear)}</td>
+            </tr>
+          )
+        })}</tbody>
       </table>
     </div>
   )
@@ -520,28 +536,17 @@ function MacroBudgetSensitivity({
   const referenceNddShare = referenceBudgetRow
     ? referenceBudgetRow.nonDefenseDiscretionary / referenceBudgetRow.nominalGDP
     : Number.NaN
-  const rows: Array<[string, number, number]> = [
-    [
-      'Permanent revenue rate',
-      comparison.paygo.permanent.rate - referenceComparison.paygo.permanent.rate,
-      comparison.prefunded.permanent.rate -
-        referenceComparison.prefunded.permanent.rate,
-    ],
-    [
-      'Transition revenue rate',
-      comparison.paygo.twoRate.transitionRate -
-        referenceComparison.paygo.twoRate.transitionRate,
-      comparison.prefunded.twoRate.transitionRate -
-        referenceComparison.prefunded.twoRate.transitionRate,
-    ],
-    [
-      'Mature revenue rate',
-      comparison.paygo.twoRate.matureRate -
-        referenceComparison.paygo.twoRate.matureRate,
-      comparison.prefunded.twoRate.matureRate -
-        referenceComparison.prefunded.twoRate.matureRate,
-    ],
-  ]
+  const rows = fundingStrategies.map((strategy) => {
+    const scenario = comparison.scenarios[strategy]
+    const baseline = referenceComparison.scenarios[strategy]
+    return {
+      strategy,
+      permanent: scenario.permanent.rate - baseline.permanent.rate,
+      transition:
+        scenario.twoRate.transitionRate - baseline.twoRate.transitionRate,
+      mature: scenario.twoRate.matureRate - baseline.twoRate.matureRate,
+    }
+  })
   return (
     <section className="card sensitivity-card">
       <div className="sensitivity-heading">
@@ -565,12 +570,13 @@ function MacroBudgetSensitivity({
       </div>
       <div className="table-scroll">
         <table className="comparison-table sensitivity-table">
-          <thead><tr><th>Required-rate impact vs central</th><th>PAYGO reform</th><th>Prefunded reform</th></tr></thead>
-          <tbody>{rows.map(([label, paygo, prefunded]) => (
-            <tr key={label}>
-              <th>{label}</th>
-              <td className={paygo < 0 ? 'favorable' : paygo > 0 ? 'adverse' : ''}>{percentagePointDelta(paygo)}</td>
-              <td className={prefunded < 0 ? 'favorable' : prefunded > 0 ? 'adverse' : ''}>{percentagePointDelta(prefunded)}</td>
+          <thead><tr><th>Required-rate impact vs central</th><th>Permanent</th><th>Transition</th><th>Mature</th></tr></thead>
+          <tbody>{rows.map((row) => (
+            <tr key={row.strategy}>
+              <th>{fundingStrategyLabels[row.strategy]}</th>
+              {[row.permanent, row.transition, row.mature].map((value, index) => (
+                <td key={index} className={value < 0 ? 'favorable' : value > 0 ? 'adverse' : ''}>{percentagePointDelta(value)}</td>
+              ))}
             </tr>
           ))}</tbody>
         </table>
@@ -589,7 +595,7 @@ function ResultsPanel({ comparison, referenceComparison, macroBudgetChanged, sce
   scheduleChoice: ScheduleChoice
   setScheduleChoice: (value: ScheduleChoice) => void
 }) {
-  const selected = comparison[scenarioChoice]
+  const selected = comparison.scenarios[scenarioChoice]
   const simulation = scheduleChoice === 'permanent' ? selected.permanent.simulation : selected.twoRate.simulation
   const chartData = simulation.years.filter((row, index) => index % 4 === 0 || row.year === selected.matureSystemYear).map((row) => ({
     year: row.year,
@@ -600,7 +606,11 @@ function ResultsPanel({ comparison, referenceComparison, macroBudgetChanged, sce
     flatSS: row.flatSocialSecurityPaygo / row.nominalGDP * 100,
     legacyMedicare: row.legacySeniorMedicare / row.nominalGDP * 100,
     premiumSupport: row.premiumSupportPaygo / row.nominalGDP * 100,
-    prefunding: row.newCohortPrefunding / row.nominalGDP * 100,
+    ssPrefunding: row.socialSecurityPrefunding / row.nominalGDP * 100,
+    medicarePrefunding: row.medicarePrefunding / row.nominalGDP * 100,
+    ssDividend:
+      row.socialSecurityPrefundingDividend / row.nominalGDP * 100,
+    medicareFundedShare: row.medicarePrefundedShare * 100,
     nonDefenseDiscretionary:
       row.nonDefenseDiscretionary / row.nominalGDP * 100,
     otherPrimary:
@@ -609,32 +619,32 @@ function ResultsPanel({ comparison, referenceComparison, macroBudgetChanged, sce
     targetRate: row.nominalTargetInterestRate * 100,
     effectiveRate: row.effectiveNominalInterestRate * 100,
   }))
-  const effect = comparison.prefundingTransitionFinancingEffect
+  const sequential = comparison.scenarios.socialSecurityFirst
   return (
     <>
       <section className="card hero-card">
-        <div><div className="eyebrow">Financing comparison</div><h2>Same benefit promise, two financing regimes</h2><p>The prefunding difference is primarily a timing and asset-funding requirement—not automatically a net economic resource cost.</p></div>
-        <div className="effect-box"><span>Prefunding transition financing effect</span><strong>{percent(effect.transitionRateDifference)}</strong><small>transition-rate difference</small></div>
+        <div><div className="eyebrow">Financing comparison</div><h2>Same benefit promise, five financing strategies</h2><p>Social Security and Medicare can remain PAYGO, be prefunded independently, be prefunded together, or follow an SS-first sequence.</p></div>
+        <div className="effect-box"><span>SS-first Medicare deposits begin</span><strong>{yearOrDash(sequential.firstMedicarePrefundingYear)}</strong><small>first funded cohort enters Medicare: {yearOrDash(sequential.firstMedicarePrefundedEligibilityYear)}</small></div>
       </section>
       <MacroBudgetSensitivity comparison={comparison} referenceComparison={referenceComparison} changed={macroBudgetChanged} />
-      <section className="card"><ComparisonTable paygo={comparison.paygo} prefunded={comparison.prefunded} /></section>
+      <section className="card strategy-card"><div className="section-heading"><div><div className="eyebrow">Strategy matrix</div><h3>Revenue burden and sequencing milestones</h3></div><span>{personDollars(comparison.prefunded.endowment.socialSecurityPV)} SS + {personDollars(comparison.prefunded.endowment.medicarePV)} Medicare per fully funded entrant</span></div><ComparisonTable comparison={comparison} /></section>
       <div className="view-controls">
-        <div className="segmented"><button className={scenarioChoice === 'paygo' ? 'active' : ''} onClick={() => setScenarioChoice('paygo')}>PAYGO detail</button><button className={scenarioChoice === 'prefunded' ? 'active' : ''} onClick={() => setScenarioChoice('prefunded')}>Prefunded detail</button></div>
+        <div className="segmented strategy-segmented">{fundingStrategies.map((strategy) => <button key={strategy} className={scenarioChoice === strategy ? 'active' : ''} onClick={() => setScenarioChoice(strategy)}>{fundingStrategyLabels[strategy]}</button>)}</div>
         <div className="segmented"><button className={scheduleChoice === 'permanent' ? 'active' : ''} onClick={() => setScheduleChoice('permanent')}>Permanent rate</button><button className={scheduleChoice === 'twoRate' ? 'active' : ''} onClick={() => setScheduleChoice('twoRate')}>Two-rate schedule</button></div>
       </div>
       <div className="chart-grid">
         <ChartCard title="Debt held by the public" note="Beginning-of-year debt as a share of current-year nominal GDP."><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip /><Line type="monotone" dataKey="debt" name="Debt / GDP" stroke="#ef8354" strokeWidth={3} dot={false} /></LineChart></ResponsiveContainer></ChartCard>
-        <ChartCard title="Primary spending decomposition" note="Net interest is intentionally excluded from this stack."><ResponsiveContainer width="100%" height="100%"><AreaChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip /><Legend /><Area stackId="1" dataKey="legacySS" name="Legacy SS" fill="#6f7d94" stroke="#6f7d94" /><Area stackId="1" dataKey="flatSS" name="Flat SS PAYGO" fill="#3c91e6" stroke="#3c91e6" /><Area stackId="1" dataKey="legacyMedicare" name="Legacy Medicare" fill="#9f86c0" stroke="#9f86c0" /><Area stackId="1" dataKey="premiumSupport" name="Premium support PAYGO" fill="#56cfe1" stroke="#56cfe1" /><Area stackId="1" dataKey="prefunding" name="New-cohort prefunding" fill="#50b58a" stroke="#50b58a" /><Area stackId="1" dataKey="nonDefenseDiscretionary" name="Nondefense discretionary" fill="#f4b860" stroke="#d69639" /><Area stackId="1" dataKey="otherPrimary" name="Other primary" fill="#b8c1cc" stroke="#8794a3" /></AreaChart></ResponsiveContainer></ChartCard>
+        <ChartCard title="Primary spending decomposition" note="SS and Medicare prefunding are separate current primary outlays; net interest is excluded."><ResponsiveContainer width="100%" height="100%"><AreaChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip /><Legend /><Area stackId="1" dataKey="legacySS" name="Legacy SS" fill="#6f7d94" stroke="#6f7d94" /><Area stackId="1" dataKey="flatSS" name="Flat SS PAYGO" fill="#3c91e6" stroke="#3c91e6" /><Area stackId="1" dataKey="legacyMedicare" name="Legacy Medicare" fill="#9f86c0" stroke="#9f86c0" /><Area stackId="1" dataKey="premiumSupport" name="Premium support PAYGO" fill="#56cfe1" stroke="#56cfe1" /><Area stackId="1" dataKey="ssPrefunding" name="SS prefunding" fill="#50b58a" stroke="#26845f" /><Area stackId="1" dataKey="medicarePrefunding" name="Medicare prefunding" fill="#8ad4b5" stroke="#4aa784" /><Area stackId="1" dataKey="nonDefenseDiscretionary" name="Nondefense discretionary" fill="#f4b860" stroke="#d69639" /><Area stackId="1" dataKey="otherPrimary" name="Other primary" fill="#b8c1cc" stroke="#8794a3" /></AreaChart></ResponsiveContainer></ChartCard>
         <ChartCard title="Interest spending and rates" note="Lambda moves the effective debt rate toward—not above—the debt-sensitive market target."><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip /><Legend /><Line dataKey="interest" name="Net interest / GDP" stroke="#ef8354" dot={false} /><Line dataKey="targetRate" name="Target nominal rate" stroke="#9f86c0" dot={false} /><Line dataKey="effectiveRate" name="Effective nominal rate" stroke="#3c91e6" dot={false} /></LineChart></ResponsiveContainer></ChartCard>
         <ChartCard title="Legacy vs reformed system" note="Cohort mortality—not an aggregate phaseout—runs off legacy SS."><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip /><Legend /><Line dataKey="legacySS" name="Legacy SS" stroke="#6f7d94" dot={false} /><Line dataKey="flatSS" name="Flat SS PAYGO" stroke="#3c91e6" dot={false} /><Line dataKey="legacyMedicare" name="Legacy Medicare" stroke="#9f86c0" dot={false} /><Line dataKey="premiumSupport" name="Premium support PAYGO" stroke="#56cfe1" dot={false} /></LineChart></ResponsiveContainer></ChartCard>
-        <ChartCard title="Prefunding transition" note="Calculated new-cohort endowments as a share of GDP; exactly zero with prefunding off."><ResponsiveContainer width="100%" height="100%"><AreaChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip /><Area dataKey="prefunding" name="Annual prefunding / GDP" fill="#50b58a" stroke="#26845f" /></AreaChart></ResponsiveContainer></ChartCard>
+        <ChartCard title="SS-first funding gate" note="A positive SS dividend can fund up to 100% of the new cohort’s Medicare endowment."><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip /><Legend /><Line dataKey="ssDividend" name="SS dividend / GDP" stroke="#26845f" dot={false} /><Line dataKey="medicareFundedShare" name="New Medicare cohort funded %" stroke="#9f86c0" dot={false} /></LineChart></ResponsiveContainer></ChartCard>
       </div>
     </>
   )
 }
 
 const primaryAuditRows: Array<[keyof SimulationYear, string]> = [
-  ['legacySocialSecurity', 'Legacy/current-law Social Security'], ['flatSocialSecurityPaygo', 'Flat Social Security PAYGO'], ['otherOASDI', 'Other OASDI outside reform'], ['legacySeniorMedicare', 'Legacy senior Medicare'], ['premiumSupportPaygo', 'Premium-support PAYGO'], ['under65Medicare', 'Under-65 Medicare'], ['nonDefenseDiscretionary', 'Nondefense discretionary'], ['newCohortPrefunding', 'New-cohort prefunding'], ['otherPrimarySpending', 'Other primary excluding NDD'], ['totalPrimarySpending', 'Total primary spending'],
+  ['legacySocialSecurity', 'Legacy/current-law Social Security'], ['flatSocialSecurityPaygo', 'Flat Social Security PAYGO'], ['otherOASDI', 'Other OASDI outside reform'], ['legacySeniorMedicare', 'Legacy senior Medicare'], ['premiumSupportPaygo', 'Premium-support PAYGO'], ['under65Medicare', 'Under-65 Medicare'], ['nonDefenseDiscretionary', 'Nondefense discretionary'], ['socialSecurityPrefunding', 'Social Security prefunding'], ['medicarePrefunding', 'Medicare prefunding'], ['otherPrimarySpending', 'Other primary excluding NDD'], ['totalPrimarySpending', 'Total primary spending'],
 ]
 
 function AuditValue({ value, gdp }: { value: number; gdp: number }) {
@@ -658,6 +668,7 @@ function AuditPanel({ scenario, scheduleChoice }: { scenario: ScenarioResult; sc
         <section className="card"><div className="section-heading"><div><div className="eyebrow">Ledger 01</div><h3>Primary program spending</h3></div><span className="reconcile">Reconciled · max error {maxError.toExponential(1)}</span></div><table className="audit-table"><thead><tr><th>Component</th><th>Dollars</th><th>% GDP</th></tr></thead><tbody>{primaryAuditRows.map(([key, label]) => <tr key={key} className={key === 'totalPrimarySpending' ? 'total-row' : ''}><th>{label}</th><AuditValue value={row[key] as number} gdp={row.nominalGDP} /></tr>)}</tbody></table></section>
         <section className="card"><div className="section-heading"><div><div className="eyebrow">Ledger 02</div><h3>Financing & interest</h3></div></div><table className="audit-table"><thead><tr><th>Item</th><th>Dollars</th><th>% GDP / rate</th></tr></thead><tbody><tr><th>Revenue</th><AuditValue value={row.revenue} gdp={row.nominalGDP} /></tr><tr><th>Primary balance</th><AuditValue value={row.primaryBalance} gdp={row.nominalGDP} /></tr><tr><th>Beginning debt</th><AuditValue value={row.beginningDebt} gdp={row.nominalGDP} /></tr><tr><th>Target nominal interest rate</th><td>—</td><td>{percent(row.nominalTargetInterestRate)}</td></tr><tr><th>Effective nominal interest rate</th><td>—</td><td>{percent(row.effectiveNominalInterestRate)}</td></tr><tr><th>Net interest</th><AuditValue value={row.netInterest} gdp={row.nominalGDP} /></tr><tr className="total-row"><th>Total federal spending</th><AuditValue value={row.totalFederalSpending} gdp={row.nominalGDP} /></tr><tr><th>Overall deficit</th><AuditValue value={row.overallDeficit} gdp={row.nominalGDP} /></tr><tr><th>Ending debt</th><AuditValue value={row.endingDebt} gdp={row.nominalGDP} /></tr><tr><th>Debt / GDP</th><td>—</td><td>{percent(row.endingDebtGDP)}</td></tr></tbody></table></section>
       </div>
+      <section className="card cohort-card"><div className="section-heading"><div><div className="eyebrow">Sequencing ledger</div><h3>Social Security dividend → Medicare funding</h3></div><span>Selected funding cohort: {row.year}</span></div><div className="cohort-metrics"><div><span>Avoided SS PAYGO</span><strong>{dollars(row.avoidedSocialSecurityPaygo)}</strong></div><div><span>SS prefunding deposit</span><strong>{dollars(row.socialSecurityPrefunding)}</strong></div><div><span>Net SS dividend</span><strong>{dollars(row.socialSecurityPrefundingDividend)}</strong></div><div><span>Full Medicare sleeve cost</span><strong>{dollars(row.fullMedicarePrefundingCost)}</strong></div><div><span>Medicare deposit</span><strong>{dollars(row.medicarePrefunding)}</strong></div><div><span>Total prefunding</span><strong>{dollars(row.newCohortPrefunding)}</strong></div><div><span>Medicare cohort funded</span><strong>{percent(row.medicarePrefundedShare, 1)}</strong></div></div><div className="cohort-proof">The Medicare deposit equals the smaller of the positive SS dividend and the full Medicare sleeve cost. A negative SS dividend contributes nothing to Medicare.</div></section>
       <section className="card cohort-card"><div className="section-heading"><div><div className="eyebrow">Cohort inspector</div><h3>Social Security retirement cohort</h3></div><label>Retirement year <input type="number" min={row.year - 40} max={row.year} value={retirementYear} onChange={(event) => setRetirementYear(Number(event.target.value))} /></label></div>{cohort ? <div className="cohort-metrics"><div><span>Initial cohort</span><strong>{cohort.initialCohortMillions.toFixed(2)}M</strong></div><div><span>Surviving in {row.year}</span><strong>{cohort.survivingBeneficiariesMillions.toFixed(2)}M</strong></div><div><span>Survival fraction</span><strong>{percent(cohort.survivalFraction, 1)}</strong></div><div className="blend"><span>Locked benefit blend</span><strong>{percent(cohort.legacyShare, 0)} legacy / {percent(cohort.flatShare, 0)} flat</strong></div><div><span>Prefunded status</span><strong>{cohort.prefunded ? 'Flat sleeve funded' : 'PAYGO'}</strong></div><div><span>Legacy PAYGO</span><strong>{dollars(cohort.legacyPaygoBillions)}</strong></div><div><span>Flat PAYGO</span><strong>{dollars(cohort.flatPaygoBillions)}</strong></div><div><span>Total cohort SS</span><strong>{dollars(cohort.totalCohortSSSpendingBillions)}</strong></div></div> : <p>No modeled retirement cohort matches that year in the selected audit year.</p>}<div className="cohort-proof">A 2036 retiree remains 50% legacy / 50% flat in every later audit year. Only the surviving headcount changes.</div></section>
     </>
   )
@@ -670,7 +681,7 @@ function SourcesPanel() {
 export default function App() {
   const [assumptions, setAssumptions] = useState(defaultAssumptions)
   const [tab, setTab] = useState<Tab>('results')
-  const [scenarioChoice, setScenarioChoice] = useState<ScenarioChoice>(assumptions.prefundingEnabled ? 'prefunded' : 'paygo')
+  const [scenarioChoice, setScenarioChoice] = useState<ScenarioChoice>(assumptions.fundingStrategy)
   const [scheduleChoice, setScheduleChoice] = useState<ScheduleChoice>('permanent')
   const deferredAssumptions = useDeferredValue(assumptions)
   const calculating = deferredAssumptions !== assumptions
@@ -736,19 +747,23 @@ export default function App() {
   }
   const update = <K extends keyof ModelAssumptions>(key: K, value: ModelAssumptions[K]) => {
     setAssumptions((current) => ({ ...current, [key]: value }))
-    if (key === 'prefundingEnabled') setScenarioChoice(value ? 'prefunded' : 'paygo')
+    if (key === 'fundingStrategy') setScenarioChoice(value as FundingStrategy)
   }
   const apply = (overrides: Partial<ModelAssumptions>) => {
     setAssumptions((current) => ({ ...current, ...overrides }))
-    if (overrides.prefundingEnabled !== undefined) {
-      setScenarioChoice(overrides.prefundingEnabled ? 'prefunded' : 'paygo')
+    if (overrides.fundingStrategy !== undefined) {
+      setScenarioChoice(overrides.fundingStrategy)
     }
   }
-  const selectedScenario = comparison[scenarioChoice]
+  const selectedScenario = comparison.scenarios[scenarioChoice]
+  const allSolversConverged = fundingStrategies.every((strategy) => {
+    const scenario = comparison.scenarios[strategy]
+    return scenario.permanent.converged && scenario.twoRate.converged
+  })
 
   return (
     <div className="app-shell">
-      <header className="topbar"><div className="brand"><div className="brand-mark">ER</div><div><strong>Entitlements Reform</strong><span>Cohort fiscal simulator · 2026 reform</span></div></div><nav>{(['policy', 'results', 'audit', 'sources'] as Tab[]).map((item) => <button key={item} className={tab === item ? 'active' : ''} onClick={() => setTab(item)}>{item === 'sources' ? 'Model & Sources' : item}</button>)}</nav><div aria-live="polite" className={`solver-status ${!calculating && comparison.paygo.permanent.converged && comparison.prefunded.permanent.converged && comparison.paygo.twoRate.converged && comparison.prefunded.twoRate.converged ? 'ok' : 'warn'}`}><span />{calculating ? 'Calculating…' : comparison.paygo.twoRate.converged && comparison.prefunded.twoRate.converged ? 'Solvers converged' : 'Check solver bounds'}</div></header>
+      <header className="topbar"><div className="brand"><div className="brand-mark">ER</div><div><strong>Entitlements Reform</strong><span>Cohort fiscal simulator · 2026 reform</span></div></div><nav>{(['policy', 'results', 'audit', 'sources'] as Tab[]).map((item) => <button key={item} className={tab === item ? 'active' : ''} onClick={() => setTab(item)}>{item === 'sources' ? 'Model & Sources' : item}</button>)}</nav><div aria-live="polite" className={`solver-status ${!calculating && allSolversConverged ? 'ok' : 'warn'}`}><span />{calculating ? 'Calculating…' : allSolversConverged ? 'All strategy solvers converged' : 'Check solver bounds'}</div></header>
       <main>
         {comparisonAttempt.error && <section className="card model-error"><strong>Those assumptions could not be calculated.</strong><span>{comparisonAttempt.error} Showing the last valid results.</span></section>}
         {tab === 'policy' && <PolicyPanel assumptions={assumptions} update={update} apply={apply} />}

@@ -1,34 +1,41 @@
-# Prefunding Toggle and Tax Solver Comparisons
+# Program Financing Strategies and Tax Solver Comparisons
 
 This file extends `MODEL_SPEC.md` and is authoritative for scenario comparison and tax-rate outputs.
 
-## 1. Prefunding must be optional
+## 1. Social Security and Medicare financing must be independently selectable
 
 Add a policy input:
 
 ```ts
-prefundingEnabled: boolean
+fundingStrategy:
+  | 'paygo'
+  | 'socialSecurityOnly'
+  | 'medicareOnly'
+  | 'both'
+  | 'socialSecurityFirst'
 ```
 
-Default: `true`.
+Default: `both` to preserve the original central scenario.
 
 The purpose is to separate two distinct reforms:
 
 1. **Benefit-design reform** — changing Social Security to the FPL-linked flat benefit and Medicare to defined premium support.
 2. **Financing reform** — prefunding the defined benefit for new cohorts.
 
-### Prefunding ON
+### Full and program-specific prefunding
 
-When `prefundingEnabled = true`:
+For every prefunded program:
 
-- calculate the cohort endowment exactly as specified in `MODEL_SPEC.md`;
+- calculate that program's cohort sleeve exactly as specified in `MODEL_SPEC.md`;
 - record new-cohort prefunding as current primary spending/resource transfer according to the chosen funding-accounting convention;
-- defined benefits for eligible prefunded cohorts are paid from their prefunded assets rather than PAYGO;
+- defined benefits for eligible prefunded cohorts are paid from their corresponding prefunded sleeve rather than PAYGO;
 - residual legacy/current-law components remain federal PAYGO obligations.
 
-### Prefunding OFF
+The unselected program remains PAYGO. Its benefit design and transition are unchanged.
 
-When `prefundingEnabled = false`:
+### Both benefits PAYGO
+
+When `fundingStrategy = 'paygo'`:
 
 - annual new-cohort prefunding is exactly zero;
 - do not create or accumulate a cohort endowment;
@@ -36,18 +43,39 @@ When `prefundingEnabled = false`:
 - all flat Social Security and Medicare premium-support obligations remain PAYGO federal spending for all cohorts;
 - legacy obligations continue to run off by the same cohort rules and mortality assumptions.
 
-The benefit-design formulas, Medicare Year A/Year B transition, FPL benefit, mortality, and other policy primitives must be identical between ON and OFF scenarios unless explicitly changed by the user.
+### Social Security-first sequential prefunding
 
-This makes the fiscal difference between otherwise identical ON/OFF runs an interpretable estimate of the transition/timing consequences of prefunding.
+When `fundingStrategy = 'socialSecurityFirst'`, fully prefund the Social Security sleeve. For each funding year calculate:
+
+```text
+SS_prefunding_dividend =
+  flat_SS_spending_under_PAYGO
+  - remaining_flat_SS_PAYGO
+  - SS_prefunding_deposit
+
+Medicare_prefunding = min(
+  max(SS_prefunding_dividend, 0),
+  full_Medicare_endowment_cost
+)
+```
+
+The resulting Medicare funded fraction is locked to that funding cohort and later removes the same fraction of its premium-support obligation from federal PAYGO. Do not use a negative dividend, future anticipated savings, debt issuance, or Medicare's own future PAYGO reductions to enlarge the current Medicare deposit.
+
+The benefit-design formulas, Medicare Year A/Year B transition, FPL benefit, mortality, and other policy primitives must be identical across all five scenarios unless explicitly changed by the user.
+
+This makes differences between otherwise identical strategy runs interpretable estimates of the transition/timing consequences of financing choices.
 
 Do not describe that difference as a pure economic “cost” without qualification: prefunding moves resources forward in time and is intended to finance future liabilities/assets. The UI may call it **incremental fiscal requirement during prefunding transition** or **prefunding timing cost**.
 
 ## 2. Required side-by-side scenario comparison
 
-For any selected policy assumptions, calculate both:
+For any selected policy assumptions, calculate all five:
 
-- `benefitReformPaygo`: benefit reform with prefunding OFF;
-- `benefitReformPrefunded`: same benefit reform with prefunding ON.
+- both benefits PAYGO;
+- Social Security prefunded and Medicare PAYGO;
+- Social Security PAYGO and Medicare prefunded;
+- both benefits prefunded;
+- Social Security-first sequential prefunding.
 
 The main Results view should allow a direct comparison of:
 
@@ -63,7 +91,7 @@ The main Results view should allow a direct comparison of:
 - reformed-benefit PAYGO spending;
 - prefunded-benefit spending removed from the federal PAYGO budget.
 
-A user toggle may select which scenario is shown in detailed charts, but the headline comparison should calculate both so the cost of prefunding is visible without manually changing settings.
+A user control may select which scenario is shown in detailed charts, but the headline comparison must calculate all five without requiring manual assumption changes.
 
 ## 3. Two different tax/revenue presentations
 
@@ -105,7 +133,7 @@ The mature-system year is the first year after which there are no remaining mode
 
 Use the maximum modeled age from the mortality table (`maxModeledAge`, initially 110).
 
-### Prefunding ON
+### Any strategy with at least one prefunded sleeve
 
 The transition includes PAYGO obligations for cohorts that were already older than the prefunding start age at enactment.
 
@@ -132,9 +160,11 @@ last modeled year alive = 2026 + (110 - 19) = 2117
 mature system begins = 2118
 ```
 
-This deliberately recognizes that the financing transition lasts much longer than the benefit-formula phase-in.
+This deliberately recognizes that the financing transition lasts much longer than the benefit-formula phase-in. It applies to `socialSecurityOnly`, `medicareOnly`, `both`, and `socialSecurityFirst` because each has initially unfunded cohorts in at least one prefunded program.
 
-### Prefunding OFF
+For `socialSecurityFirst`, this year marks the exit of initially unfunded cohorts; Medicare's funded fraction can continue evolving afterward. Report the first positive SS dividend, first Medicare deposit, first funded cohort's Medicare eligibility, and first fully funded Medicare cohort separately.
+
+### Both benefits PAYGO
 
 There is no prefunding transition. The temporary transition is the legacy-benefit runoff.
 
@@ -170,7 +200,7 @@ last modeled year alive = 2085
 mature PAYGO benefit-design system begins = 2086
 ```
 
-Expose the calculated mature-system year in the UI and explain why it differs across prefunding ON/OFF scenarios.
+Expose the calculated mature-system year in the UI and explain why it differs across financing strategies.
 
 ## 5. Two-rate solver: make the pair unique
 
@@ -252,8 +282,11 @@ The gap between `T_transition` and `T_mature` makes the temporary fiscal burden 
 
 Show a compact comparison with rows:
 
-1. Benefit reform — PAYGO (prefunding OFF)
-2. Benefit reform — prefunded (prefunding ON)
+1. Both benefits PAYGO
+2. Social Security prefunded / Medicare PAYGO
+3. Social Security PAYGO / Medicare prefunded
+4. Both benefits prefunded
+5. Social Security-first sequential prefunding
 
 And columns at minimum:
 
@@ -266,6 +299,10 @@ And columns at minimum:
 - cumulative prefunding contributions/GDP or dollars (0 when OFF)
 - mature primary spending/GDP
 - mature net interest/GDP at handoff target
+- first positive Social Security prefunding dividend year
+- first Medicare prefunding-deposit year
+- first funded cohort's Medicare eligibility year
+- first fully funded Medicare cohort year, or an explicit `not reached by horizon`
 
 The user should be able to answer immediately:
 
@@ -276,12 +313,9 @@ The user should be able to answer immediately:
 
 ## 8. Audit requirements
 
-The decomposition audit must clearly label the scenario as:
+The decomposition audit must clearly label the selected financing strategy.
 
-- `PAYGO benefit reform`, or
-- `Prefunded benefit reform`.
-
-When prefunding is OFF:
+When both programs are PAYGO:
 
 ```text
 newCohortPrefunding = 0
@@ -289,14 +323,18 @@ newCohortPrefunding = 0
 
 and all reformed benefits remain in the appropriate PAYGO categories.
 
-When prefunding is ON, the audit must separately show:
+When either sleeve is prefunded, the audit must separately show:
 
-- new-cohort prefunding;
+- Social Security prefunding;
+- Medicare prefunding;
+- total new-cohort prefunding;
 - flat SS PAYGO for unfunded cohorts;
 - premium-support PAYGO for unfunded cohorts;
 - legacy SS;
 - legacy Medicare;
 - net interest.
+
+For `socialSecurityFirst`, also show avoided SS PAYGO, SS prefunding deposit, signed SS dividend, full Medicare sleeve cost, actual Medicare deposit, and the cohort's Medicare funded fraction.
 
 For the two-rate schedule, the audit should also show which tax regime applies in the selected year:
 
@@ -307,32 +345,35 @@ For the two-rate schedule, the audit should also show which tax regime applies i
 
 Add tests proving:
 
-1. With identical benefit-design assumptions, toggling prefunding OFF sets annual prefunding to exactly zero.
-2. Prefunding OFF does not alter cohort benefit shares or Medicare Year A/Year B transition shares.
-3. With prefunding OFF, fully reformed future benefits remain PAYGO.
-4. With prefunding ON, eligible prefunded cohorts' defined components leave PAYGO when benefits begin.
+1. With identical benefit-design assumptions, `paygo` sets annual prefunding to exactly zero.
+2. Financing strategy does not alter cohort benefit shares or Medicare Year A/Year B transition shares.
+3. Each program-specific strategy removes only its selected sleeve from later PAYGO.
+4. `both` removes both eligible defined components from PAYGO when benefits begin.
 5. Default age-18 prefunding produces mature-system year 2118 when max modeled age is 110.
-6. Default 20-year SS phase-in with prefunding OFF produces mature-system year 2086 when FRA=70, max age=110, and Year B=2035.
+6. Default 20-year SS phase-in with both programs PAYGO produces mature-system year 2086 when FRA=70, max age=110, and Year B=2035.
 7. The permanent-rate solver uses exactly one revenue rate in every year.
 8. The two-rate solver uses exactly `T_transition` before the handoff and exactly `T_mature` from the mature-system year onward.
 9. The transition solver reaches the configured mature debt target within numerical tolerance.
 10. The mature-rate solver produces non-rising debt at the handoff target.
-11. Interest and overall-deficit accounting reconcile under both tax schedules.
-12. Scenario comparisons use identical benefit assumptions except for `prefundingEnabled`.
+11. Interest and overall-deficit accounting reconcile under both tax schedules and all five strategies.
+12. Scenario comparisons use identical benefit assumptions except for `fundingStrategy`.
+13. Sequential Medicare deposits are zero while the SS dividend is negative.
+14. Sequential Medicare deposits equal the lesser of the positive SS dividend and full Medicare sleeve.
+15. A partial Medicare funded fraction follows its cohort and proportionally reduces later PAYGO.
 
 ## 10. UI recommendation
 
-On the Results page, place a **Financing comparison** section near the top:
+On the Results page, place a **Financing comparison** matrix near the top with one row per strategy:
 
 ```text
-                         PAYGO reform       Prefunded reform
-Single permanent rate       x.xx%               x.xx%
-Transition rate             x.xx%               x.xx%
-Mature rate                 x.xx%               x.xx%
-Mature-system year           2086                2118
-Peak debt                    ...                 ...
+Strategy                    Permanent   Transition   Mature   SS dividend   Medicare starts
+Both PAYGO                    x.xx%        x.xx%       x.xx%       —               —
+SS prefunded                 x.xx%        x.xx%       x.xx%      2080             —
+Medicare prefunded           x.xx%        x.xx%       x.xx%       —              2026
+Both prefunded               x.xx%        x.xx%       x.xx%      2080            2026
+SS-first                     x.xx%        x.xx%       x.xx%      2080            2080
 ```
 
-Below it, show a toggle to inspect either scenario in the charts and decomposition audit.
+Below it, show a control to inspect any strategy in the charts and decomposition audit.
 
-On the Policy page, expose a simple `Prefund new cohorts` switch for scenario-specific inspection, but always compute both ON/OFF comparison results in the Results view.
+On the Policy page, expose the five-value financing-strategy control for scenario-specific inspection, but always compute all strategies in the Results view.

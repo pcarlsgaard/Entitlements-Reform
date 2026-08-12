@@ -1,6 +1,14 @@
 import { survivalProbability } from './mortality'
+import {
+  fullyPrefundsMedicare,
+  usesSocialSecurityDividend,
+} from './fundingStrategy'
 import { clamp, cohortSizeMillions } from './socialSecurity'
 import type { MedicareYearResult, ModelAssumptions } from './types'
+
+export type MedicarePrefundedShareResolver = (
+  eligibilityYear: number,
+) => number
 
 export function firstPrefundedMedicareEligibilityYear(
   assumptions: ModelAssumptions,
@@ -47,7 +55,7 @@ export function isMedicareComponentPrefunded(
   assumptions: ModelAssumptions,
 ): boolean {
   return (
-    assumptions.prefundingEnabled &&
+    fullyPrefundsMedicare(assumptions.fundingStrategy) &&
     eligibilityYear >= firstPrefundedMedicareEligibilityYear(assumptions)
   )
 }
@@ -55,7 +63,16 @@ export function isMedicareComponentPrefunded(
 export function medicareForYear(
   year: number,
   assumptions: ModelAssumptions,
+  resolvePrefundedShare?: MedicarePrefundedShareResolver,
 ): MedicareYearResult {
+  if (
+    usesSocialSecurityDividend(assumptions.fundingStrategy) &&
+    !resolvePrefundedShare
+  ) {
+    throw new Error(
+      'Sequential Medicare financing requires its cohort funding schedule.',
+    )
+  }
   const cohorts: MedicareYearResult['cohorts'] = []
   const firstEligibilityYear =
     year - (assumptions.maxModeledAge - assumptions.medicareEligibilityAge)
@@ -94,9 +111,12 @@ export function medicareForYear(
       assumptions,
     )
     const legacyShare = 1 - premiumSupportShare
-    const prefunded = isMedicareComponentPrefunded(
-      eligibilityYear,
-      assumptions,
+    const prefundedShare = clamp(
+      resolvePrefundedShare
+        ? resolvePrefundedShare(eligibilityYear)
+        : isMedicareComponentPrefunded(eligibilityYear, assumptions)
+          ? 1
+          : 0,
     )
 
     cohorts.push({
@@ -105,15 +125,15 @@ export function medicareForYear(
       legacyShare,
       initialCohortMillions,
       survivingBeneficiariesMillions,
-      prefunded,
+      prefundedShare,
       legacyBillions:
         (survivingBeneficiariesMillions * legacyShare * legacyCost) / 1_000,
-      premiumSupportPaygoBillions: prefunded
-        ? 0
-        : (survivingBeneficiariesMillions *
-            premiumSupportShare *
-            premiumSupport) /
-          1_000,
+      premiumSupportPaygoBillions:
+        (survivingBeneficiariesMillions *
+          premiumSupportShare *
+          premiumSupport *
+          (1 - prefundedShare)) /
+        1_000,
     })
   }
 
