@@ -1,4 +1,5 @@
 import { annualPrefundingBillions, calculateEndowmentPerPerson } from './endowment'
+import { nonDefenseDiscretionaryBillions } from './budget'
 import {
   nominalGDPGrowth,
   nominalRateFromReal,
@@ -29,6 +30,7 @@ export function primaryComponentSum(components: PrimaryComponents): number {
     components.legacySeniorMedicare +
     components.premiumSupportPaygo +
     components.under65Medicare +
+    components.nonDefenseDiscretionary +
     components.newCohortPrefunding +
     components.otherPrimarySpending
   )
@@ -68,6 +70,10 @@ export function simulate(
       legacySeniorMedicare: medicare.legacyBillions,
       premiumSupportPaygo: medicare.premiumSupportPaygoBillions,
       under65Medicare: assumptions.under65MedicareGDP * nominalGDP,
+      nonDefenseDiscretionary: nonDefenseDiscretionaryBillions(
+        year,
+        assumptions,
+      ),
       newCohortPrefunding: annualPrefundingBillions(year, assumptions),
       otherPrimarySpending: assumptions.otherPrimaryGDP * nominalGDP,
     }

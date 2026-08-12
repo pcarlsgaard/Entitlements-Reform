@@ -34,7 +34,12 @@ export const defaultAssumptions: ModelAssumptions = {
   debtRatePassThrough: 0.15,
   otherOASDIGDP: 0.01,
   under65MedicareGDP: 0.006,
-  otherPrimaryGDP: 0.094,
+  nonDefenseDiscretionaryGDP2026: 0.031,
+  // The prior model held all other primary spending at a constant GDP share.
+  // Matching NDD real growth to GDP preserves that baseline until the user
+  // deliberately applies a different discretionary-growth path.
+  nonDefenseDiscretionaryRealGrowth: 0.018,
+  otherPrimaryGDP: 0.063,
   fiscalObjective: 'returnToStartingDebt',
   peakDebtCeilingGDP: 1.5,
   matureDebtTargetGDP: 1.01,

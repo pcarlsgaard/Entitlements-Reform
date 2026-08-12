@@ -11,6 +11,7 @@ export function primaryComponentsFromYear(
     legacySeniorMedicare: row.legacySeniorMedicare,
     premiumSupportPaygo: row.premiumSupportPaygo,
     under65Medicare: row.under65Medicare,
+    nonDefenseDiscretionary: row.nonDefenseDiscretionary,
     newCohortPrefunding: row.newCohortPrefunding,
     otherPrimarySpending: row.otherPrimarySpending,
   }

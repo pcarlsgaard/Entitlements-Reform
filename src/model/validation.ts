@@ -38,6 +38,8 @@ const numericKeys = [
   'debtRatePassThrough',
   'otherOASDIGDP',
   'under65MedicareGDP',
+  'nonDefenseDiscretionaryGDP2026',
+  'nonDefenseDiscretionaryRealGrowth',
   'otherPrimaryGDP',
   'peakDebtCeilingGDP',
   'matureDebtTargetGDP',
@@ -79,8 +81,35 @@ export function validateModelAssumptions(
   if (assumptions.realEndowmentYield <= -1) {
     add('realEndowmentYield', 'The real endowment yield must be greater than -100%.')
   }
+  if (assumptions.realGDPGrowth <= -1) {
+    add('realGDPGrowth', 'Real GDP growth must be greater than -100%.')
+  }
+  if (assumptions.inflation <= -1) {
+    add('inflation', 'Inflation must be greater than -100%.')
+  }
+  if (assumptions.cohortSizeGrowth <= -1) {
+    add('cohortSizeGrowth', 'Cohort-size growth must be greater than -100%.')
+  }
+  if (assumptions.currentLawSSBenefitRealGrowth <= -1) {
+    add(
+      'currentLawSSBenefitRealGrowth',
+      'Current-law Social Security benefit growth must be greater than -100%.',
+    )
+  }
   if (assumptions.premiumSupportRealGrowth <= -1) {
     add('premiumSupportRealGrowth', 'Real premium-support growth must be greater than -100%.')
+  }
+  if (assumptions.legacyMedicareRealGrowth <= -1) {
+    add(
+      'legacyMedicareRealGrowth',
+      'Legacy Medicare cost growth must be greater than -100%.',
+    )
+  }
+  if (assumptions.nonDefenseDiscretionaryRealGrowth <= -1) {
+    add(
+      'nonDefenseDiscretionaryRealGrowth',
+      'Real nondefense discretionary growth must be greater than -100%.',
+    )
   }
   if (assumptions.debtRatePassThrough < 0 || assumptions.debtRatePassThrough > 1) {
     add('debtRatePassThrough', 'Refinancing speed must be between 0% and 100%.')
@@ -94,10 +123,23 @@ export function validateModelAssumptions(
   if (assumptions.startingNominalGDPBillions <= 0) {
     add('startingNominalGDPBillions', 'Starting nominal GDP must be positive.')
   }
-  if (assumptions.startingDebtGDP < 0 || assumptions.matureDebtTargetGDP <= 0) {
-    add('matureDebtTargetGDP', 'Debt ratios must be nonnegative and the handoff target must be positive.')
+  if (assumptions.startingDebtGDP < 0) {
+    add('startingDebtGDP', 'Starting debt cannot be negative.')
   }
+  if (assumptions.matureDebtTargetGDP <= 0) {
+    add('matureDebtTargetGDP', 'The handoff debt target must be positive.')
+  }
+  if (assumptions.otherOASDIGDP < 0)
+    add('otherOASDIGDP', 'The other-OASDI share cannot be negative.')
+  if (assumptions.under65MedicareGDP < 0)
+    add('under65MedicareGDP', 'The under-65 Medicare share cannot be negative.')
+  if (assumptions.nonDefenseDiscretionaryGDP2026 < 0)
+    add(
+      'nonDefenseDiscretionaryGDP2026',
+      'The nondefense discretionary share cannot be negative.',
+    )
+  if (assumptions.otherPrimaryGDP < 0)
+    add('otherPrimaryGDP', 'The other-primary share cannot be negative.')
 
   return issues
 }
-

@@ -40,6 +40,10 @@ The project is designed to answer a central fiscal question:
 - Baseline effective real borrowing rate: 2.3%
 - Debt sensitivity: +2 bp long-run target rate per +1 percentage point debt/GDP
 - Annual debt-rate pass-through: 15%
+- 2026 nondefense discretionary outlays: 3.1% of GDP
+- Default real NDD growth: 1.8% (matches central GDP growth to preserve the prior baseline share)
+
+The Policy view exposes macro and broader-budget sensitivities including real GDP growth, inflation, cohort growth, borrowing rates, debt sensitivity, legacy benefit growth, and an independent nondefense discretionary spending path. The Results view compares any custom combination with the central macro/budget assumptions while holding the selected benefit design and fiscal objective fixed.
 
 ## Core modeling principle
 

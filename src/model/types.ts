@@ -40,6 +40,8 @@ export interface ModelAssumptions {
   debtRatePassThrough: number
   otherOASDIGDP: number
   under65MedicareGDP: number
+  nonDefenseDiscretionaryGDP2026: number
+  nonDefenseDiscretionaryRealGrowth: number
   otherPrimaryGDP: number
   fiscalObjective: FiscalObjective
   peakDebtCeilingGDP: number
@@ -98,6 +100,7 @@ export interface PrimaryComponents {
   legacySeniorMedicare: number
   premiumSupportPaygo: number
   under65Medicare: number
+  nonDefenseDiscretionary: number
   newCohortPrefunding: number
   otherPrimarySpending: number
 }
