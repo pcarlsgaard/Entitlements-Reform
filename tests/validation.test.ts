@@ -35,4 +35,16 @@ describe('model assumption validation', () => {
       message: 'Year B must be the same as or later than Year A.',
     })
   })
+
+  it('rejects an impossible NDD real growth rate', () => {
+    expect(
+      validateModelAssumptions(
+        withAssumptions({ nonDefenseDiscretionaryRealGrowth: -1 }),
+      ),
+    ).toContainEqual({
+      key: 'nonDefenseDiscretionaryRealGrowth',
+      message:
+        'Real nondefense discretionary growth must be greater than -100%.',
+    })
+  })
 })

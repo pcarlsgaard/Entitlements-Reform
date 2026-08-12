@@ -15,6 +15,10 @@ import { sources } from './data/sources'
 import { defaultAssumptions } from './model/defaults'
 import { reconciliationErrors } from './model/audit'
 import { compareScenarios } from './model/scenarios'
+import {
+  centralMacroBudgetReference,
+  hasNoncentralMacroBudgetAssumptions,
+} from './model/sensitivity'
 import { validateModelAssumptions } from './model/validation'
 import type {
   FiscalObjective,
@@ -30,6 +34,8 @@ type ScheduleChoice = 'permanent' | 'twoRate'
 
 const percent = (value: number, digits = 2) =>
   `${(value * 100).toFixed(digits)}%`
+const percentagePointDelta = (value: number) =>
+  `${value > 0 ? '+' : ''}${(value * 100).toFixed(2)} pp`
 const dollars = (billions: number) =>
   `$${billions >= 1_000 ? `${(billions / 1_000).toFixed(2)}T` : `${billions.toFixed(1)}B`}`
 const personDollars = (value: number) =>
@@ -120,12 +126,14 @@ function NumericInput({
 function PolicyPanel({
   assumptions,
   update,
+  apply,
 }: {
   assumptions: ModelAssumptions
   update: <K extends keyof ModelAssumptions>(
     key: K,
     value: ModelAssumptions[K],
   ) => void
+  apply: (overrides: Partial<ModelAssumptions>) => void
 }) {
   return (
     <div className="panel-grid">
@@ -273,12 +281,20 @@ function PolicyPanel({
               update('fiscalObjective', event.target.value as FiscalObjective)
             }
           >
-            <option value="returnToStartingDebt">Return terminal debt to 101% GDP</option>
+            <option value="returnToStartingDebt">Return terminal debt to starting debt</option>
             <option value="stableTerminalDebt">Terminal debt no longer rising</option>
             <option value="peakDebtCeiling">Peak-debt ceiling</option>
             <option value="combinedStableAndPeak">Stable debt + peak ceiling</option>
           </select>
         </label>
+        <NumericInput
+          label="Starting debt"
+          value={assumptions.startingDebtGDP * 100}
+          onChange={(value) => update('startingDebtGDP', value / 100)}
+          suffix="% GDP"
+          min={0}
+          max={500}
+        />
         <NumericInput
           label="Handoff debt target"
           value={assumptions.matureDebtTargetGDP * 100}
@@ -296,9 +312,154 @@ function PolicyPanel({
           max={100}
           note="Refinancing speed: the share of the remaining target-rate gap closed each year."
         />
-        <div className="locked-row">
-          <span>Debt sensitivity</span><strong>+2 bp per +1% GDP debt</strong>
+        <NumericInput
+          label="Peak-debt ceiling"
+          value={assumptions.peakDebtCeilingGDP * 100}
+          onChange={(value) => update('peakDebtCeilingGDP', value / 100)}
+          suffix="% GDP"
+          min={1}
+          max={1_000}
+          note="Used by the peak-ceiling and combined permanent-rate objectives."
+        />
+      </section>
+
+      <section className="card policy-card">
+        <div className="eyebrow">Macroeconomy & debt service</div>
+        <h2>Growth and financing assumptions</h2>
+        <div className="preset-row">
+          <button onClick={() => apply(centralMacroBudgetReference(assumptions))}>Central defaults</button>
+          <button onClick={() => apply({ realGDPGrowth: defaultAssumptions.realGDPGrowth + 0.001 })}>GDP growth +0.1 pp</button>
         </div>
+        <NumericInput
+          label="Real GDP growth"
+          value={assumptions.realGDPGrowth * 100}
+          onChange={(value) => update('realGDPGrowth', value / 100)}
+          step={0.1}
+          suffix="%/year"
+          min={-5}
+          max={10}
+        />
+        <NumericInput
+          label="Inflation"
+          value={assumptions.inflation * 100}
+          onChange={(value) => update('inflation', value / 100)}
+          step={0.1}
+          suffix="%/year"
+          min={-5}
+          max={15}
+          note="Applied consistently to benefit dollars, NDD spending, GDP, and nominal rate targets."
+        />
+        <NumericInput
+          label="Cohort-size growth"
+          value={assumptions.cohortSizeGrowth * 100}
+          onChange={(value) => update('cohortSizeGrowth', value / 100)}
+          step={0.1}
+          suffix="%/year"
+          min={-5}
+          max={5}
+        />
+        <NumericInput
+          label="Baseline real market rate"
+          value={assumptions.baselineRealMarketRate * 100}
+          onChange={(value) => update('baselineRealMarketRate', value / 100)}
+          step={0.1}
+          suffix="%"
+          min={-5}
+          max={15}
+        />
+        <NumericInput
+          label="Starting effective nominal rate"
+          value={assumptions.startingEffectiveNominalRate * 100}
+          onChange={(value) => update('startingEffectiveNominalRate', value / 100)}
+          step={0.1}
+          suffix="%"
+          min={0}
+          max={20}
+        />
+        <NumericInput
+          label="Debt sensitivity"
+          value={assumptions.debtSensitivity * 100}
+          onChange={(value) => update('debtSensitivity', value / 100)}
+          step={0.5}
+          suffix="bp per +1% GDP debt"
+          min={0}
+          max={20}
+        />
+      </section>
+
+      <section className="card policy-card">
+        <div className="eyebrow">Broader federal budget</div>
+        <h2>Spending outside the reform</h2>
+        <div className="preset-row">
+          <button onClick={() => apply({ nonDefenseDiscretionaryRealGrowth: 0.01 })}>NDD 1% real growth</button>
+          <button onClick={() => apply({ nonDefenseDiscretionaryRealGrowth: 0 })}>NDD real freeze</button>
+        </div>
+        <NumericInput
+          label="Current-law SS benefit growth"
+          value={assumptions.currentLawSSBenefitRealGrowth * 100}
+          onChange={(value) => update('currentLawSSBenefitRealGrowth', value / 100)}
+          step={0.1}
+          suffix="% real/year"
+          min={-5}
+          max={10}
+        />
+        <NumericInput
+          label="Legacy Medicare cost growth"
+          value={assumptions.legacyMedicareRealGrowth * 100}
+          onChange={(value) => update('legacyMedicareRealGrowth', value / 100)}
+          step={0.1}
+          suffix="% real/year"
+          min={-5}
+          max={10}
+        />
+        <NumericInput
+          label="2026 nondefense discretionary"
+          value={assumptions.nonDefenseDiscretionaryGDP2026 * 100}
+          onChange={(value) => update('nonDefenseDiscretionaryGDP2026', value / 100)}
+          step={0.1}
+          suffix="% GDP"
+          min={0}
+          max={20}
+          note="CBO February 2026 baseline: 3.1% of GDP."
+        />
+        <NumericInput
+          label="NDD spending growth"
+          value={assumptions.nonDefenseDiscretionaryRealGrowth * 100}
+          onChange={(value) => update('nonDefenseDiscretionaryRealGrowth', value / 100)}
+          step={0.1}
+          suffix="% real/year"
+          min={-10}
+          max={10}
+          note="An independent dollar path; below GDP growth makes NDD decline as a share of GDP."
+        />
+        <NumericInput
+          label="Other OASDI"
+          value={assumptions.otherOASDIGDP * 100}
+          onChange={(value) => update('otherOASDIGDP', value / 100)}
+          step={0.1}
+          suffix="% GDP"
+          min={0}
+          max={20}
+        />
+        <NumericInput
+          label="Under-65 Medicare"
+          value={assumptions.under65MedicareGDP * 100}
+          onChange={(value) => update('under65MedicareGDP', value / 100)}
+          step={0.1}
+          suffix="% GDP"
+          min={0}
+          max={20}
+        />
+        <NumericInput
+          label="Other primary excluding NDD"
+          value={assumptions.otherPrimaryGDP * 100}
+          onChange={(value) => update('otherPrimaryGDP', value / 100)}
+          step={0.1}
+          suffix="% GDP"
+          min={0}
+          max={30}
+          note="Remaining first-pass primary-spending calibration; held at a constant GDP share."
+        />
       </section>
     </div>
   )
@@ -334,8 +495,95 @@ function ChartCard({ title, note, children }: { title: string; note?: string; ch
   return <section className="card chart-card"><div><h3>{title}</h3>{note && <p>{note}</p>}</div><div className="chart-frame">{children}</div></section>
 }
 
-function ResultsPanel({ comparison, scenarioChoice, setScenarioChoice, scheduleChoice, setScheduleChoice }: {
+function MacroBudgetSensitivity({
+  comparison,
+  referenceComparison,
+  changed,
+}: {
   comparison: ReturnType<typeof compareScenarios>
+  referenceComparison: ReturnType<typeof compareScenarios>
+  changed: boolean
+}) {
+  const assumptions = comparison.paygo.assumptions
+  const reference = referenceComparison.paygo.assumptions
+  const displayYear = Math.min(2050, assumptions.endYear)
+  const currentBudgetRow = comparison.paygo.permanent.simulation.years.find(
+    (row) => row.year === displayYear,
+  )
+  const referenceBudgetRow =
+    referenceComparison.paygo.permanent.simulation.years.find(
+      (row) => row.year === displayYear,
+    )
+  const nddShare = currentBudgetRow
+    ? currentBudgetRow.nonDefenseDiscretionary / currentBudgetRow.nominalGDP
+    : Number.NaN
+  const referenceNddShare = referenceBudgetRow
+    ? referenceBudgetRow.nonDefenseDiscretionary / referenceBudgetRow.nominalGDP
+    : Number.NaN
+  const rows: Array<[string, number, number]> = [
+    [
+      'Permanent revenue rate',
+      comparison.paygo.permanent.rate - referenceComparison.paygo.permanent.rate,
+      comparison.prefunded.permanent.rate -
+        referenceComparison.prefunded.permanent.rate,
+    ],
+    [
+      'Transition revenue rate',
+      comparison.paygo.twoRate.transitionRate -
+        referenceComparison.paygo.twoRate.transitionRate,
+      comparison.prefunded.twoRate.transitionRate -
+        referenceComparison.prefunded.twoRate.transitionRate,
+    ],
+    [
+      'Mature revenue rate',
+      comparison.paygo.twoRate.matureRate -
+        referenceComparison.paygo.twoRate.matureRate,
+      comparison.prefunded.twoRate.matureRate -
+        referenceComparison.prefunded.twoRate.matureRate,
+    ],
+  ]
+  return (
+    <section className="card sensitivity-card">
+      <div className="sensitivity-heading">
+        <div>
+          <div className="eyebrow">Ceteris-paribus sensitivity</div>
+          <h2>Macro & broader-budget effect</h2>
+          <p>
+            Current macro and broader-budget inputs versus central defaults,
+            holding benefit design, prefunding rules, and fiscal objectives fixed.
+          </p>
+        </div>
+        <span className={`scenario-state ${changed ? 'changed' : ''}`}>
+          {changed ? 'Custom assumptions active' : 'At central defaults'}
+        </span>
+      </div>
+      <div className="assumption-strip">
+        <div><span>Real GDP growth</span><strong>{percent(assumptions.realGDPGrowth)}</strong><small>central {percent(reference.realGDPGrowth)}</small></div>
+        <div><span>NDD real growth</span><strong>{percent(assumptions.nonDefenseDiscretionaryRealGrowth)}</strong><small>central {percent(reference.nonDefenseDiscretionaryRealGrowth)}</small></div>
+        <div><span>{displayYear} NDD / GDP</span><strong>{percent(nddShare)}</strong><small>central {percent(referenceNddShare)}</small></div>
+        <div><span>Baseline real rate</span><strong>{percent(assumptions.baselineRealMarketRate)}</strong><small>central {percent(reference.baselineRealMarketRate)}</small></div>
+      </div>
+      <div className="table-scroll">
+        <table className="comparison-table sensitivity-table">
+          <thead><tr><th>Required-rate impact vs central</th><th>PAYGO reform</th><th>Prefunded reform</th></tr></thead>
+          <tbody>{rows.map(([label, paygo, prefunded]) => (
+            <tr key={label}>
+              <th>{label}</th>
+              <td className={paygo < 0 ? 'favorable' : paygo > 0 ? 'adverse' : ''}>{percentagePointDelta(paygo)}</td>
+              <td className={prefunded < 0 ? 'favorable' : prefunded > 0 ? 'adverse' : ''}>{percentagePointDelta(prefunded)}</td>
+            </tr>
+          ))}</tbody>
+        </table>
+      </div>
+      <p className="sensitivity-note">Negative values mean the selected assumptions reduce the required federal revenue rate. This is a fiscal sensitivity, not a general-equilibrium forecast.</p>
+    </section>
+  )
+}
+
+function ResultsPanel({ comparison, referenceComparison, macroBudgetChanged, scenarioChoice, setScenarioChoice, scheduleChoice, setScheduleChoice }: {
+  comparison: ReturnType<typeof compareScenarios>
+  referenceComparison: ReturnType<typeof compareScenarios>
+  macroBudgetChanged: boolean
   scenarioChoice: ScenarioChoice
   setScenarioChoice: (value: ScenarioChoice) => void
   scheduleChoice: ScheduleChoice
@@ -353,6 +601,11 @@ function ResultsPanel({ comparison, scenarioChoice, setScenarioChoice, scheduleC
     legacyMedicare: row.legacySeniorMedicare / row.nominalGDP * 100,
     premiumSupport: row.premiumSupportPaygo / row.nominalGDP * 100,
     prefunding: row.newCohortPrefunding / row.nominalGDP * 100,
+    nonDefenseDiscretionary:
+      row.nonDefenseDiscretionary / row.nominalGDP * 100,
+    otherPrimary:
+      (row.otherOASDI + row.under65Medicare + row.otherPrimarySpending) /
+      row.nominalGDP * 100,
     targetRate: row.nominalTargetInterestRate * 100,
     effectiveRate: row.effectiveNominalInterestRate * 100,
   }))
@@ -363,6 +616,7 @@ function ResultsPanel({ comparison, scenarioChoice, setScenarioChoice, scheduleC
         <div><div className="eyebrow">Financing comparison</div><h2>Same benefit promise, two financing regimes</h2><p>The prefunding difference is primarily a timing and asset-funding requirement—not automatically a net economic resource cost.</p></div>
         <div className="effect-box"><span>Prefunding transition financing effect</span><strong>{percent(effect.transitionRateDifference)}</strong><small>transition-rate difference</small></div>
       </section>
+      <MacroBudgetSensitivity comparison={comparison} referenceComparison={referenceComparison} changed={macroBudgetChanged} />
       <section className="card"><ComparisonTable paygo={comparison.paygo} prefunded={comparison.prefunded} /></section>
       <div className="view-controls">
         <div className="segmented"><button className={scenarioChoice === 'paygo' ? 'active' : ''} onClick={() => setScenarioChoice('paygo')}>PAYGO detail</button><button className={scenarioChoice === 'prefunded' ? 'active' : ''} onClick={() => setScenarioChoice('prefunded')}>Prefunded detail</button></div>
@@ -370,7 +624,7 @@ function ResultsPanel({ comparison, scenarioChoice, setScenarioChoice, scheduleC
       </div>
       <div className="chart-grid">
         <ChartCard title="Debt held by the public" note="Beginning-of-year debt as a share of current-year nominal GDP."><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip /><Line type="monotone" dataKey="debt" name="Debt / GDP" stroke="#ef8354" strokeWidth={3} dot={false} /></LineChart></ResponsiveContainer></ChartCard>
-        <ChartCard title="Primary spending decomposition" note="Net interest is intentionally excluded from this stack."><ResponsiveContainer width="100%" height="100%"><AreaChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip /><Legend /><Area stackId="1" dataKey="legacySS" name="Legacy SS" fill="#6f7d94" stroke="#6f7d94" /><Area stackId="1" dataKey="flatSS" name="Flat SS PAYGO" fill="#3c91e6" stroke="#3c91e6" /><Area stackId="1" dataKey="legacyMedicare" name="Legacy Medicare" fill="#9f86c0" stroke="#9f86c0" /><Area stackId="1" dataKey="premiumSupport" name="Premium support PAYGO" fill="#56cfe1" stroke="#56cfe1" /><Area stackId="1" dataKey="prefunding" name="New-cohort prefunding" fill="#50b58a" stroke="#50b58a" /></AreaChart></ResponsiveContainer></ChartCard>
+        <ChartCard title="Primary spending decomposition" note="Net interest is intentionally excluded from this stack."><ResponsiveContainer width="100%" height="100%"><AreaChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip /><Legend /><Area stackId="1" dataKey="legacySS" name="Legacy SS" fill="#6f7d94" stroke="#6f7d94" /><Area stackId="1" dataKey="flatSS" name="Flat SS PAYGO" fill="#3c91e6" stroke="#3c91e6" /><Area stackId="1" dataKey="legacyMedicare" name="Legacy Medicare" fill="#9f86c0" stroke="#9f86c0" /><Area stackId="1" dataKey="premiumSupport" name="Premium support PAYGO" fill="#56cfe1" stroke="#56cfe1" /><Area stackId="1" dataKey="prefunding" name="New-cohort prefunding" fill="#50b58a" stroke="#50b58a" /><Area stackId="1" dataKey="nonDefenseDiscretionary" name="Nondefense discretionary" fill="#f4b860" stroke="#d69639" /><Area stackId="1" dataKey="otherPrimary" name="Other primary" fill="#b8c1cc" stroke="#8794a3" /></AreaChart></ResponsiveContainer></ChartCard>
         <ChartCard title="Interest spending and rates" note="Lambda moves the effective debt rate toward—not above—the debt-sensitive market target."><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip /><Legend /><Line dataKey="interest" name="Net interest / GDP" stroke="#ef8354" dot={false} /><Line dataKey="targetRate" name="Target nominal rate" stroke="#9f86c0" dot={false} /><Line dataKey="effectiveRate" name="Effective nominal rate" stroke="#3c91e6" dot={false} /></LineChart></ResponsiveContainer></ChartCard>
         <ChartCard title="Legacy vs reformed system" note="Cohort mortality—not an aggregate phaseout—runs off legacy SS."><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip /><Legend /><Line dataKey="legacySS" name="Legacy SS" stroke="#6f7d94" dot={false} /><Line dataKey="flatSS" name="Flat SS PAYGO" stroke="#3c91e6" dot={false} /><Line dataKey="legacyMedicare" name="Legacy Medicare" stroke="#9f86c0" dot={false} /><Line dataKey="premiumSupport" name="Premium support PAYGO" stroke="#56cfe1" dot={false} /></LineChart></ResponsiveContainer></ChartCard>
         <ChartCard title="Prefunding transition" note="Calculated new-cohort endowments as a share of GDP; exactly zero with prefunding off."><ResponsiveContainer width="100%" height="100%"><AreaChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip /><Area dataKey="prefunding" name="Annual prefunding / GDP" fill="#50b58a" stroke="#26845f" /></AreaChart></ResponsiveContainer></ChartCard>
@@ -380,7 +634,7 @@ function ResultsPanel({ comparison, scenarioChoice, setScenarioChoice, scheduleC
 }
 
 const primaryAuditRows: Array<[keyof SimulationYear, string]> = [
-  ['legacySocialSecurity', 'Legacy/current-law Social Security'], ['flatSocialSecurityPaygo', 'Flat Social Security PAYGO'], ['otherOASDI', 'Other OASDI outside reform'], ['legacySeniorMedicare', 'Legacy senior Medicare'], ['premiumSupportPaygo', 'Premium-support PAYGO'], ['under65Medicare', 'Under-65 Medicare'], ['newCohortPrefunding', 'New-cohort prefunding'], ['otherPrimarySpending', 'Other primary spending'], ['totalPrimarySpending', 'Total primary spending'],
+  ['legacySocialSecurity', 'Legacy/current-law Social Security'], ['flatSocialSecurityPaygo', 'Flat Social Security PAYGO'], ['otherOASDI', 'Other OASDI outside reform'], ['legacySeniorMedicare', 'Legacy senior Medicare'], ['premiumSupportPaygo', 'Premium-support PAYGO'], ['under65Medicare', 'Under-65 Medicare'], ['nonDefenseDiscretionary', 'Nondefense discretionary'], ['newCohortPrefunding', 'New-cohort prefunding'], ['otherPrimarySpending', 'Other primary excluding NDD'], ['totalPrimarySpending', 'Total primary spending'],
 ]
 
 function AuditValue({ value, gdp }: { value: number; gdp: number }) {
@@ -423,24 +677,72 @@ export default function App() {
   const comparisonAttempt = useMemo(() => {
     const validationIssues = validateModelAssumptions(deferredAssumptions)
     if (validationIssues.length > 0) {
-      return { comparison: null, error: validationIssues[0]!.message }
+      return {
+        comparison: null,
+        referenceComparison: null,
+        macroBudgetChanged: null,
+        error: validationIssues[0]!.message,
+      }
     }
     try {
-      return { comparison: compareScenarios(deferredAssumptions), error: null }
+      const comparison = compareScenarios(deferredAssumptions)
+      const macroBudgetChanged = hasNoncentralMacroBudgetAssumptions(
+        deferredAssumptions,
+      )
+      const referenceComparison = macroBudgetChanged
+        ? compareScenarios(
+            centralMacroBudgetReference(deferredAssumptions),
+          )
+        : comparison
+      return {
+        comparison,
+        referenceComparison,
+        macroBudgetChanged,
+        error: null,
+      }
     } catch (error) {
       return {
         comparison: null,
+        referenceComparison: null,
+        macroBudgetChanged: null,
         error: error instanceof Error ? error.message : 'The model could not evaluate those assumptions.',
       }
     }
   }, [deferredAssumptions])
   const lastValidComparison = useRef(comparisonAttempt.comparison)
-  if (comparisonAttempt.comparison) lastValidComparison.current = comparisonAttempt.comparison
+  const lastValidReferenceComparison = useRef(
+    comparisonAttempt.referenceComparison,
+  )
+  const lastValidMacroBudgetChanged = useRef(
+    comparisonAttempt.macroBudgetChanged,
+  )
+  if (comparisonAttempt.comparison && comparisonAttempt.referenceComparison) {
+    lastValidComparison.current = comparisonAttempt.comparison
+    lastValidReferenceComparison.current =
+      comparisonAttempt.referenceComparison
+    lastValidMacroBudgetChanged.current =
+      comparisonAttempt.macroBudgetChanged
+  }
   const comparison = comparisonAttempt.comparison ?? lastValidComparison.current
-  if (!comparison) throw new Error('Default assumptions did not produce a scenario comparison.')
+  const referenceComparison =
+    comparisonAttempt.referenceComparison ??
+    lastValidReferenceComparison.current
+  const macroBudgetChanged =
+    comparisonAttempt.macroBudgetChanged ??
+    lastValidMacroBudgetChanged.current ??
+    false
+  if (!comparison || !referenceComparison) {
+    throw new Error('Default assumptions did not produce a scenario comparison.')
+  }
   const update = <K extends keyof ModelAssumptions>(key: K, value: ModelAssumptions[K]) => {
     setAssumptions((current) => ({ ...current, [key]: value }))
     if (key === 'prefundingEnabled') setScenarioChoice(value ? 'prefunded' : 'paygo')
+  }
+  const apply = (overrides: Partial<ModelAssumptions>) => {
+    setAssumptions((current) => ({ ...current, ...overrides }))
+    if (overrides.prefundingEnabled !== undefined) {
+      setScenarioChoice(overrides.prefundingEnabled ? 'prefunded' : 'paygo')
+    }
   }
   const selectedScenario = comparison[scenarioChoice]
 
@@ -449,8 +751,8 @@ export default function App() {
       <header className="topbar"><div className="brand"><div className="brand-mark">ER</div><div><strong>Entitlements Reform</strong><span>Cohort fiscal simulator · 2026 reform</span></div></div><nav>{(['policy', 'results', 'audit', 'sources'] as Tab[]).map((item) => <button key={item} className={tab === item ? 'active' : ''} onClick={() => setTab(item)}>{item === 'sources' ? 'Model & Sources' : item}</button>)}</nav><div aria-live="polite" className={`solver-status ${!calculating && comparison.paygo.permanent.converged && comparison.prefunded.permanent.converged && comparison.paygo.twoRate.converged && comparison.prefunded.twoRate.converged ? 'ok' : 'warn'}`}><span />{calculating ? 'Calculating…' : comparison.paygo.twoRate.converged && comparison.prefunded.twoRate.converged ? 'Solvers converged' : 'Check solver bounds'}</div></header>
       <main>
         {comparisonAttempt.error && <section className="card model-error"><strong>Those assumptions could not be calculated.</strong><span>{comparisonAttempt.error} Showing the last valid results.</span></section>}
-        {tab === 'policy' && <PolicyPanel assumptions={assumptions} update={update} />}
-        {tab === 'results' && <ResultsPanel comparison={comparison} scenarioChoice={scenarioChoice} setScenarioChoice={setScenarioChoice} scheduleChoice={scheduleChoice} setScheduleChoice={setScheduleChoice} />}
+        {tab === 'policy' && <PolicyPanel assumptions={assumptions} update={update} apply={apply} />}
+        {tab === 'results' && <ResultsPanel comparison={comparison} referenceComparison={referenceComparison} macroBudgetChanged={macroBudgetChanged} scenarioChoice={scenarioChoice} setScenarioChoice={setScenarioChoice} scheduleChoice={scheduleChoice} setScheduleChoice={setScheduleChoice} />}
         {tab === 'audit' && <AuditPanel scenario={selectedScenario} scheduleChoice={scheduleChoice} />}
         {tab === 'sources' && <SourcesPanel />}
       </main>

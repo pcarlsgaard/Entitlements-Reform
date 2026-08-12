@@ -32,9 +32,9 @@ export const sources: readonly SourceRecord[] = [
     agency: 'Congressional Budget Office',
     datasetOrReport: 'The Budget and Economic Outlook: 2026 to 2036',
     publicationDate: '2026-02-11',
-    relevantTable: '2026 headline budget totals and debt held by the public',
+    relevantTable: '2026 headline budget totals, debt held by the public, and outlays by category',
     url: 'https://www.cbo.gov/publication/62105',
-    notes: 'Calibrates starting debt at 101% GDP, nominal GDP near $31.8T, and starting effective nominal rate as 3.3% GDP net interest divided by 101% GDP debt.',
+    notes: 'Calibrates starting debt at 101% GDP, nominal GDP near $31.8T, starting effective nominal rate as 3.3% GDP net interest divided by 101% GDP debt, and 2026 nondefense discretionary outlays at 3.1% of GDP.',
   },
   {
     id: 'hhs-fpl-2026',
@@ -74,6 +74,6 @@ export const sources: readonly SourceRecord[] = [
     publicationDate: '2026-08-09',
     relevantTable: 'src/model/defaults.ts',
     url: 'https://github.com/pcarlsgaard/Entitlements-Reform',
-    notes: 'Current-law SS benefit, legacy Medicare cost, cohort size/growth, other OASDI, under-65 Medicare, and other-primary shares are placeholders exposed as typed assumptions rather than hidden residuals.',
+    notes: 'Current-law SS benefit, legacy Medicare cost, cohort size/growth, other OASDI, under-65 Medicare, NDD growth, and other-primary-excluding-NDD share are exposed typed assumptions rather than hidden residuals. Central NDD real growth matches real GDP growth to preserve the previous baseline; it is not presented as CBO policy.',
   },
 ]

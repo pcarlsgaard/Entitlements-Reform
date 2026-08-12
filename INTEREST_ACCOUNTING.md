@@ -22,8 +22,9 @@ primary_spending_t =
   + legacy_Medicare_t
   + premium_support_PAYGO_t
   + under65_Medicare_t
+  + nondefense_discretionary_t
   + new_cohort_prefunding_t
-  + other_primary_spending_t
+  + other_primary_spending_excluding_NDD_t
 ```
 
 ### 2. Primary balance
@@ -160,8 +161,9 @@ At minimum display, in dollars and %GDP:
 - Legacy/current-law senior Medicare
 - Premium-support PAYGO
 - Under-65 Medicare
+- Nondefense discretionary spending
 - New-cohort prefunding
-- Other primary spending
+- Other primary spending excluding nondefense discretionary spending
 - **Total primary spending**
 
 ### Financing and interest

@@ -261,15 +261,16 @@ Every simulation year should retain at least these components separately:
 4. Legacy/current-law senior Medicare spending.
 5. Premium-support PAYGO for senior cohorts not prefunded.
 6. Under-65 Medicare outside the senior reform.
-7. New-cohort prefunding.
-8. Other federal primary spending.
-9. Net interest.
-10. Total primary spending.
-11. Total federal spending.
-12. Federal revenue.
-13. Primary balance.
-14. Overall deficit.
-15. Debt/GDP.
+7. Nondefense discretionary spending.
+8. New-cohort prefunding.
+9. Other federal primary spending excluding nondefense discretionary spending.
+10. Net interest.
+11. Total primary spending.
+12. Total federal spending.
+13. Federal revenue.
+14. Primary balance.
+15. Overall deficit.
+16. Debt/GDP.
 
 The sum of primary spending components must exactly reconcile to modeled total primary spending within floating-point tolerance.
 
@@ -438,6 +439,30 @@ Priority official sources:
 - HHS 2026 federal poverty guideline.
 
 When exact age-specific Medicare spending is not available in a clean official form, use a clearly named average per-beneficiary calibration rather than inventing an unsupported age-cost curve.
+
+## 10.1 Macro and broader-budget sensitivities
+
+The central model uses one explicit real GDP growth assumption to construct the nominal GDP path together with inflation. A real-GDP sensitivity changes the denominator for all spending and debt ratios and the growth term in debt dynamics; it does not endogenously change benefit rules, population, productivity, interest rates, or other inputs.
+
+Nondefense discretionary spending must be modeled as a named component rather than buried in a fixed “other” share:
+
+```text
+NDD_2026 = NDD_share_2026 * GDP_2026
+
+NDD_t = NDD_2026
+      * [(1 + real_NDD_growth) * (1 + inflation)]^(t - 2026)
+```
+
+Central 2026 calibration:
+
+- nondefense discretionary outlays: **3.1% of GDP**, from CBO's February 2026 baseline;
+- central real NDD growth for this simulator: **1.8%**, equal to central real GDP growth, which preserves the previous aggregate broader-primary calibration as a share of GDP until a user deliberately changes the NDD path;
+- other primary spending excluding NDD: **6.3% of GDP**;
+- combined NDD plus other-primary-excluding-NDD in 2026: **9.4% of GDP**, matching the prior model calibration.
+
+The 1.8% NDD growth default is a continuity modeling assumption, not a claim that it is CBO's statutory baseline. The UI must allow alternatives such as 1.0% real growth or a real freeze and show the resulting NDD/GDP path.
+
+When reporting a macro/budget sensitivity against central defaults, hold benefit design, prefunding rules, transition dates, and fiscal objectives fixed. Describe the result as a fiscal sensitivity, not a general-equilibrium forecast.
 
 ---
 
