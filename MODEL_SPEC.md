@@ -133,6 +133,38 @@ annual_prefunding_dollars = PV_total_per_person * funded_cohort_size
 annual_prefunding_GDP = annual_prefunding_dollars / GDP
 ```
 
+## 2.5 Independent financing strategies
+
+The financing primitive is:
+
+```ts
+fundingStrategy:
+  | 'paygo'
+  | 'socialSecurityOnly'
+  | 'medicareOnly'
+  | 'both'
+  | 'socialSecurityFirst'
+```
+
+Social Security and Medicare sleeves must remain separate so either benefit can be PAYGO-financed while the other is prefunded. Changing the financing strategy must not change the benefit formula, premium-support promise, transition dates, mortality, or cohort size.
+
+For `socialSecurityFirst`, calculate the annual Social Security cash-flow dividend against the identical PAYGO flat-benefit promise:
+
+```text
+SS_dividend_t = avoided_flat_SS_PAYGO_t - SS_prefunding_deposit_t
+available_SS_dividend_t = max(SS_dividend_t, 0)
+
+Medicare_prefunding_deposit_t = min(
+  available_SS_dividend_t,
+  full_Medicare_endowment_cost_t
+)
+
+Medicare_funded_share_t =
+  Medicare_prefunding_deposit_t / full_Medicare_endowment_cost_t
+```
+
+A negative Social Security dividend cannot fund Medicare. The funded share is locked to the cohort receiving that year's endowment and later reduces that cohort's premium-support PAYGO spending proportionally. Report the funding year separately from the later Medicare eligibility year.
+
 ---
 
 # 3. Medicare reform

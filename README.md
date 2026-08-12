@@ -23,6 +23,8 @@ The project is designed to answer a central fiscal question:
 - Default start age: 18
 - Alternative: birth
 - Real endowment yield: 2.5%
+- Five financing strategies: both benefits PAYGO, Social Security only prefunded, Medicare only prefunded, both prefunded, and Social Security-first sequential prefunding
+- In the sequential strategy, only a positive Social Security prefunding dividend is available for the new cohort's Medicare endowment; partial funding follows that cohort into Medicare eligibility
 
 ### Medicare
 
@@ -43,7 +45,7 @@ The project is designed to answer a central fiscal question:
 - 2026 nondefense discretionary outlays: 3.1% of GDP
 - Default real NDD growth: 1.8% (matches central GDP growth to preserve the prior baseline share)
 
-The Policy view exposes macro and broader-budget sensitivities including real GDP growth, inflation, cohort growth, borrowing rates, debt sensitivity, legacy benefit growth, and an independent nondefense discretionary spending path. The Results view compares any custom combination with the central macro/budget assumptions while holding the selected benefit design and fiscal objective fixed.
+The Policy view exposes financing strategy plus macro and broader-budget sensitivities including real GDP growth, inflation, cohort growth, borrowing rates, debt sensitivity, legacy benefit growth, and an independent nondefense discretionary spending path. The Results view compares all five financing strategies and compares any custom macro/budget combination with central assumptions while holding the benefit design and fiscal objective fixed.
 
 ## Core modeling principle
 

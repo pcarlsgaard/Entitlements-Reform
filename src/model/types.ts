@@ -1,5 +1,12 @@
 export type FundingStartAge = 0 | 18
 
+export type FundingStrategy =
+  | 'paygo'
+  | 'socialSecurityOnly'
+  | 'medicareOnly'
+  | 'both'
+  | 'socialSecurityFirst'
+
 export type FiscalObjective =
   | 'stableTerminalDebt'
   | 'returnToStartingDebt'
@@ -18,7 +25,7 @@ export interface ModelAssumptions {
   vestingYears: number
   currentLawSSBenefit2026: number
   currentLawSSBenefitRealGrowth: number
-  prefundingEnabled: boolean
+  fundingStrategy: FundingStrategy
   prefundingStartAge: FundingStartAge
   realEndowmentYield: number
   medicareEligibilityAge: number
@@ -60,12 +67,14 @@ export interface SSCohortAudit extends BenefitShares {
   survivalFraction: number
   prefunded: boolean
   legacyPaygoBillions: number
+  flatBenefitBillions: number
   flatPaygoBillions: number
   totalCohortSSSpendingBillions: number
 }
 
 export interface SocialSecurityYearResult {
   legacyBillions: number
+  flatBenefitBillions: number
   flatPaygoBillions: number
   cohorts: SSCohortAudit[]
 }
@@ -76,7 +85,7 @@ export interface MedicareCohortAudit {
   legacyShare: number
   initialCohortMillions: number
   survivingBeneficiariesMillions: number
-  prefunded: boolean
+  prefundedShare: number
   legacyBillions: number
   premiumSupportPaygoBillions: number
 }
@@ -91,6 +100,17 @@ export interface EndowmentPerPerson {
   socialSecurityPV: number
   medicarePV: number
   totalPV: number
+}
+
+export interface AnnualFundingPlan {
+  year: number
+  socialSecurityPrefunding: number
+  fullMedicarePrefundingCost: number
+  medicarePrefunding: number
+  totalPrefunding: number
+  avoidedSocialSecurityPaygo: number
+  socialSecurityPrefundingDividend: number
+  medicarePrefundedShare: number
 }
 
 export interface PrimaryComponents {
@@ -108,6 +128,12 @@ export interface PrimaryComponents {
 export interface SimulationYear extends PrimaryComponents {
   year: number
   nominalGDP: number
+  socialSecurityPrefunding: number
+  medicarePrefunding: number
+  fullMedicarePrefundingCost: number
+  avoidedSocialSecurityPaygo: number
+  socialSecurityPrefundingDividend: number
+  medicarePrefundedShare: number
   totalPrimarySpending: number
   revenue: number
   revenueRate: number
@@ -133,6 +159,8 @@ export interface SimulationResult {
   medicareByYear: Map<number, MedicareYearResult>
   endowment2026: EndowmentPerPerson
   cumulativePrefundingBillions: number
+  cumulativeSocialSecurityPrefundingBillions: number
+  cumulativeMedicarePrefundingBillions: number
 }
 
 export interface SolverDiagnostics {
@@ -165,7 +193,7 @@ export interface TwoRateSolution {
 }
 
 export interface ScenarioResult {
-  label: 'PAYGO benefit reform' | 'Prefunded benefit reform'
+  label: string
   assumptions: ModelAssumptions
   permanent: PermanentRateSolution
   twoRate: TwoRateSolution
@@ -174,9 +202,14 @@ export interface ScenarioResult {
   matureNetInterestGDP: number
   matureTotalSpendingGDP: number
   endowment: EndowmentPerPerson
+  firstPositiveSocialSecurityDividendYear: number | null
+  firstMedicarePrefundingYear: number | null
+  firstMedicarePrefundedEligibilityYear: number | null
+  firstFullMedicarePrefundingYear: number | null
 }
 
 export interface ScenarioComparison {
+  scenarios: Record<FundingStrategy, ScenarioResult>
   paygo: ScenarioResult
   prefunded: ScenarioResult
   prefundingTransitionFinancingEffect: {

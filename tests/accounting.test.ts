@@ -6,6 +6,7 @@ import {
   updateEffectiveRate,
 } from '../src/model/debt'
 import { simulateConstantRevenue } from '../src/model/simulate'
+import { fundingStrategies } from '../src/model/fundingStrategy'
 
 describe('interest-rate mechanics', () => {
   it('lambda 1 reprices immediately', () => {
@@ -22,10 +23,10 @@ describe('interest-rate mechanics', () => {
 })
 
 describe('annual federal accounting', () => {
-  for (const prefundingEnabled of [false, true]) {
-    it(`reconciles every annual identity with prefunding ${prefundingEnabled ? 'ON' : 'OFF'}`, () => {
+  for (const fundingStrategy of fundingStrategies) {
+    it(`reconciles every annual identity with ${fundingStrategy} financing`, () => {
       const simulation = simulateConstantRevenue(
-        withAssumptions({ prefundingEnabled, endYear: 2130 }),
+        withAssumptions({ fundingStrategy, endYear: 2130 }),
         0.22,
       )
       for (const row of simulation.years) {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { withAssumptions } from '../src/model/defaults'
 import { compareScenarios } from '../src/model/scenarios'
+import { fundingStrategies } from '../src/model/fundingStrategy'
 import {
   calculateMatureSystemYear,
   objectiveSatisfied,
@@ -14,7 +15,7 @@ describe('mature-system timing', () => {
   it('age-18 prefunding matures in 2118', () => {
     expect(
       calculateMatureSystemYear(
-        withAssumptions({ prefundingEnabled: true, prefundingStartAge: 18 }),
+        withAssumptions({ fundingStrategy: 'both', prefundingStartAge: 18 }),
       ),
     ).toBe(2118)
   })
@@ -23,7 +24,7 @@ describe('mature-system timing', () => {
     expect(
       calculateMatureSystemYear(
         withAssumptions({
-          prefundingEnabled: false,
+          fundingStrategy: 'paygo',
           benefitPhaseInYears: 20,
           fullRetirementAge: 70,
           maxModeledAge: 110,
@@ -59,9 +60,9 @@ describe('permanent revenue solver', () => {
 })
 
 describe('two-rate solver', () => {
-  for (const prefundingEnabled of [false, true]) {
-    it(`reaches the handoff target with prefunding ${prefundingEnabled ? 'ON' : 'OFF'}`, () => {
-      const assumptions = withAssumptions({ prefundingEnabled, endYear: 2160 })
+  for (const fundingStrategy of fundingStrategies) {
+    it(`reaches the handoff target with ${fundingStrategy} financing`, () => {
+      const assumptions = withAssumptions({ fundingStrategy, endYear: 2160 })
       const solution = solveTwoRateSchedule(assumptions)
       expect(solution.transitionConverged).toBe(true)
       expect(solution.handoffDebtGDP).toBeCloseTo(
@@ -70,9 +71,9 @@ describe('two-rate solver', () => {
       )
     })
 
-    it(`uses exactly two rates around the handoff with prefunding ${prefundingEnabled ? 'ON' : 'OFF'}`, () => {
+    it(`uses exactly two rates around the handoff with ${fundingStrategy} financing`, () => {
       const solution = solveTwoRateSchedule(
-        withAssumptions({ prefundingEnabled, endYear: 2160 }),
+        withAssumptions({ fundingStrategy, endYear: 2160 }),
       )
       for (const row of solution.simulation.years) {
         expect(row.revenueRate).toBe(
@@ -83,9 +84,9 @@ describe('two-rate solver', () => {
       }
     })
 
-    it(`produces a non-rising mature terminal debt path with prefunding ${prefundingEnabled ? 'ON' : 'OFF'}`, () => {
+    it(`produces a non-rising mature terminal debt path with ${fundingStrategy} financing`, () => {
       const solution = solveTwoRateSchedule(
-        withAssumptions({ prefundingEnabled, endYear: 2160 }),
+        withAssumptions({ fundingStrategy, endYear: 2160 }),
       )
       expect(solution.matureConverged).toBe(true)
       const matureRows = solution.simulation.years.filter(
@@ -101,17 +102,17 @@ describe('two-rate solver', () => {
 })
 
 describe('scenario comparison', () => {
-  it('uses identical benefit assumptions except for the prefunding toggle', () => {
+  it('uses identical benefit assumptions except for the funding strategy', () => {
     const result = compareScenarios(shorter)
-    const { prefundingEnabled: paygoToggle, ...paygo } = result.paygo.assumptions
-    const { prefundingEnabled: prefundedToggle, ...prefunded } =
+    const { fundingStrategy: paygoStrategy, ...paygo } = result.paygo.assumptions
+    const { fundingStrategy: prefundedStrategy, ...prefunded } =
       result.prefunded.assumptions
-    expect(paygoToggle).toBe(false)
-    expect(prefundedToggle).toBe(true)
+    expect(paygoStrategy).toBe('paygo')
+    expect(prefundedStrategy).toBe('both')
     expect(paygo).toEqual(prefunded)
   })
 
-  it('prefunding changes financing timing without altering policy primitives', () => {
+  it('funding strategy changes timing without altering policy primitives', () => {
     const result = compareScenarios(shorter)
     expect(result.paygo.permanent.simulation.years[0]?.newCohortPrefunding).toBe(0)
     expect(
@@ -123,5 +124,10 @@ describe('scenario comparison', () => {
     expect(result.paygo.assumptions.premiumSupport2026).toBe(
       result.prefunded.assumptions.premiumSupport2026,
     )
+    const sequential = result.scenarios.socialSecurityFirst
+    expect(sequential.firstPositiveSocialSecurityDividendYear).toBe(2080)
+    expect(sequential.firstMedicarePrefundingYear).toBe(2080)
+    expect(sequential.firstMedicarePrefundedEligibilityYear).toBe(2127)
+    expect(sequential.firstFullMedicarePrefundingYear).toBeNull()
   })
 })

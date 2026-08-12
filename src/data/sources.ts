@@ -64,7 +64,7 @@ export const sources: readonly SourceRecord[] = [
     publicationDate: 'repository current version',
     relevantTable: 'Policy defaults',
     url: 'https://github.com/pcarlsgaard/Entitlements-Reform',
-    notes: 'Defines FPL multiple, FRA, vesting, premium support, transition years, prefunding ages, and the two tax presentations.',
+    notes: 'Defines FPL multiple, FRA, vesting, premium support, transition years, prefunding ages, five program-financing strategies including SS-first sequencing, and the two tax presentations.',
   },
   {
     id: 'first-pass-calibrations',

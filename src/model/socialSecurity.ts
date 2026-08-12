@@ -1,4 +1,5 @@
 import { survivalProbability } from './mortality'
+import { prefundsSocialSecurity } from './fundingStrategy'
 import type {
   BenefitShares,
   ModelAssumptions,
@@ -47,7 +48,7 @@ export function isSSFlatComponentPrefunded(
   assumptions: ModelAssumptions,
 ): boolean {
   return (
-    assumptions.prefundingEnabled &&
+    prefundsSocialSecurity(assumptions.fundingStrategy) &&
     retirementYear >= firstPrefundedSSRetirementYear(assumptions)
   )
 }
@@ -106,9 +107,11 @@ export function socialSecurityForYear(
     const legacyPaygoBillions =
       (survivingBeneficiariesMillions * legacyShare * currentLawBenefit) /
       1_000
+    const flatBenefitBillions =
+      (survivingBeneficiariesMillions * flatShare * flatBenefit) / 1_000
     const flatPaygoBillions = prefunded
       ? 0
-      : (survivingBeneficiariesMillions * flatShare * flatBenefit) / 1_000
+      : flatBenefitBillions
 
     cohorts.push({
       retirementYear,
@@ -119,6 +122,7 @@ export function socialSecurityForYear(
       flatShare,
       prefunded,
       legacyPaygoBillions,
+      flatBenefitBillions,
       flatPaygoBillions,
       totalCohortSSSpendingBillions:
         legacyPaygoBillions + flatPaygoBillions,
@@ -128,6 +132,10 @@ export function socialSecurityForYear(
   return {
     legacyBillions: cohorts.reduce(
       (sum, cohort) => sum + cohort.legacyPaygoBillions,
+      0,
+    ),
+    flatBenefitBillions: cohorts.reduce(
+      (sum, cohort) => sum + cohort.flatBenefitBillions,
       0,
     ),
     flatPaygoBillions: cohorts.reduce(
