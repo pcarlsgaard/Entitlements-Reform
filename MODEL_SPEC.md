@@ -473,6 +473,7 @@ Annual-path outputs should also include:
 
 - policy-horizon endpoint, peak ceiling, and endpoint debt target,
 - peak required revenue/GDP and year,
+- opening fiscal adjustment versus CBO's 2026 current-law revenue/GDP,
 - first year revenue declines, if any,
 - minimum required revenue/GDP and year,
 - revenue/GDP at the policy endpoint,
@@ -512,12 +513,15 @@ NDD_t = NDD_2026
 
 Central 2026 calibration:
 
+- current-law federal revenue: **17.5% of GDP**, from CBO's February 2026 baseline;
 - nondefense discretionary outlays: **3.1% of GDP**, from CBO's February 2026 baseline;
 - central real NDD growth for this simulator: **1.8%**, equal to central real GDP growth, which holds NDD's share constant until a user deliberately changes the path;
 - other primary spending excluding NDD: **7.235% of GDP**, the named residual after separately modeled categories;
 - scheduled-current-law primary spending: **20.0% of GDP** and net interest **3.3%**, reconciling to CBO's **23.3% total outlays** before reform prefunding deposits.
 
 The 1.8% NDD growth default is a continuity modeling assumption, not a claim that it is CBO's statutory baseline. The UI must allow alternatives such as 1.0% real growth or a real freeze and show the resulting NDD/GDP path.
+
+For each scenario, calculate `openingRevenueRate - 17.5% GDP` and display it next to the opening/single rate as the required opening fiscal adjustment. This difference is not necessarily a tax increase: it may be achieved through additional federal revenue, reductions in spending outside the modeled entitlement path, or a combination.
 
 When reporting a macro/budget sensitivity against central defaults, hold benefit design, prefunding rules, transition dates, and fiscal objectives fixed. Describe the result as a fiscal sensitivity, not a general-equilibrium forecast.
 
@@ -574,4 +578,5 @@ The implementation is not considered reliable until automated tests verify:
 - rate pass-through semantics are correct,
 - decomposition reconciles exactly,
 - constant-revenue solver satisfies both policy-horizon debt constraints without changing the tax rate,
-- annual required-revenue path reaches the endpoint target without breaching the peak ceiling, begins at the constant rate, never rises, and reports its first decline and exact minimum across the visible simulation.
+- annual required-revenue path reaches the endpoint target without breaching the peak ceiling, begins at the constant rate, never rises, and reports its first decline and exact minimum across the visible simulation,
+- opening fiscal adjustment exactly reconciles the opening rate to CBO's 17.5%-of-GDP 2026 current-law revenue baseline.

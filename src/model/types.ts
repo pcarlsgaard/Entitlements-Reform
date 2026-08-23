@@ -195,6 +195,7 @@ export interface AnnualRevenuePathSolution {
   endpointDebtTargetGDP: number
   endpointDebtGDP: number
   startingRevenueRate: number
+  openingFiscalAdjustmentGDP: number
   revenueDeclineYear: number | null
   nonIncreasing: boolean
   peakRevenueRate: number

@@ -3,6 +3,7 @@ import {
   simulateConstantRevenue,
   type RevenueSchedule,
 } from './simulate'
+import { cbo2026RevenueGDP } from '../data/cboBaseline'
 import { hasAnyPrefunding } from './fundingStrategy'
 import { survivalProbability } from './mortality'
 import type {
@@ -350,6 +351,8 @@ export function solveAnnualRevenuePathUsing(
     endpointDebtTargetGDP: target,
     endpointDebtGDP: endpoint.endingDebtGDP,
     startingRevenueRate: visibleRows[0]!.revenueRate,
+    openingFiscalAdjustmentGDP:
+      visibleRows[0]!.revenueRate - cbo2026RevenueGDP,
     revenueDeclineYear: revenueDecline?.year ?? null,
     nonIncreasing,
     peakRevenueRate: peakRevenue.revenueRate,

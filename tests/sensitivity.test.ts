@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { nonDefenseDiscretionaryBillions } from '../src/model/budget'
+import { cbo2026RevenueGDP } from '../src/data/cboBaseline'
 import { defaultAssumptions, withAssumptions } from '../src/model/defaults'
 import {
   centralMacroBudgetReference,
@@ -12,6 +13,10 @@ import {
 import { solvePermanentRevenueRate } from '../src/model/solveTax'
 
 describe('nondefense discretionary path', () => {
+  it('records CBO 2026 current-law revenue at 17.5% of GDP', () => {
+    expect(cbo2026RevenueGDP).toBe(0.175)
+  })
+
   it('calibrates 2026 NDD to 3.1% of GDP', () => {
     expect(
       nonDefenseDiscretionaryBillions(2026, defaultAssumptions),

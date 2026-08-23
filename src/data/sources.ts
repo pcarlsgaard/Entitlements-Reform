@@ -32,9 +32,9 @@ export const sources: readonly SourceRecord[] = [
     agency: 'Congressional Budget Office',
     datasetOrReport: 'The Budget and Economic Outlook: 2026 to 2036',
     publicationDate: '2026-02-11',
-    relevantTable: '2026 headline budget totals, debt held by the public, and outlays by category',
+    relevantTable: '2026 headline revenues, outlays, deficit, debt held by the public, and outlays by category',
     url: 'https://www.cbo.gov/publication/62105',
-    notes: 'Calibrates starting debt at 101% GDP, nominal GDP near $31.8T, starting effective nominal rate as 3.3% GDP net interest divided by 101% GDP debt, and 2026 nondefense discretionary outlays at 3.1% of GDP.',
+    notes: 'Calibrates current-law revenue at 17.5% of GDP, starting debt at 101% GDP, nominal GDP near $31.8T, starting effective nominal rate as 3.3% GDP net interest divided by 101% GDP debt, and 2026 nondefense discretionary outlays at 3.1% of GDP.',
   },
   {
     id: 'hhs-fpl-2026',

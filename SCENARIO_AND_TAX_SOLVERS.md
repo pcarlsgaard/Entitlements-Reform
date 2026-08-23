@@ -186,7 +186,7 @@ requiredRevenueRate_t = max(
 
 This lets the revenue burden fall when the transition runs off without ever requiring it to rise. If the maintenance requirement later rises above the cap, preserve the no-increase rule and allow post-cutoff debt to drift rather than silently raising taxes.
 
-`endpointDebtTargetGDP` is always the user-selected target; there are no alternate fiscal-objective modes. Report starting revenue/GDP, the first decline year, minimum revenue/GDP and its year across the visible simulation, endpoint revenue rate, peak debt/GDP, and endpoint debt/GDP. Do not call these values “transition” and “mature” rates.
+`endpointDebtTargetGDP` is always the user-selected target; there are no alternate fiscal-objective modes. Report starting revenue/GDP, the opening fiscal adjustment versus CBO's 17.5%-of-GDP 2026 current-law revenue baseline, the first decline year, minimum revenue/GDP and its year across the visible simulation, endpoint revenue rate, peak debt/GDP, and endpoint debt/GDP. The opening fiscal adjustment may be supplied by higher revenues, lower spending elsewhere, or both. Do not call these values “transition” and “mature” rates.
 
 ## 4. Mature-system year
 
