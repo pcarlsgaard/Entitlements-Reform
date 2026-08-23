@@ -5,7 +5,10 @@ import {
   centralMacroBudgetReference,
   hasNoncentralMacroBudgetAssumptions,
 } from '../src/model/sensitivity'
-import { simulateConstantRevenue } from '../src/model/simulate'
+import {
+  simulateConstantRevenue,
+  simulateCurrentLawConstantRevenue,
+} from '../src/model/simulate'
 import { solvePermanentRevenueRate } from '../src/model/solveTax'
 
 describe('nondefense discretionary path', () => {
@@ -15,12 +18,13 @@ describe('nondefense discretionary path', () => {
     ).toBe(0.031 * defaultAssumptions.startingNominalGDPBillions)
   })
 
-  it('preserves the prior 9.4% broader-primary calibration in 2026', () => {
-    const row = simulateConstantRevenue(defaultAssumptions, 0.22).years[0]!
-    expect(
-      (row.nonDefenseDiscretionary + row.otherPrimarySpending) /
-        row.nominalGDP,
-    ).toBeCloseTo(0.094, 12)
+  it('calibrates scheduled-current-law 2026 primary spending to CBO', () => {
+    const row = simulateCurrentLawConstantRevenue(
+      defaultAssumptions,
+      'scheduled',
+      0.22,
+    ).years[0]!
+    expect(row.totalPrimarySpending / row.nominalGDP).toBeCloseTo(0.2, 3)
   })
 
   it('holds its GDP share constant when NDD and real GDP growth match', () => {

@@ -1,17 +1,36 @@
-import { simulate, simulateConstantRevenue } from './simulate'
+import {
+  simulate,
+  simulateConstantRevenue,
+  type RevenueSchedule,
+} from './simulate'
 import { hasAnyPrefunding } from './fundingStrategy'
+import { survivalProbability } from './mortality'
 import type {
   FiscalObjective,
+  AnnualRevenuePathSolution,
   ModelAssumptions,
   PermanentRateSolution,
   SimulationResult,
   SolverDiagnostics,
-  TwoRateSolution,
 } from './types'
 
 const MAX_ITERATIONS = 80
 const RATE_TOLERANCE = 1e-10
 const DEBT_TOLERANCE = 1e-7
+
+export type ConstantRevenueSimulator = (
+  revenueRate: number,
+) => SimulationResult
+
+export type ScheduledRevenueSimulator = (
+  revenueSchedule: RevenueSchedule,
+) => SimulationResult
+
+export function policyHorizonEndYear(
+  assumptions: ModelAssumptions,
+): number {
+  return assumptions.reformYear + assumptions.policyHorizonYears - 1
+}
 
 function finite(value: number): boolean {
   return Number.isFinite(value)
@@ -23,22 +42,26 @@ export function simulationDiagnostics(
   iterations: number,
   converged: boolean,
 ): SolverDiagnostics {
-  const rows = simulation.years
+  const horizonEnd = Math.min(
+    policyHorizonEndYear(simulation.assumptions),
+    simulation.assumptions.endYear,
+  )
+  const rows = simulation.years.filter((row) => row.year <= horizonEnd)
   const last = rows.at(-1)
   const prior = rows.at(-2)
   if (!last || !prior) throw new Error('Simulation horizon is too short')
   const peak = rows.reduce((current, row) =>
-    row.beginningDebtGDP > current.beginningDebtGDP ? row : current,
+    row.endingDebtGDP > current.endingDebtGDP ? row : current,
   )
   return {
     converged,
     iterations,
     rate,
-    peakDebtGDP: peak.beginningDebtGDP,
+    peakDebtGDP: peak.endingDebtGDP,
     peakYear: peak.year,
-    terminalDebtGDP: last.beginningDebtGDP,
+    terminalDebtGDP: last.endingDebtGDP,
     terminalAnnualDebtChange:
-      last.beginningDebtGDP - prior.beginningDebtGDP,
+      last.endingDebtGDP - prior.endingDebtGDP,
     terminalNetInterestGDP: last.netInterest / last.nominalGDP,
     effectiveInterestRateAtPeak: peak.effectiveNominalInterestRate,
     terminalEffectiveInterestRate: last.effectiveNominalInterestRate,
@@ -66,6 +89,11 @@ export function objectiveSatisfied(
     diagnostics.peakDebtGDP <=
     assumptions.peakDebtCeilingGDP + DEBT_TOLERANCE
   switch (objective) {
+    case 'targetDebtAtPolicyHorizon':
+      return (
+        diagnostics.terminalDebtGDP <=
+        assumptions.policyHorizonDebtTargetGDP + DEBT_TOLERANCE
+      )
     case 'stableTerminalDebt':
       return stable
     case 'returnToStartingDebt':
@@ -77,12 +105,13 @@ export function objectiveSatisfied(
   }
 }
 
-export function solvePermanentRevenueRate(
+function solvePermanentRevenueRateUsing(
   assumptions: ModelAssumptions,
+  makeSimulation: ConstantRevenueSimulator,
   lowerBound = 0,
   upperBound = 0.6,
 ): PermanentRateSolution {
-  const upperSimulation = simulateConstantRevenue(assumptions, upperBound)
+  const upperSimulation = makeSimulation(upperBound)
   if (
     !objectiveSatisfied(
       upperSimulation,
@@ -101,7 +130,7 @@ export function solvePermanentRevenueRate(
   let iterations = 0
   while (iterations < MAX_ITERATIONS && high - low > RATE_TOLERANCE) {
     const midpoint = (low + high) / 2
-    const candidate = simulateConstantRevenue(assumptions, midpoint)
+    const candidate = makeSimulation(midpoint)
     if (
       objectiveSatisfied(candidate, assumptions.fiscalObjective, assumptions)
     ) {
@@ -111,11 +140,38 @@ export function solvePermanentRevenueRate(
     }
     iterations += 1
   }
-  const simulation = simulateConstantRevenue(assumptions, high)
+  const simulation = makeSimulation(high)
   return {
     ...simulationDiagnostics(simulation, high, iterations, true),
     simulation,
   }
+}
+
+export function solvePermanentRevenueRate(
+  assumptions: ModelAssumptions,
+  lowerBound = 0,
+  upperBound = 0.6,
+): PermanentRateSolution {
+  return solvePermanentRevenueRateUsing(
+    assumptions,
+    (rate) => simulateConstantRevenue(assumptions, rate),
+    lowerBound,
+    upperBound,
+  )
+}
+
+export function solvePermanentRevenueRateWithSimulator(
+  assumptions: ModelAssumptions,
+  makeSimulation: ConstantRevenueSimulator,
+  lowerBound = 0,
+  upperBound = 0.6,
+): PermanentRateSolution {
+  return solvePermanentRevenueRateUsing(
+    assumptions,
+    makeSimulation,
+    lowerBound,
+    upperBound,
+  )
 }
 
 export function calculateMatureSystemYear(
@@ -137,132 +193,147 @@ export function calculateMatureSystemYear(
   return Math.max(lastBlendedExitYear + 1, assumptions.medicareYearB + 1)
 }
 
-function handoffDebtGDP(
+function firstRunoffYear(
+  startingYear: number,
+  startingAge: number,
+  remainingShare: number,
   assumptions: ModelAssumptions,
-  matureSystemYear: number,
-  transitionRate: number,
 ): number {
-  const simulation = simulate(assumptions, (year) =>
-    year < matureSystemYear ? transitionRate : 0,
-  )
-  return (
-    simulation.years.find((row) => row.year === matureSystemYear)
-      ?.beginningDebtGDP ?? Number.NaN
-  )
-}
-
-function solveTransitionRate(
-  assumptions: ModelAssumptions,
-  matureSystemYear: number,
-  lowerBound = 0,
-  upperBound = 0.6,
-): { rate: number; converged: boolean } {
-  const target = assumptions.matureDebtTargetGDP
-  const lowDebt = handoffDebtGDP(assumptions, matureSystemYear, lowerBound)
-  const highDebt = handoffDebtGDP(assumptions, matureSystemYear, upperBound)
-  const lowEndpointIsAboveTarget = !finite(lowDebt) || lowDebt >= target
-  const highEndpointIsBelowTarget = finite(highDebt) && highDebt <= target
-  if (!lowEndpointIsAboveTarget || !highEndpointIsBelowTarget) {
-    return { rate: upperBound, converged: false }
-  }
-  let low = lowerBound
-  let high = upperBound
-  for (let iteration = 0; iteration < MAX_ITERATIONS; iteration += 1) {
-    const midpoint = (low + high) / 2
-    const debt = handoffDebtGDP(assumptions, matureSystemYear, midpoint)
-    if (Math.abs(debt - target) <= DEBT_TOLERANCE) {
-      return { rate: midpoint, converged: true }
-    }
-    if (debt > target || !finite(debt)) low = midpoint
-    else high = midpoint
-  }
-  return { rate: (low + high) / 2, converged: true }
-}
-
-function maturePathIsStable(
-  simulation: SimulationResult,
-  matureSystemYear: number,
-  target: number,
-): boolean {
-  const matureRows = simulation.years.filter(
-    (row) => row.year >= matureSystemYear,
-  )
-  const last = matureRows.at(-1)
-  const prior = matureRows.at(-2)
-  if (!last || !prior) return false
-  const maximum = Math.max(...matureRows.map((row) => row.beginningDebtGDP))
-  return (
-    finite(maximum) &&
-    maximum <= target + DEBT_TOLERANCE &&
-    last.beginningDebtGDP - prior.beginningDebtGDP <= DEBT_TOLERANCE
-  )
-}
-
-function solveMatureRate(
-  assumptions: ModelAssumptions,
-  matureSystemYear: number,
-  transitionRate: number,
-  lowerBound = 0,
-  upperBound = 0.6,
-): { rate: number; converged: boolean } {
-  const makeSimulation = (matureRate: number) =>
-    simulate(assumptions, (year) =>
-      year < matureSystemYear ? transitionRate : matureRate,
-    )
-  if (
-    !maturePathIsStable(
-      makeSimulation(upperBound),
-      matureSystemYear,
-      assumptions.matureDebtTargetGDP,
-    )
+  for (
+    let age = startingAge;
+    age <= assumptions.maxModeledAge;
+    age += 1
   ) {
-    return { rate: upperBound, converged: false }
-  }
-  let low = lowerBound
-  let high = upperBound
-  for (let iteration = 0; iteration < MAX_ITERATIONS; iteration += 1) {
-    const midpoint = (low + high) / 2
-    if (
-      maturePathIsStable(
-        makeSimulation(midpoint),
-        matureSystemYear,
-        assumptions.matureDebtTargetGDP,
-      )
-    ) {
-      high = midpoint
-    } else {
-      low = midpoint
+    if (survivalProbability(startingAge, age) <= remainingShare) {
+      return startingYear + age - startingAge
     }
-    if (high - low <= RATE_TOLERANCE) break
   }
-  return { rate: high, converged: true }
+  return (
+    startingYear + assumptions.maxModeledAge - startingAge + 1
+  )
 }
 
-export function solveTwoRateSchedule(
+export function calculateTransitionRunoffYears(
   assumptions: ModelAssumptions,
-): TwoRateSolution {
-  const matureSystemYear = calculateMatureSystemYear(assumptions)
-  const transition = solveTransitionRate(assumptions, matureSystemYear)
-  const mature = solveMatureRate(
-    assumptions,
-    matureSystemYear,
-    transition.rate,
+): {
+  ninetyPercent: number
+  ninetyFivePercent: number
+  ninetyNinePercent: number
+} {
+  const prefundingTransition = hasAnyPrefunding(
+    assumptions.fundingStrategy,
   )
-  const simulation = simulate(assumptions, (year) =>
-    year < matureSystemYear ? transition.rate : mature.rate,
+  const startingAge = prefundingTransition
+    ? assumptions.prefundingStartAge + 1
+    : assumptions.fullRetirementAge
+  const startingYear = prefundingTransition
+    ? assumptions.reformYear
+    : assumptions.reformYear + assumptions.benefitPhaseInYears - 1
+  return {
+    ninetyPercent: firstRunoffYear(
+      startingYear,
+      startingAge,
+      0.1,
+      assumptions,
+    ),
+    ninetyFivePercent: firstRunoffYear(
+      startingYear,
+      startingAge,
+      0.05,
+      assumptions,
+    ),
+    ninetyNinePercent: firstRunoffYear(
+      startingYear,
+      startingAge,
+      0.01,
+      assumptions,
+    ),
+  }
+}
+
+function endpointDebtTargetForObjective(
+  assumptions: ModelAssumptions,
+  permanent: PermanentRateSolution,
+): number {
+  switch (assumptions.fiscalObjective) {
+    case 'targetDebtAtPolicyHorizon':
+      return assumptions.policyHorizonDebtTargetGDP
+    case 'returnToStartingDebt':
+      return assumptions.startingDebtGDP
+    case 'stableTerminalDebt':
+    case 'peakDebtCeiling':
+    case 'combinedStableAndPeak':
+      return permanent.terminalDebtGDP
+  }
+}
+
+/**
+ * Construct a unique annual revenue path by moving end-of-year debt/GDP on a
+ * straight glidepath from the starting ratio to the objective-consistent
+ * policy-horizon target. After the cutoff, revenue adjusts annually to hold
+ * debt at that target through the visible actuarial extension.
+ */
+export function solveAnnualRevenuePathUsing(
+  assumptions: ModelAssumptions,
+  makeSimulation: ScheduledRevenueSimulator,
+  permanent: PermanentRateSolution,
+): AnnualRevenuePathSolution {
+  const horizonEnd = policyHorizonEndYear(assumptions)
+  const target = endpointDebtTargetForObjective(assumptions, permanent)
+  const schedule: RevenueSchedule = (year, context) => {
+    const elapsedYears = year - assumptions.reformYear + 1
+    const progress = Math.min(
+      1,
+      Math.max(0, elapsedYears / assumptions.policyHorizonYears),
+    )
+    const targetDebtGDP =
+      assumptions.startingDebtGDP +
+      progress * (target - assumptions.startingDebtGDP)
+    const targetEndingDebt = targetDebtGDP * context.nominalGDP
+    const requiredRevenue =
+      context.totalFederalSpending +
+      context.beginningDebt -
+      targetEndingDebt
+    return requiredRevenue / context.nominalGDP
+  }
+  const simulation = makeSimulation(schedule)
+  const policyRows = simulation.years.filter((row) => row.year <= horizonEnd)
+  const endpoint = policyRows.at(-1)
+  if (!endpoint || policyRows.length === 0) {
+    throw new Error('Annual revenue path has no policy-horizon rows.')
+  }
+  const peakRevenue = policyRows.reduce((current, row) =>
+    row.revenueRate > current.revenueRate ? row : current,
   )
-  const handoff = simulation.years.find(
-    (row) => row.year === matureSystemYear,
+  const minimumRevenue = policyRows.reduce((current, row) =>
+    row.revenueRate < current.revenueRate ? row : current,
+  )
+  const peakDebt = policyRows.reduce((current, row) =>
+    row.endingDebtGDP > current.endingDebtGDP ? row : current,
   )
   return {
-    converged: transition.converged && mature.converged,
-    transitionConverged: transition.converged,
-    matureConverged: mature.converged,
-    transitionRate: transition.rate,
-    matureRate: mature.rate,
-    matureSystemYear,
-    handoffDebtTargetGDP: assumptions.matureDebtTargetGDP,
-    handoffDebtGDP: handoff?.beginningDebtGDP ?? Number.NaN,
+    converged: Math.abs(endpoint.endingDebtGDP - target) <= DEBT_TOLERANCE,
+    policyHorizonEndYear: horizonEnd,
+    endpointDebtTargetGDP: target,
+    endpointDebtGDP: endpoint.endingDebtGDP,
+    peakRevenueRate: peakRevenue.revenueRate,
+    peakRevenueYear: peakRevenue.year,
+    minimumRevenueRate: minimumRevenue.revenueRate,
+    minimumRevenueYear: minimumRevenue.year,
+    endpointRevenueRate: endpoint.revenueRate,
+    peakDebtGDP: peakDebt.endingDebtGDP,
+    peakDebtYear: peakDebt.year,
     simulation,
   }
+}
+
+export function solveAnnualRevenuePath(
+  assumptions: ModelAssumptions,
+  permanent = solvePermanentRevenueRate(assumptions),
+): AnnualRevenuePathSolution {
+  return solveAnnualRevenuePathUsing(
+    assumptions,
+    (schedule) => simulate(assumptions, schedule),
+    permanent,
+  )
 }

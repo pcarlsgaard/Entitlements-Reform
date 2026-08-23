@@ -29,7 +29,7 @@ primary_spending_t =
 
 ### 2. Primary balance
 
-Let `revenue_t` be federal revenue as a share of GDP. In the central model this is one constant rate across all years.
+Let `revenue_t` be federal revenue as a share of GDP. The model reports both a constant-rate benchmark and an annual required-revenue path.
 
 ```text
 primary_balance_t = revenue_t - primary_spending_t
@@ -199,7 +199,7 @@ The debt roll-forward using `debt * (1 + effective nominal rate) + primary defic
 
 ## Solver implication
 
-The constant-revenue solver must respond to interest through the debt feedback loop.
+Both revenue presentations must respond to interest through the debt feedback loop.
 
 A higher debt path can:
 
@@ -210,6 +210,8 @@ A higher debt path can:
 5. increase debt further.
 
 Thus interest is endogenous to the fiscal path even though it is not part of `primary_spending`.
+
+For the annual path, solve current-year revenue after calculating current-year primary spending and net interest. Revenue must place end-of-year debt/GDP on the specified glidepath to the policy-horizon target. After the cutoff, solve revenue to hold the target debt ratio rather than continuing a fixed rate that can drive debt below zero.
 
 ## UI terminology
 

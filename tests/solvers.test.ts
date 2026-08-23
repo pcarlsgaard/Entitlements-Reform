@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { withAssumptions } from '../src/model/defaults'
-import { compareScenarios } from '../src/model/scenarios'
+import {
+  comparePolicyHorizons,
+  compareScenarios,
+} from '../src/model/scenarios'
 import { fundingStrategies } from '../src/model/fundingStrategy'
 import {
   calculateMatureSystemYear,
+  calculateTransitionRunoffYears,
   objectiveSatisfied,
+  solveAnnualRevenuePath,
   solvePermanentRevenueRate,
-  solveTwoRateSchedule,
 } from '../src/model/solveTax'
 
 const shorter = withAssumptions({ endYear: 2160 })
@@ -32,6 +36,21 @@ describe('mature-system timing', () => {
         }),
       ),
     ).toBe(2086)
+  })
+
+  it('reports conservative 90/95/99 transition runoff milestones', () => {
+    expect(
+      calculateTransitionRunoffYears(
+        withAssumptions({
+          fundingStrategy: 'both',
+          prefundingStartAge: 18,
+        }),
+      ),
+    ).toEqual({
+      ninetyPercent: 2102,
+      ninetyFivePercent: 2105,
+      ninetyNinePercent: 2109,
+    })
   })
 })
 
@@ -59,49 +78,71 @@ describe('permanent revenue solver', () => {
   })
 })
 
-describe('two-rate solver', () => {
+describe('annual required-revenue path', () => {
   for (const fundingStrategy of fundingStrategies) {
-    it(`reaches the handoff target with ${fundingStrategy} financing`, () => {
+    it(`reaches the 70-year debt target with ${fundingStrategy} financing`, () => {
       const assumptions = withAssumptions({ fundingStrategy, endYear: 2160 })
-      const solution = solveTwoRateSchedule(assumptions)
-      expect(solution.transitionConverged).toBe(true)
-      expect(solution.handoffDebtGDP).toBeCloseTo(
-        assumptions.matureDebtTargetGDP,
-        5,
+      const solution = solveAnnualRevenuePath(assumptions)
+      expect(solution.converged).toBe(true)
+      expect(solution.policyHorizonEndYear).toBe(2095)
+      expect(solution.endpointDebtGDP).toBeCloseTo(
+        assumptions.policyHorizonDebtTargetGDP,
+        10,
       )
     })
 
-    it(`uses exactly two rates around the handoff with ${fundingStrategy} financing`, () => {
-      const solution = solveTwoRateSchedule(
+    it(`holds debt at the endpoint target after the cutoff with ${fundingStrategy} financing`, () => {
+      const solution = solveAnnualRevenuePath(
         withAssumptions({ fundingStrategy, endYear: 2160 }),
       )
-      for (const row of solution.simulation.years) {
-        expect(row.revenueRate).toBe(
-          row.year < solution.matureSystemYear
-            ? solution.transitionRate
-            : solution.matureRate,
+      for (const row of solution.simulation.years.filter(
+        (item) => item.year >= solution.policyHorizonEndYear,
+      )) {
+        expect(row.endingDebtGDP).toBeCloseTo(
+          solution.endpointDebtTargetGDP,
+          10,
         )
       }
-    })
-
-    it(`produces a non-rising mature terminal debt path with ${fundingStrategy} financing`, () => {
-      const solution = solveTwoRateSchedule(
-        withAssumptions({ fundingStrategy, endYear: 2160 }),
-      )
-      expect(solution.matureConverged).toBe(true)
-      const matureRows = solution.simulation.years.filter(
-        (row) => row.year >= solution.matureSystemYear,
-      )
-      const last = matureRows.at(-1)!
-      const prior = matureRows.at(-2)!
-      expect(last.beginningDebtGDP - prior.beginningDebtGDP).toBeLessThanOrEqual(
-        1e-6,
-      )
+      expect(
+        solution.simulation.years.every((row) => row.endingDebtGDP >= 0),
+      ).toBe(true)
     })
   }
+
+  it('reports exact peak and minimum rates within the policy window', () => {
+    const solution = solveAnnualRevenuePath(withAssumptions({ endYear: 2160 }))
+    const policyRows = solution.simulation.years.filter(
+      (row) => row.year <= solution.policyHorizonEndYear,
+    )
+    expect(solution.peakRevenueRate).toBe(
+      Math.max(...policyRows.map((row) => row.revenueRate)),
+    )
+    expect(solution.minimumRevenueRate).toBe(
+      Math.min(...policyRows.map((row) => row.revenueRate)),
+    )
+    expect(solution.peakRevenueRate).not.toBe(solution.minimumRevenueRate)
+  })
 })
 
 describe('scenario comparison', () => {
+  it('uses 2095 as the central 70-year endpoint and keeps the extension visible', () => {
+    expect(withAssumptions({}).endYear).toBe(2160)
+    expect(withAssumptions({}).policyHorizonYears).toBe(70)
+    const horizons = comparePolicyHorizons(withAssumptions({}))
+    expect(horizons.map((horizon) => horizon.endYear)).toEqual([
+      2055,
+      2075,
+      2095,
+    ])
+    expect(
+      horizons.every((horizon) =>
+        fundingStrategies.every(
+          (strategy) => horizon.scenarios[strategy].converged,
+        ),
+      ),
+    ).toBe(true)
+  })
+
   it('uses identical benefit assumptions except for the funding strategy', () => {
     const result = compareScenarios(shorter)
     const { fundingStrategy: paygoStrategy, ...paygo } = result.paygo.assumptions
@@ -125,9 +166,9 @@ describe('scenario comparison', () => {
       result.prefunded.assumptions.premiumSupport2026,
     )
     const sequential = result.scenarios.socialSecurityFirst
-    expect(sequential.firstPositiveSocialSecurityDividendYear).toBe(2080)
-    expect(sequential.firstMedicarePrefundingYear).toBe(2080)
-    expect(sequential.firstMedicarePrefundedEligibilityYear).toBe(2127)
+    expect(sequential.firstPositiveSocialSecurityDividendYear).toBe(2081)
+    expect(sequential.firstMedicarePrefundingYear).toBe(2081)
+    expect(sequential.firstMedicarePrefundedEligibilityYear).toBe(2128)
     expect(sequential.firstFullMedicarePrefundingYear).toBeNull()
   })
 })

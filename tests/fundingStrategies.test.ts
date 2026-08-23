@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { withAssumptions } from '../src/model/defaults'
 import {
   annualFundingPlan,
+  benefitDesignSavingsBillions,
   fundingPlanForAssumptions,
   medicarePrefundedShareForEligibilityYear,
 } from '../src/model/endowment'
@@ -145,5 +146,75 @@ describe('Social Security first sequencing', () => {
         row.socialSecurityPrefunding + row.medicarePrefunding,
       )
     }
+  })
+})
+
+describe('savings-funded sequential prefunding', () => {
+  const assumptions = withAssumptions({
+    fundingStrategy: 'savingsFundedSequential',
+    endYear: 2100,
+  })
+  const plan = fundingPlanForAssumptions(assumptions)
+
+  it('never deposits more than exogenous benefit-design savings', () => {
+    for (const row of plan.values()) {
+      expect(row.availableReformSavings).toBeCloseTo(
+        benefitDesignSavingsBillions(row.year, assumptions),
+        10,
+      )
+      expect(row.totalPrefunding).toBeLessThanOrEqual(
+        row.availableReformSavings + 1e-9,
+      )
+      expect(row.unusedReformSavings).toBeCloseTo(
+        row.availableReformSavings - row.totalPrefunding,
+        10,
+      )
+    }
+  })
+
+  it('buys Social Security before Medicare', () => {
+    const partialSocialSecurity = [...plan.values()].find(
+      (row) =>
+        row.socialSecurityPrefundedShare > 0 &&
+        row.socialSecurityPrefundedShare < 1,
+    )!
+    expect(partialSocialSecurity).toBeDefined()
+    expect(partialSocialSecurity.medicarePrefunding).toBe(0)
+
+    const firstMedicare = [...plan.values()].find(
+      (row) => row.medicarePrefunding > 0,
+    )!
+    expect(firstMedicare).toBeDefined()
+    expect(firstMedicare.socialSecurityPrefundedShare).toBe(1)
+  })
+
+  it('locks a partial Social Security funded share to its cohort', () => {
+    const funded = [...plan.values()].find(
+      (row) =>
+        row.socialSecurityPrefundedShare > 0 &&
+        row.socialSecurityPrefundedShare < 1,
+    )!
+    const retirementYear =
+      funded.year +
+      assumptions.fullRetirementAge -
+      assumptions.prefundingStartAge
+    const simulation = simulateConstantRevenue(assumptions, 0.25)
+    const cohort = simulation.socialSecurityByYear
+      .get(retirementYear)!
+      .cohorts.find((item) => item.retirementYear === retirementYear)!
+    const paygoCohort = socialSecurityForYear(
+      retirementYear,
+      withAssumptions({ fundingStrategy: 'paygo', endYear: 2100 }),
+    ).cohorts.find((item) => item.retirementYear === retirementYear)!
+
+    expect(cohort.prefundedShare).toBeCloseTo(
+      funded.socialSecurityPrefundedShare,
+      12,
+    )
+    expect(cohort.flatPaygoBillions).toBeCloseTo(
+      paygoCohort.flatPaygoBillions *
+        (1 - funded.socialSecurityPrefundedShare),
+      10,
+    )
   })
 })

@@ -13,6 +13,7 @@ fundingStrategy:
   | 'medicareOnly'
   | 'both'
   | 'socialSecurityFirst'
+  | 'savingsFundedSequential'
 ```
 
 Default: `both` to preserve the original central scenario.
@@ -61,7 +62,31 @@ Medicare_prefunding = min(
 
 The resulting Medicare funded fraction is locked to that funding cohort and later removes the same fraction of its premium-support obligation from federal PAYGO. Do not use a negative dividend, future anticipated savings, debt issuance, or Medicare's own future PAYGO reductions to enlarge the current Medicare deposit.
 
-The benefit-design formulas, Medicare Year A/Year B transition, FPL benefit, mortality, and other policy primitives must be identical across all five scenarios unless explicitly changed by the user.
+### Savings-funded sequential prefunding
+
+When `fundingStrategy = 'savingsFundedSequential'`, limit the current year's combined deposits to realized benefit-design savings against scheduled current law. Calculate the savings budget before and independently of any prefunding effects:
+
+```text
+available_reform_savings_t = max(
+  scheduled_current_law_SS_and_senior_Medicare_t
+  - reform_SS_and_senior_Medicare_under_PAYGO_t,
+  0
+)
+
+SS_prefunding_t = min(
+  available_reform_savings_t,
+  full_SS_endowment_cost_t
+)
+
+Medicare_prefunding_t = min(
+  available_reform_savings_t - SS_prefunding_t,
+  full_Medicare_endowment_cost_t
+)
+```
+
+Each program's funded fraction is locked to that funding cohort and proportionally removes the corresponding future defined-benefit spending from PAYGO. Deposits, avoided PAYGO created by earlier deposits, endowment returns, debt issuance, and Medicare's own future reductions must not enlarge `available_reform_savings_t`. Any savings left after both sleeves are fully funded remains unused reform savings/deficit reduction.
+
+The benefit-design formulas, Medicare Year A/Year B transition, FPL benefit, mortality, and other policy primitives must be identical across all six scenarios unless explicitly changed by the user.
 
 This makes differences between otherwise identical strategy runs interpretable estimates of the transition/timing consequences of financing choices.
 
@@ -69,13 +94,14 @@ Do not describe that difference as a pure economic “cost” without qualificat
 
 ## 2. Required side-by-side scenario comparison
 
-For any selected policy assumptions, calculate all five:
+For any selected policy assumptions, calculate all six:
 
 - both benefits PAYGO;
 - Social Security prefunded and Medicare PAYGO;
 - Social Security PAYGO and Medicare prefunded;
 - both benefits prefunded;
 - Social Security-first sequential prefunding.
+- savings-funded sequential prefunding (Social Security first, then Medicare).
 
 The main Results view should allow a direct comparison of:
 
@@ -91,39 +117,49 @@ The main Results view should allow a direct comparison of:
 - reformed-benefit PAYGO spending;
 - prefunded-benefit spending removed from the federal PAYGO budget.
 
-A user control may select which scenario is shown in detailed charts, but the headline comparison must calculate all five without requiring manual assumption changes.
+A user control may select which scenario is shown in detailed charts, but the headline comparison must calculate all six without requiring manual assumption changes.
 
-## 3. Two different tax/revenue presentations
+### Policy-score horizons
+
+The primary policy score covers 70 fiscal years, 2026 through 2095 inclusive. Also report otherwise-identical 30-year (through 2055) and 50-year (through 2075) scores. Each horizon independently solves the selected objective at its own endpoint.
+
+Keep the simulation visible through 2160 as an actuarial stress-test extension. Every long chart must mark the policy cutoff with a vertical line. Do not describe post-cutoff extrapolations as part of the 70-year score.
+
+Also calculate two non-reform reference cases defined in `MODEL_SPEC.md`:
+
+- current law with scheduled benefits paid in full;
+- current law with only payable benefits delivered after OASI and HI depletion.
+
+Use both revenue presentations below for the reference cases. Do not assign a benefit-design maturity date to current law. For every reform strategy, report the constant-rate difference against both current-law references. Label the payable comparison carefully because its lower spending reflects unpaid scheduled benefits rather than enacted reform savings.
+
+## 3. Two revenue presentations
 
 For every scenario calculate BOTH:
 
-### A. Single permanent revenue rate
+### A. Constant revenue-rate benchmark
 
-One constant federal revenue rate `T_constant` applies in every simulation year.
+One constant federal revenue rate `T_constant` applies in every scored year. Solve it to the selected objective at the policy cutoff. The longer simulation may display what would happen if that fixed rate continued, but the operational charts should use the annual path below so post-cutoff debt does not become economically meaningless.
 
-Solve this exactly as in `MODEL_SPEC.md` under the selected fiscal objective.
+### B. Annual required-revenue path
 
-Report:
-
-- `constantRevenueRate`
-- peak debt/GDP
-- peak year
-- terminal debt/GDP
-- terminal annual debt change
-- terminal net interest/GDP
-
-### B. Transition + mature revenue rates
-
-Also calculate a two-rate schedule:
+For each year, solve the revenue share that places end-of-year debt/GDP on a straight glidepath from starting debt to the objective-consistent policy-horizon target:
 
 ```text
-T_t = T_transition, for reformYear <= t < matureSystemYear
-T_t = T_mature,     for t >= matureSystemYear
+progress_t = clamp((t - reformYear + 1) / policyHorizonYears, 0, 1)
+
+targetDebtGDP_t = startingDebtGDP
+  + progress_t * (endpointDebtTargetGDP - startingDebtGDP)
+
+requiredRevenue_t = totalFederalSpending_t
+  + beginningDebt_t
+  - targetDebtGDP_t * nominalGDP_t
 ```
 
-The two-rate schedule is an analytical comparison only. It does NOT replace the permanent-rate result.
+After the cutoff, hold `targetDebtGDP_t = endpointDebtTargetGDP`; annual revenue must continue adjusting to maintain that debt ratio through the visible extension.
 
-Because infinitely many pairs of rates can satisfy long-run stability, the solver must use the explicit handoff rule below.
+For the explicit endpoint-debt objective, `endpointDebtTargetGDP` is the user-selected target. For return-to-starting-debt it is starting debt. For the other legacy objectives, use the endpoint produced by the constant-rate solution so both presentations remain objective-consistent.
+
+Report peak and minimum revenue/GDP and their years within the policy window, the endpoint revenue rate, and endpoint debt/GDP. Do not call those extrema “transition” and “mature” rates.
 
 ## 4. Mature-system year
 
@@ -200,85 +236,9 @@ last modeled year alive = 2085
 mature PAYGO benefit-design system begins = 2086
 ```
 
-Expose the calculated mature-system year in the UI and explain why it differs across financing strategies.
+Expose the calculated mature-system year in the UI and explain why it differs across financing strategies. Also report 90%, 95%, and 99% transition-runoff milestones using period-life-table conditional survival for the youngest initially unfunded cohort under prefunding, and for the final blended retiree under PAYGO.
 
-## 5. Two-rate solver: make the pair unique
-
-A two-rate problem is underdetermined unless a handoff debt condition is specified.
-
-Add:
-
-```ts
-matureDebtTargetGDP: number
-```
-
-Default:
-
-```text
-matureDebtTargetGDP = startingDebtGDP
-```
-
-Central default = 101% of GDP.
-
-### Step 1: solve the transition rate
-
-Solve for one constant `T_transition` from the reform year through the year before `matureSystemYear` such that:
-
-```text
-debtGDP_at_start_of_matureSystemYear = matureDebtTargetGDP
-```
-
-The transition-rate simulation must include:
-
-- all primary spending components;
-- explicit net interest;
-- endogenous debt-sensitive interest rates;
-- the same interest-rate pass-through rules as the permanent-rate simulation.
-
-Use a deterministic numerical solver.
-
-If the target cannot be reached within configured tax-search bounds, return an explicit infeasible result rather than silently changing assumptions.
-
-### Step 2: solve the mature rate
-
-Starting from:
-
-```text
-debtGDP = matureDebtTargetGDP
-```
-
-and the mature-system spending structure, solve the minimum constant `T_mature` that keeps debt/GDP non-rising indefinitely / over the mature simulation horizon.
-
-Do not simply set `T_mature = maturePrimarySpending` because debt service matters.
-
-The mature solver must include:
-
-- net interest;
-- nominal GDP growth;
-- debt-sensitive rates;
-- effective-rate repricing/pass-through.
-
-If the mature state is stationary at the target debt ratio and rates/growth are constant, the numerical result should be consistent with the relevant debt-stabilizing accounting identity.
-
-## 6. Why this comparison is useful
-
-The UI should explain the distinction:
-
-### Single permanent rate
-
-“How high would federal revenues need to be if one stable tax/revenue burden were adopted immediately and maintained permanently?”
-
-### Transition rate
-
-“What revenue burden is required while the old system is running off and, when enabled, new cohorts are simultaneously being prefunded, if debt is to reach the chosen handoff target by maturity?”
-
-### Mature rate
-
-“What permanent revenue burden is required once the transition cohorts have exited and the financing regime is fully mature?”
-
-The gap between `T_transition` and `T_mature` makes the temporary fiscal burden of the transition visible.
-
-## 7. Required result matrix
+## 5. Required result matrix
 
 Show a compact comparison with rows:
 
@@ -287,18 +247,21 @@ Show a compact comparison with rows:
 3. Social Security PAYGO / Medicare prefunded
 4. Both benefits prefunded
 5. Social Security-first sequential prefunding
+6. Savings-funded sequential prefunding
 
 And columns at minimum:
 
+- policy-horizon endpoint year and debt target
+- constant revenue rate
+- annual-path peak revenue rate and year
+- annual-path minimum revenue rate and year
+- annual-path endpoint revenue rate
+- endpoint debt/GDP
+- peak debt/GDP under the constant-rate benchmark
 - mature-system year
-- single permanent revenue rate
-- transition revenue rate
-- mature revenue rate
-- peak debt/GDP under permanent-rate solution
-- peak debt/GDP under two-rate solution
 - cumulative prefunding contributions/GDP or dollars (0 when OFF)
 - mature primary spending/GDP
-- mature net interest/GDP at handoff target
+- mature net interest and total spending/GDP under the annual path
 - first positive Social Security prefunding dividend year
 - first Medicare prefunding-deposit year
 - first funded cohort's Medicare eligibility year
@@ -309,9 +272,9 @@ The user should be able to answer immediately:
 - What does changing the benefit design save/cost?
 - What additional near-term fiscal requirement comes from prefunding?
 - What is the long-run revenue requirement with and without prefunding?
-- How much higher is the transition rate than the mature rate?
+- How far can the required revenue share decline as the transition runs off?
 
-## 8. Audit requirements
+## 6. Audit requirements
 
 The decomposition audit must clearly label the selected financing strategy.
 
@@ -336,12 +299,11 @@ When either sleeve is prefunded, the audit must separately show:
 
 For `socialSecurityFirst`, also show avoided SS PAYGO, SS prefunding deposit, signed SS dividend, full Medicare sleeve cost, actual Medicare deposit, and the cohort's Medicare funded fraction.
 
-For the two-rate schedule, the audit should also show which tax regime applies in the selected year:
+For `savingsFundedSequential`, also show scheduled-current-law benefit-design savings, full and actual SS sleeve costs, the SS funded fraction, full and actual Medicare sleeve costs, the Medicare funded fraction, and unused reform savings. The audit must reconcile `total prefunding <= available reform savings` in every year.
 
-- `transition rate`, or
-- `mature rate`.
+The audit must identify whether the selected year is on the policy-horizon debt glidepath or in post-cutoff debt-ratio maintenance. It must show annual revenue, net interest, total federal spending, and ending debt/GDP.
 
-## 9. Required tests
+## 7. Required tests
 
 Add tests proving:
 
@@ -351,29 +313,36 @@ Add tests proving:
 4. `both` removes both eligible defined components from PAYGO when benefits begin.
 5. Default age-18 prefunding produces mature-system year 2118 when max modeled age is 110.
 6. Default 20-year SS phase-in with both programs PAYGO produces mature-system year 2086 when FRA=70, max age=110, and Year B=2035.
-7. The permanent-rate solver uses exactly one revenue rate in every year.
-8. The two-rate solver uses exactly `T_transition` before the handoff and exactly `T_mature` from the mature-system year onward.
-9. The transition solver reaches the configured mature debt target within numerical tolerance.
-10. The mature-rate solver produces non-rising debt at the handoff target.
-11. Interest and overall-deficit accounting reconcile under both tax schedules and all five strategies.
+7. The constant-rate solver uses exactly one revenue rate in every scored year.
+8. The annual path reaches the configured policy-horizon debt target within numerical tolerance.
+9. The annual path holds debt/GDP at that target in every post-cutoff year.
+10. Reported peak and minimum rates equal the actual extrema within the policy window.
+11. Interest and overall-deficit accounting reconcile under both revenue presentations and all six strategies.
 12. Scenario comparisons use identical benefit assumptions except for `fundingStrategy`.
 13. Sequential Medicare deposits are zero while the SS dividend is negative.
 14. Sequential Medicare deposits equal the lesser of the positive SS dividend and full Medicare sleeve.
 15. A partial Medicare funded fraction follows its cohort and proportionally reduces later PAYGO.
+16. Savings-funded deposits never exceed independently calculated benefit-design savings.
+17. Savings-funded sequencing fills the Social Security sleeve before depositing into Medicare.
+18. A partial Social Security funded fraction follows its cohort and proportionally reduces later PAYGO.
+19. The default policy score ends in 2095 while the visible simulation extends through 2160.
+20. The 30-, 50-, and 70-year score endpoints are 2055, 2075, and 2095.
+21. Scheduled-current-law 2026 primary spending reconciles to approximately 20.0% of GDP and total spending to approximately 23.3% before reform deposits.
+22. Birth-cohort size is multiplied by life-table survival before counting Medicare and Social Security eligibility cohorts.
 
-## 10. UI recommendation
+## 8. UI recommendation
 
 On the Results page, place a **Financing comparison** matrix near the top with one row per strategy:
 
 ```text
-Strategy                    Permanent   Transition   Mature   SS dividend   Medicare starts
-Both PAYGO                    x.xx%        x.xx%       x.xx%       —               —
-SS prefunded                 x.xx%        x.xx%       x.xx%      2080             —
-Medicare prefunded           x.xx%        x.xx%       x.xx%       —              2026
-Both prefunded               x.xx%        x.xx%       x.xx%      2080            2026
-SS-first                     x.xx%        x.xx%       x.xx%      2080            2080
+Strategy                    Constant   Path peak   Path min   SS dividend   Medicare starts
+Both PAYGO                    x.xx%       x.xx%      x.xx%         —               —
+SS prefunded                 x.xx%       x.xx%      x.xx%        2081             —
+Medicare prefunded           x.xx%       x.xx%      x.xx%         —              2026
+Both prefunded               x.xx%       x.xx%      x.xx%        2081            2026
+SS-first                     x.xx%       x.xx%      x.xx%        2081            2081
 ```
 
-Below it, show a control to inspect any strategy in the charts and decomposition audit.
+Below it, show a control to inspect any strategy in the charts and decomposition audit. Long charts must show a vertical policy-cutoff marker. The spending chart must stack net interest on primary components and draw an explicit total-federal-spending line. Provide a click-to-open glossary, including a plain-language definition of nondefense discretionary spending.
 
-On the Policy page, expose the five-value financing-strategy control for scenario-specific inspection, but always compute all strategies in the Results view.
+On the Policy page, expose the six-value financing-strategy control for scenario-specific inspection, but always compute all strategies in the Results view.

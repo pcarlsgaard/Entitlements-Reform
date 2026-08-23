@@ -4,7 +4,7 @@ A cohort-based simulator for a proposed U.S. Social Security and Medicare entitl
 
 The project is designed to answer a central fiscal question:
 
-> What single constant federal revenue rate, as a percentage of GDP, is required to transition from current Social Security and Medicare obligations to a prefunded flat old-age benefit and defined Medicare premium-support system while satisfying a selected long-run debt objective?
+> What constant federal revenue rate—and what realistic year-by-year revenue path—is required to transition from current Social Security and Medicare obligations while meeting a clearly dated debt objective?
 
 ## Current policy defaults
 
@@ -23,8 +23,9 @@ The project is designed to answer a central fiscal question:
 - Default start age: 18
 - Alternative: birth
 - Real endowment yield: 2.5%
-- Five financing strategies: both benefits PAYGO, Social Security only prefunded, Medicare only prefunded, both prefunded, and Social Security-first sequential prefunding
+- Six financing strategies: both benefits PAYGO, Social Security only prefunded, Medicare only prefunded, both prefunded, Social Security-first sequential prefunding, and savings-funded sequential prefunding
 - In the sequential strategy, only a positive Social Security prefunding dividend is available for the new cohort's Medicare endowment; partial funding follows that cohort into Medicare eligibility
+- In the savings-funded strategy, benefit-design savings versus scheduled current law prefund Social Security first and then Medicare; deposits cannot create or enlarge their own savings budget, and partial SS or Medicare funding follows the cohort for life
 
 ### Medicare
 
@@ -45,7 +46,22 @@ The project is designed to answer a central fiscal question:
 - 2026 nondefense discretionary outlays: 3.1% of GDP
 - Default real NDD growth: 1.8% (matches central GDP growth to preserve the prior baseline share)
 
-The Policy view exposes financing strategy plus macro and broader-budget sensitivities including real GDP growth, inflation, cohort growth, borrowing rates, debt sensitivity, legacy benefit growth, and an independent nondefense discretionary spending path. The Results view compares all five financing strategies and compares any custom macro/budget combination with central assumptions while holding the benefit design and fiscal objective fixed.
+The Policy view exposes financing strategy plus macro and broader-budget sensitivities including real GDP growth, inflation, cohort growth, borrowing rates, debt sensitivity, legacy benefit growth, and an independent nondefense discretionary spending path. The Results view compares all six financing strategies, measures each against current law with scheduled benefits and with trust-fund-payable benefits, and compares any custom macro/budget combination with central assumptions while holding the benefit design and fiscal objective fixed.
+
+## Current-law benchmarks
+
+The Results view includes two apples-to-apples reference cases inside the simulator's cohort calibration:
+
+- **Scheduled:** current-law Social Security and senior Medicare benefits are paid in full.
+- **Payable:** OASI and Medicare Part A are constrained after their projected trust-fund depletion dates using the 2026 Trustees payable percentages; DI and Medicare Parts B/D remain fully payable.
+
+The annual model approximates the partial depletion years, interpolates published Trustees points through 2100, and holds the 2100 percentages afterward. The displayed unpaid-benefit share makes clear that the payable baseline's lower fiscal requirement is not reform savings. Because “other OASDI” is not yet split into survivor and disability components, its separate calibration remains scheduled while the OASI factor applies to the modeled old-age stream.
+
+Legacy senior Medicare is an all-in Parts A, B, D, and Medicare Advantage benefit growing at the selected current-law cost rate, initially 1.5% real per beneficiary. Medicare Advantage payments are allocated between Part A and Part B financing rather than modeled as a separate trust fund. The payable baseline leaves the scheduled trajectory intact and applies nonpayment only to the HI-financed share.
+
+The primary score uses a 70-year policy horizon through 2095, with companion 30- and 50-year scores. The model keeps the longer path through 2160 visible as a marked actuarial stress test. It reports both a constant-rate benchmark and a unique annual required-revenue path: end-of-year debt/GDP follows a straight glidepath to the selected 2095 target, after which annual revenue adjusts to hold that debt ratio. The Results view also reports 90%, 95%, and 99% transition-runoff milestones so the comparison does not hinge on the final modeled survivor at age 110.
+
+The 2026 scheduled-current-law calibration reconciles to CBO's 20.0% of GDP in primary spending and 23.3% in total spending. The model applies SSA survival from birth before counting cohorts at Medicare or Social Security eligibility; reform prefunding deposits then appear explicitly on top of that baseline.
 
 ## Core modeling principle
 
@@ -134,7 +150,8 @@ The test suite should demonstrate at least:
 - Medicare Year A = 2030 and Year B = 2035 behave correctly.
 - 15% debt-rate pass-through closes 15% of the remaining target-rate gap each year.
 - Spending decomposition exactly reconciles.
-- Solver uses one constant revenue rate and satisfies its selected objective.
+- Constant-rate solver satisfies the selected policy-horizon objective.
+- Annual required-revenue path reaches the same endpoint debt target, reports peak/minimum rates, and prevents post-cutoff negative debt.
 
 ## Modeling discipline
 

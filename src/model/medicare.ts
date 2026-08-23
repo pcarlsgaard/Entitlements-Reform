@@ -1,10 +1,14 @@
 import { survivalProbability } from './mortality'
 import {
   fullyPrefundsMedicare,
-  usesSocialSecurityDividend,
+  usesCohortFundingSchedule,
 } from './fundingStrategy'
-import { clamp, cohortSizeMillions } from './socialSecurity'
-import type { MedicareYearResult, ModelAssumptions } from './types'
+import { clamp, cohortSizeAtAgeMillions } from './socialSecurity'
+import type {
+  EntitlementDesign,
+  MedicareYearResult,
+  ModelAssumptions,
+} from './types'
 
 export type MedicarePrefundedShareResolver = (
   eligibilityYear: number,
@@ -64,9 +68,11 @@ export function medicareForYear(
   year: number,
   assumptions: ModelAssumptions,
   resolvePrefundedShare?: MedicarePrefundedShareResolver,
+  entitlementDesign: EntitlementDesign = 'reform',
 ): MedicareYearResult {
   if (
-    usesSocialSecurityDividend(assumptions.fundingStrategy) &&
+    entitlementDesign === 'reform' &&
+    usesCohortFundingSchedule(assumptions.fundingStrategy) &&
     !resolvePrefundedShare
   ) {
     throw new Error(
@@ -99,24 +105,26 @@ export function medicareForYear(
       assumptions.medicareEligibilityAge,
       age,
     )
-    const initialCohortMillions = cohortSizeMillions(
+    const initialCohortMillions = cohortSizeAtAgeMillions(
       eligibilityYear,
+      assumptions.medicareEligibilityAge,
       assumptions,
     )
     const survivingBeneficiariesMillions =
       initialCohortMillions * survivalFraction
-    const premiumSupportShare = medicarePremiumSupportShare(
-      eligibilityYear,
-      year,
-      assumptions,
-    )
+    const premiumSupportShare =
+      entitlementDesign === 'currentLaw'
+        ? 0
+        : medicarePremiumSupportShare(eligibilityYear, year, assumptions)
     const legacyShare = 1 - premiumSupportShare
     const prefundedShare = clamp(
-      resolvePrefundedShare
-        ? resolvePrefundedShare(eligibilityYear)
-        : isMedicareComponentPrefunded(eligibilityYear, assumptions)
-          ? 1
-          : 0,
+      entitlementDesign === 'currentLaw'
+        ? 0
+        : resolvePrefundedShare
+          ? resolvePrefundedShare(eligibilityYear)
+          : isMedicareComponentPrefunded(eligibilityYear, assumptions)
+            ? 1
+            : 0,
     )
 
     cohorts.push({
