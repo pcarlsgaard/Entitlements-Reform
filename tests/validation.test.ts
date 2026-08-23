@@ -47,4 +47,29 @@ describe('model assumption validation', () => {
         'Real nondefense discretionary growth must be greater than -100%.',
     })
   })
+
+  it('requires the endpoint target to be no higher than the peak ceiling', () => {
+    expect(
+      validateModelAssumptions(
+        withAssumptions({
+          peakDebtCeilingGDP: 1.2,
+          policyHorizonDebtTargetGDP: 1.21,
+        }),
+      ),
+    ).toContainEqual({
+      key: 'policyHorizonDebtTargetGDP',
+      message: 'The endpoint debt target cannot exceed the peak-debt ceiling.',
+    })
+  })
+
+  it('requires the peak ceiling to cover starting debt', () => {
+    expect(
+      validateModelAssumptions(
+        withAssumptions({ startingDebtGDP: 1.25, peakDebtCeilingGDP: 1.2 }),
+      ),
+    ).toContainEqual({
+      key: 'peakDebtCeilingGDP',
+      message: 'The peak-debt ceiling cannot be below starting debt.',
+    })
+  })
 })

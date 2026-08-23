@@ -65,16 +65,17 @@ describe('permanent revenue solver', () => {
     ).toBe(true)
   })
 
-  it('satisfies its selected objective', () => {
+  it('satisfies both the selected peak ceiling and endpoint target', () => {
     const assumptions = withAssumptions({
-      fiscalObjective: 'returnToStartingDebt',
+      peakDebtCeilingGDP: 1.2,
+      policyHorizonDebtTargetGDP: 1.01,
       endYear: 2160,
     })
     const solution = solvePermanentRevenueRate(assumptions)
     expect(solution.converged).toBe(true)
-    expect(
-      objectiveSatisfied(solution.simulation, assumptions.fiscalObjective, assumptions),
-    ).toBe(true)
+    expect(objectiveSatisfied(solution.simulation, assumptions)).toBe(true)
+    expect(solution.peakDebtGDP).toBeLessThanOrEqual(1.2 + 1e-10)
+    expect(solution.terminalDebtGDP).toBeLessThanOrEqual(1.01 + 1e-10)
   })
 })
 
@@ -125,6 +126,45 @@ describe('annual required-revenue path', () => {
     expect(solution.minimumRevenueRate).toBeLessThanOrEqual(
       solution.startingRevenueRate,
     )
+  })
+
+  it('lowers revenue before the endpoint when an early peak ceiling binds', () => {
+    const assumptions = withAssumptions({
+      fundingStrategy: 'both',
+      peakDebtCeilingGDP: 1.2,
+      policyHorizonDebtTargetGDP: 1.01,
+      endYear: 2160,
+    })
+    const solution = solveAnnualRevenuePath(assumptions)
+    expect(solution.converged).toBe(true)
+    expect(solution.revenueDeclineYear).not.toBeNull()
+    expect(solution.revenueDeclineYear!).toBeLessThan(
+      solution.policyHorizonEndYear,
+    )
+    expect(solution.peakDebtGDP).toBeLessThanOrEqual(1.2 + 1e-7)
+    expect(solution.endpointDebtGDP).toBeCloseTo(1.01, 7)
+    expect(solution.endpointRevenueRate).toBeLessThan(
+      solution.startingRevenueRate,
+    )
+    expect(solution.nonIncreasing).toBe(true)
+  })
+
+  it('can stabilize endpoint debt at the same level as the peak ceiling', () => {
+    const assumptions = withAssumptions({
+      fundingStrategy: 'paygo',
+      peakDebtCeilingGDP: 1.2,
+      policyHorizonDebtTargetGDP: 1.2,
+      endYear: 2160,
+    })
+    const solution = solveAnnualRevenuePath(assumptions)
+    expect(solution.converged).toBe(true)
+    expect(solution.revenueDeclineYear).not.toBeNull()
+    expect(solution.revenueDeclineYear!).toBeLessThan(
+      solution.policyHorizonEndYear,
+    )
+    expect(solution.peakDebtGDP).toBeLessThanOrEqual(1.2 + 1e-7)
+    expect(solution.endpointDebtGDP).toBeCloseTo(1.2, 7)
+    expect(solution.nonIncreasing).toBe(true)
   })
 })
 

@@ -26,7 +26,6 @@ import {
 } from './model/sensitivity'
 import { validateModelAssumptions } from './model/validation'
 import type {
-  FiscalObjective,
   FundingStrategy,
   ModelAssumptions,
   ScenarioResult,
@@ -55,8 +54,8 @@ const termDefinitions = [
   ['Total federal spending', 'Primary spending plus net interest on debt held by the public.'],
   ['Nondefense discretionary (NDD)', 'Annually appropriated domestic and international programs outside national defense—for example education, transportation, housing, public health, research, justice, and foreign affairs. It excludes mandatory benefits such as Social Security, Medicare, and Medicaid.'],
   ['Other primary excluding NDD', 'The 2026 residual outside separately modeled Social Security, Medicare, and NDD. It includes defense, Medicaid/CHIP/ACA subsidies, income security, veterans and federal retirement, agriculture, other mandatory programs, and offsetting receipts.'],
-  ['Constant revenue rate', 'One federal revenue share of GDP applied every year through the policy cutoff. It is a tax-smoothing benchmark, not a forecast that Congress would leave the rate unchanged forever.'],
-  ['Non-rising revenue path', 'The minimum opening revenue share that meets the fiscal target without a later tax increase. It equals the single constant-rate score through the cutoff, then may decline when less revenue is needed to maintain the target debt ratio.'],
+  ['Constant revenue rate', 'The minimum single federal revenue share that would satisfy both the peak-debt ceiling and endpoint target if applied throughout the policy window. It is the opening-rate benchmark.'],
+  ['Non-rising revenue path', 'Begins at the minimum constant-rate benchmark. If the peak ceiling binds before the endpoint, revenue begins a smooth decline as soon as it can do so without breaching the ceiling, and reaches the selected endpoint debt target without a later tax increase.'],
   ['Policy horizon', 'The years used to score the fiscal objective. The default is 70 fiscal years, 2026–2095; later years are an actuarial stress-test extension.'],
   ['Net interest', 'Budget outlays for servicing debt held by the public, using the model’s average effective nominal interest rate.'],
 ] as const
@@ -307,22 +306,7 @@ function PolicyPanel({
 
       <section className="card policy-card">
         <div className="eyebrow">Debt & revenue</div>
-        <h2>Fiscal objective</h2>
-        <label className="field">
-          <span>Permanent-rate objective</span>
-          <select
-            value={assumptions.fiscalObjective}
-            onChange={(event) =>
-              update('fiscalObjective', event.target.value as FiscalObjective)
-            }
-          >
-            <option value="targetDebtAtPolicyHorizon">Selected debt / GDP at policy endpoint</option>
-            <option value="returnToStartingDebt">Return terminal debt to starting debt</option>
-            <option value="stableTerminalDebt">Terminal debt no longer rising</option>
-            <option value="peakDebtCeiling">Peak-debt ceiling</option>
-            <option value="combinedStableAndPeak">Stable debt + peak ceiling</option>
-          </select>
-        </label>
+        <h2>Debt limits</h2>
         <NumericInput
           label="Starting debt"
           value={assumptions.startingDebtGDP * 100}
@@ -342,13 +326,22 @@ function PolicyPanel({
           note={`Default cutoff: ${assumptions.reformYear + assumptions.policyHorizonYears - 1}. Later chart years are a stress-test extension.`}
         />
         <NumericInput
+          label="Peak-debt ceiling"
+          value={assumptions.peakDebtCeilingGDP * 100}
+          onChange={(value) => update('peakDebtCeilingGDP', value / 100)}
+          suffix="% GDP"
+          min={assumptions.startingDebtGDP * 100}
+          max={1_000}
+          note="Debt may touch but cannot exceed this level before the policy endpoint."
+        />
+        <NumericInput
           label="Debt target at policy endpoint"
           value={assumptions.policyHorizonDebtTargetGDP * 100}
           onChange={(value) => update('policyHorizonDebtTargetGDP', value / 100)}
           suffix="% GDP"
           min={0}
-          max={500}
-          note="Used directly by the selected endpoint-debt objective and the minimum non-rising revenue path."
+          max={assumptions.peakDebtCeilingGDP * 100}
+          note="May equal the peak ceiling for stable debt or be lower for a declining debt path."
         />
         <NumericInput
           label="Debt-rate pass-through"
@@ -358,15 +351,6 @@ function PolicyPanel({
           min={0}
           max={100}
           note="Refinancing speed: the share of the remaining target-rate gap closed each year."
-        />
-        <NumericInput
-          label="Peak-debt ceiling"
-          value={assumptions.peakDebtCeilingGDP * 100}
-          onChange={(value) => update('peakDebtCeilingGDP', value / 100)}
-          suffix="% GDP"
-          min={1}
-          max={1_000}
-          note="Used by the peak-ceiling and combined permanent-rate objectives."
         />
       </section>
 
@@ -523,14 +507,14 @@ function ComparisonTable({ comparison }: { comparison: ReturnType<typeof compare
   return (
     <div className="table-scroll">
       <table className="comparison-table">
-        <thead><tr><th>Financing strategy</th><th>Starting / single rate</th><th>Lowest visible rate</th><th>Peak debt</th><th>{policyEnd} debt</th><th>Mature primary spending</th><th>95% runoff</th><th>Medicare deposits begin</th><th>First 100%-funded Medicare cohort</th></tr></thead>
+        <thead><tr><th>Financing strategy</th><th>Opening / single rate</th><th>Lowest visible rate</th><th>Peak debt</th><th>{policyEnd} debt</th><th>Mature primary spending</th><th>95% runoff</th><th>Medicare deposits begin</th><th>First 100%-funded Medicare cohort</th></tr></thead>
         <tbody>{fundingStrategies.map((strategy) => {
           const scenario = comparison.scenarios[strategy]
           return (
             <tr key={strategy}>
               <th>{scenario.label}</th>
               <td>{percent(scenario.revenuePath.startingRevenueRate)}<br /><small>2026</small></td>
-              <td>{percent(scenario.revenuePath.minimumRevenueRate)}<br /><small>{scenario.revenuePath.minimumRevenueYear}</small></td>
+              <td>{percent(scenario.revenuePath.minimumRevenueRate)}<br /><small>{scenario.revenuePath.revenueDeclineYear === null ? 'never falls' : `falls ${scenario.revenuePath.revenueDeclineYear} · min ${scenario.revenuePath.minimumRevenueYear}`}</small></td>
               <td>{percent(scenario.revenuePath.peakDebtGDP, 1)}<br /><small>{scenario.revenuePath.peakDebtYear}</small></td>
               <td>{percent(scenario.revenuePath.endpointDebtGDP, 1)}</td>
               <td>{percent(scenario.maturePrimarySpendingGDP, 1)}<br /><small>{scenario.matureSystemYear}</small></td>
@@ -541,7 +525,7 @@ function ComparisonTable({ comparison }: { comparison: ReturnType<typeof compare
           )
         })}</tbody>
       </table>
-      <p className="baseline-note">The opening rate is the minimum single rate that meets the {policyEnd} objective. Under deterministic assumptions, a lower opening rate plus a no-increase rule cannot raise enough revenue to meet the same target. Rates may fall after {policyEnd} when maintaining the target debt ratio requires less.</p>
+      <p className="baseline-note">The opening rate is the minimum single rate that satisfies both debt limits. If the peak ceiling binds early, the operational rate begins falling at the earliest year a smooth decline can still respect the ceiling and reach the {policyEnd} endpoint target.</p>
     </div>
   )
 }
@@ -611,7 +595,7 @@ function MacroBudgetSensitivity({
       </div>
       <div className="table-scroll">
         <table className="comparison-table sensitivity-table">
-          <thead><tr><th>Required-rate impact vs central</th><th>Starting / single rate</th><th>Lowest visible rate</th></tr></thead>
+          <thead><tr><th>Required-rate impact vs central</th><th>Opening / single rate</th><th>Lowest visible rate</th></tr></thead>
           <tbody>{rows.map((row) => (
             <tr key={row.strategy}>
               <th>{fundingStrategyLabels[row.strategy]}</th>
@@ -642,6 +626,7 @@ function ResultsPanel({ comparison, referenceComparison, macroBudgetChanged, sce
     (row, index) =>
       index % 4 === 0 ||
       row.year === policyEnd ||
+      row.year === selected.revenuePath.revenueDeclineYear ||
       row.year === selected.assumptions.endYear,
   ).map((row) => ({
     year: row.year,
@@ -672,8 +657,8 @@ function ResultsPanel({ comparison, referenceComparison, macroBudgetChanged, sce
   return (
     <>
       <section className="card hero-card">
-        <div><div className="eyebrow">Financing comparison</div><h2>Same benefit promise, six financing strategies</h2><p>Each path begins at the minimum rate that can meet the fiscal objective without a later tax increase. The longer actuarial path stays visible, with the {policyEnd} cutoff marked on every chart.</p></div>
-        <div className="effect-box"><span>Selected starting revenue</span><strong>{percent(selected.revenuePath.startingRevenueRate)}</strong><small>same as the single-rate solution · lowest visible {percent(selected.revenuePath.minimumRevenueRate)} in {selected.revenuePath.minimumRevenueYear}</small></div>
+        <div><div className="eyebrow">Financing comparison</div><h2>Same benefit promise, six financing strategies</h2><p>Each path begins at the minimum rate that satisfies both the peak ceiling and endpoint debt target without a later tax increase. The longer actuarial path stays visible, with the {policyEnd} cutoff marked on every chart.</p></div>
+        <div className="effect-box"><span>Selected opening revenue</span><strong>{percent(selected.revenuePath.startingRevenueRate)}</strong><small>{selected.revenuePath.revenueDeclineYear === null ? 'rate does not fall in the visible period' : `first falls in ${selected.revenuePath.revenueDeclineYear}`} · lowest visible {percent(selected.revenuePath.minimumRevenueRate)} in {selected.revenuePath.minimumRevenueYear}</small></div>
       </section>
       <MacroBudgetSensitivity comparison={comparison} referenceComparison={referenceComparison} changed={macroBudgetChanged} />
       <section className="card strategy-card"><div className="section-heading"><div><div className="eyebrow">Strategy matrix</div><h3>Revenue burden, mature spending, and sequencing</h3></div><span>{personDollars(comparison.prefunded.endowment.socialSecurityPV)} SS + {personDollars(comparison.prefunded.endowment.medicarePV)} Medicare per fully funded entrant</span></div><ComparisonTable comparison={comparison} /></section>
@@ -682,8 +667,8 @@ function ResultsPanel({ comparison, referenceComparison, macroBudgetChanged, sce
         <div className="segmented strategy-segmented">{fundingStrategies.map((strategy) => <button key={strategy} className={scenarioChoice === strategy ? 'active' : ''} onClick={() => setScenarioChoice(strategy)}>{fundingStrategyLabels[strategy]}</button>)}</div>
       </div>
       <div className="chart-grid">
-        <ChartCard title="Debt held by the public" note={`The minimum single rate is applied through ${policyEnd}; afterward revenue may fall as long as the debt target can be maintained without a tax increase.`}><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip /><ReferenceLine x={policyEnd} stroke="#253b56" strokeDasharray="5 4" label={cutoffLabel} /><Line type="monotone" dataKey="debt" name="Debt / GDP" stroke="#ef8354" strokeWidth={3} dot={false} /></LineChart></ResponsiveContainer></ChartCard>
-        <ChartCard title="Federal revenue path" note={`Starts at ${percent(selected.revenuePath.startingRevenueRate)}—never above the single-rate score—and never rises. Lowest visible rate: ${percent(selected.revenuePath.minimumRevenueRate)} in ${selected.revenuePath.minimumRevenueYear}.`}><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip /><ReferenceLine x={policyEnd} stroke="#253b56" strokeDasharray="5 4" label={cutoffLabel} /><Line type="monotone" dataKey="revenue" name="Required revenue / GDP" stroke="#26845f" strokeWidth={3} dot={false} /></LineChart></ResponsiveContainer></ChartCard>
+        <ChartCard title="Debt held by the public" note={`Debt cannot exceed ${percent(selected.assumptions.peakDebtCeilingGDP, 0)} before ${policyEnd} and must reach ${percent(selected.assumptions.policyHorizonDebtTargetGDP, 0)} at the cutoff.`}><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip /><ReferenceLine y={selected.assumptions.peakDebtCeilingGDP * 100} stroke="#d96c4a" strokeDasharray="3 3" label="Peak ceiling" />{Math.abs(selected.assumptions.policyHorizonDebtTargetGDP - selected.assumptions.peakDebtCeilingGDP) > 1e-9 && <ReferenceLine y={selected.assumptions.policyHorizonDebtTargetGDP * 100} stroke="#3c91e6" strokeDasharray="3 3" label="Endpoint target" />}<ReferenceLine x={policyEnd} stroke="#253b56" strokeDasharray="5 4" label={cutoffLabel} /><Line type="monotone" dataKey="debt" name="Debt / GDP" stroke="#ef8354" strokeWidth={3} dot={false} /></LineChart></ResponsiveContainer></ChartCard>
+        <ChartCard title="Federal revenue path" note={`Starts at ${percent(selected.revenuePath.startingRevenueRate)} and never rises. ${selected.revenuePath.revenueDeclineYear === null ? 'It does not fall in the visible period.' : `It first falls in ${selected.revenuePath.revenueDeclineYear}, once the debt ceiling permits.`} Lowest visible rate: ${percent(selected.revenuePath.minimumRevenueRate)} in ${selected.revenuePath.minimumRevenueYear}.`}><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip /><ReferenceLine x={policyEnd} stroke="#253b56" strokeDasharray="5 4" label={cutoffLabel} />{selected.revenuePath.revenueDeclineYear !== null && selected.revenuePath.revenueDeclineYear < policyEnd && <ReferenceLine x={selected.revenuePath.revenueDeclineYear} stroke="#26845f" strokeDasharray="3 3" label="Rate declines" />}<Line type="monotone" dataKey="revenue" name="Required revenue / GDP" stroke="#26845f" strokeWidth={3} dot={false} /></LineChart></ResponsiveContainer></ChartCard>
         <ChartCard title="Total federal spending decomposition" note="The stacked areas now include net interest; the dark line is their explicit sum."><ResponsiveContainer width="100%" height="100%"><ComposedChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip /><Legend /><ReferenceLine x={policyEnd} stroke="#253b56" strokeDasharray="5 4" label={cutoffLabel} /><Area stackId="1" dataKey="legacySS" name="Legacy SS" fill="#6f7d94" stroke="#6f7d94" /><Area stackId="1" dataKey="flatSS" name="Flat SS PAYGO" fill="#3c91e6" stroke="#3c91e6" /><Area stackId="1" dataKey="legacyMedicare" name="Legacy Medicare" fill="#9f86c0" stroke="#9f86c0" /><Area stackId="1" dataKey="premiumSupport" name="Premium support PAYGO" fill="#56cfe1" stroke="#56cfe1" /><Area stackId="1" dataKey="ssPrefunding" name="SS prefunding" fill="#50b58a" stroke="#26845f" /><Area stackId="1" dataKey="medicarePrefunding" name="Medicare prefunding" fill="#8ad4b5" stroke="#4aa784" /><Area stackId="1" dataKey="nonDefenseDiscretionary" name="Nondefense discretionary" fill="#f4b860" stroke="#d69639" /><Area stackId="1" dataKey="otherPrimary" name="Other primary" fill="#b8c1cc" stroke="#8794a3" /><Area stackId="1" dataKey="interest" name="Net interest" fill="#ef9a7a" stroke="#d96c4a" /><Line type="monotone" dataKey="totalSpending" name="Total federal spending" stroke="#172033" strokeWidth={2.5} dot={false} /></ComposedChart></ResponsiveContainer></ChartCard>
         <ChartCard title="Interest spending and rates" note="Lambda moves the effective debt rate toward—not above—the debt-sensitive market target."><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip /><Legend /><ReferenceLine x={policyEnd} stroke="#253b56" strokeDasharray="5 4" label={cutoffLabel} /><Line dataKey="interest" name="Net interest / GDP" stroke="#ef8354" dot={false} /><Line dataKey="targetRate" name="Target nominal rate" stroke="#9f86c0" dot={false} /><Line dataKey="effectiveRate" name="Effective nominal rate" stroke="#3c91e6" dot={false} /></LineChart></ResponsiveContainer></ChartCard>
         <ChartCard title="Legacy vs reformed system" note="Cohort mortality—not an aggregate phaseout—runs off legacy SS."><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip /><Legend /><ReferenceLine x={policyEnd} stroke="#253b56" strokeDasharray="5 4" label={cutoffLabel} /><Line dataKey="legacySS" name="Legacy SS" stroke="#6f7d94" dot={false} /><Line dataKey="flatSS" name="Flat SS PAYGO" stroke="#3c91e6" dot={false} /><Line dataKey="legacyMedicare" name="Legacy Medicare" stroke="#9f86c0" dot={false} /><Line dataKey="premiumSupport" name="Premium support PAYGO" stroke="#56cfe1" dot={false} /></LineChart></ResponsiveContainer></ChartCard>
@@ -708,9 +693,12 @@ function AuditPanel({ scenario }: { scenario: ScenarioResult }) {
   const row = simulation.years.find((item) => item.year === auditYear) ?? simulation.years[0]!
   const ss = simulation.socialSecurityByYear.get(row.year)
   const cohort = ss?.cohorts.find((item) => item.retirementYear === retirementYear)
-  const regime = row.year <= scenario.revenuePath.policyHorizonEndYear
-    ? 'minimum constant revenue through the fiscal cutoff'
-    : 'post-cutoff non-rising debt-maintenance path'
+  const declineYear = scenario.revenuePath.revenueDeclineYear
+  const regime = row.year > scenario.revenuePath.policyHorizonEndYear
+    ? 'post-cutoff non-rising debt-maintenance path'
+    : declineYear !== null && row.year >= declineYear
+      ? 'policy-window revenue decline after the debt ceiling releases'
+      : 'minimum opening revenue rate'
   const isSavingsFunded =
     scenario.assumptions.fundingStrategy === 'savingsFundedSequential'
   const errors = reconciliationErrors(row)
@@ -748,7 +736,7 @@ function AuditPanel({ scenario }: { scenario: ScenarioResult }) {
 }
 
 function SourcesPanel() {
-  return <><section className="card hero-card"><div><div className="eyebrow">Model & sources</div><h2>Inputs have names, provenance, and limits</h2><p>Official inputs, policy choices, modeling assumptions, and outputs remain distinct. The mortality table is period mortality; it does not claim cohort longevity improvement.</p></div></section><TermDefinitions /><section className="card"><div className="conflict"><strong>Revenue-path convention</strong><p>The operational path begins at the minimum constant rate that meets the fiscal objective. It cannot begin lower and still promise no later tax increase: every future rate would then be below the already-minimal single-rate solution. After the cutoff, the rate may decline when less revenue is needed to maintain the target debt ratio, but it never rises.</p></div><div className="source-list">{sources.map((source) => <article key={source.id}><span className={`source-kind ${source.kind.replace(' ', '-')}`}>{source.kind}</span><h3>{source.agency}</h3><a href={source.url} target="_blank" rel="noreferrer">{source.datasetOrReport}</a><p><strong>{source.relevantTable}</strong> · {source.publicationDate}</p><p>{source.notes}</p></article>)}</div></section></>
+  return <><section className="card hero-card"><div><div className="eyebrow">Model & sources</div><h2>Inputs have names, provenance, and limits</h2><p>Official inputs, policy choices, modeling assumptions, and outputs remain distinct. The mortality table is period mortality; it does not claim cohort longevity improvement.</p></div></section><TermDefinitions /><section className="card"><div className="conflict"><strong>Revenue-path convention</strong><p>The operational path begins at the minimum constant rate that satisfies both the selected peak-debt ceiling and endpoint target. It cannot begin lower while also promising no later increase. When the ceiling binds before the endpoint, the rate begins a smooth decline in the earliest safe year; otherwise it remains at the opening rate through the cutoff. After the cutoff, it may decline further to maintain the endpoint debt ratio, but it never rises.</p></div><div className="source-list">{sources.map((source) => <article key={source.id}><span className={`source-kind ${source.kind.replace(' ', '-')}`}>{source.kind}</span><h3>{source.agency}</h3><a href={source.url} target="_blank" rel="noreferrer">{source.datasetOrReport}</a><p><strong>{source.relevantTable}</strong> · {source.publicationDate}</p><p>{source.notes}</p></article>)}</div></section></>
 }
 
 export default function App() {
@@ -834,7 +822,9 @@ export default function App() {
       return scenario.permanent.converged && scenario.revenuePath.converged
     }) &&
     comparison.baselines.scheduled.permanent.converged &&
-    comparison.baselines.payable.permanent.converged
+    comparison.baselines.scheduled.revenuePath.converged &&
+    comparison.baselines.payable.permanent.converged &&
+    comparison.baselines.payable.revenuePath.converged
 
   return (
     <div className="app-shell">

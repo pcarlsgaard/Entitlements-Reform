@@ -342,10 +342,10 @@ The cohort ledger must make it visually obvious that transition cohorts continue
 
 Report both:
 
-1. A minimum **single constant federal revenue rate as %GDP** needed to meet the selected objective at the policy cutoff.
-2. A **minimum-opening, nonincreasing revenue path**. Apply the single constant rate through the policy cutoff. Afterward, reduce revenue whenever the target debt ratio can be maintained at a lower rate, but never raise the rate above its prior-year value.
+1. A minimum **single constant federal revenue rate as %GDP** that keeps debt at or below the selected peak ceiling in every scored year and at or below the selected endpoint target at the policy cutoff.
+2. A **minimum-opening, nonincreasing revenue path**. Begin at the constant-rate benchmark. If the peak ceiling binds before the endpoint and leaves endpoint slack, begin a smooth decline in the earliest safe year and solve the ending rate so debt reaches the endpoint target. Otherwise, keep the opening rate through the cutoff. Afterward, reduce revenue whenever the target debt ratio can be maintained at a lower rate, but never raise the rate above its prior-year value.
 
-The opening rate must equal the constant-rate solution: if it were lower, the no-increase constraint would force every later rate below the already-minimal constant solution and the same fiscal objective could not be met. The post-cutoff rule prevents over-collection and negative debt when the maintenance requirement falls. Do not use a separate transition/mature two-rate schedule.
+The endpoint target must not exceed the peak ceiling, and the peak ceiling must not be below starting debt. The opening rate must equal the constant-rate solution: if it were lower, the no-increase constraint would force every later rate below the already-minimal constant solution and at least one debt constraint would fail. The early-decline rule avoids over-collection when an early peak, rather than the endpoint, determines that minimum rate. The post-cutoff rule prevents negative debt when the maintenance requirement falls. Do not use an objective dropdown or a separate transition/mature two-rate schedule.
 
 ## 8.2 Debt dynamics
 
@@ -471,11 +471,12 @@ Solver outputs should include:
 
 Annual-path outputs should also include:
 
-- policy-horizon endpoint and debt target,
+- policy-horizon endpoint, peak ceiling, and endpoint debt target,
 - peak required revenue/GDP and year,
+- first year revenue declines, if any,
 - minimum required revenue/GDP and year,
 - revenue/GDP at the policy endpoint,
-- confirmation that post-cutoff debt/GDP remains at the selected target.
+- confirmation that the scored path respects both debt constraints.
 
 ---
 
@@ -572,5 +573,5 @@ The implementation is not considered reliable until automated tests verify:
 - Medicare Year A and Year B semantics are correct,
 - rate pass-through semantics are correct,
 - decomposition reconciles exactly,
-- constant-revenue solver satisfies its selected policy-horizon condition without changing the tax rate,
-- annual required-revenue path reaches the same endpoint target, begins at the constant rate, never rises, and reports the exact minimum across the visible simulation.
+- constant-revenue solver satisfies both policy-horizon debt constraints without changing the tax rate,
+- annual required-revenue path reaches the endpoint target without breaching the peak ceiling, begins at the constant rate, never rises, and reports its first decline and exact minimum across the visible simulation.

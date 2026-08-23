@@ -211,7 +211,7 @@ A higher debt path can:
 
 Thus interest is endogenous to the fiscal path even though it is not part of `primary_spending`.
 
-For the non-rising path, use the minimum constant-rate solution through the policy cutoff. After the cutoff, calculate the revenue needed to hold the target debt ratio after current-year primary spending and net interest, then use the lesser of that maintenance rate and the prior-year rate. This allows taxes to fall without permitting a later increase; if the cap binds, debt may drift above the post-cutoff target rather than violating the no-increase rule.
+For the non-rising path, begin at the minimum constant rate that satisfies both the peak-debt ceiling and endpoint debt target. If the peak ceiling binds early and leaves endpoint slack, decline smoothly from the earliest year that avoids a second peak, solving the endpoint rate to reach the debt target. After the cutoff, calculate the revenue needed to hold the target debt ratio after current-year primary spending and net interest, then use the lesser of that maintenance rate and the prior-year rate. This allows taxes to fall without permitting a later increase; if the cap binds, debt may drift above the post-cutoff target rather than violating the no-increase rule.
 
 ## UI terminology
 

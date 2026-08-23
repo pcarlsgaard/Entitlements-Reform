@@ -34,8 +34,9 @@ The economic model is more important than the interface. UI work must never sile
    - Default Year B = 2035: all remaining senior Medicare beneficiaries use premium-support payment rules.
 
 6. **Show both the constant-rate benchmark and the annual required-revenue path.**
-   - The constant rate is solved to the selected policy-horizon objective.
-   - The annual path begins at the minimum rate consistent with the objective and no future increase. Under deterministic assumptions this equals the constant-rate solution through the policy cutoff.
+   - There is one combined fiscal lever: a peak-debt ceiling and an endpoint debt target no higher than that ceiling. Do not reintroduce an objective dropdown.
+   - The constant rate is the minimum single rate that satisfies both constraints.
+   - The annual path begins at that rate. If the peak ceiling binds early and the constant path would finish below the endpoint target, begin a smooth decline in the earliest year that still respects the ceiling and reaches the endpoint.
    - After the cutoff, revenue may decline to the debt-maintenance requirement but may never rise above the prior year's rate.
    - Do not reintroduce an underdetermined transition/mature two-rate schedule.
 
@@ -100,8 +101,8 @@ At minimum preserve tests proving:
 - Pass-through lambda = 1 reprices immediately.
 - Pass-through lambda = 0.15 closes exactly 15% of the remaining rate gap each year.
 - Spending decomposition sums to total primary spending within floating-point tolerance.
-- The constant-rate solver uses the same federal revenue rate in every scored year and satisfies the selected policy-horizon objective.
-- The annual required-revenue path reaches the same debt target, starts no higher than the constant rate, never rises, and reports its minimum visible rate.
+- The constant-rate solver uses the same federal revenue rate in every scored year and satisfies both the peak ceiling and endpoint debt target.
+- The annual required-revenue path reaches the endpoint target without breaching the peak ceiling, starts at the constant rate, never rises, and reports its first decline year and minimum visible rate.
 
 If a UI change breaks a model test, fix the UI or identify a genuine model-spec change. Do not weaken the test merely to make CI pass.
 
