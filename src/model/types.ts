@@ -202,6 +202,8 @@ export interface AnnualRevenuePathSolution {
   policyHorizonEndYear: number
   endpointDebtTargetGDP: number
   endpointDebtGDP: number
+  startingRevenueRate: number
+  nonIncreasing: boolean
   peakRevenueRate: number
   peakRevenueYear: number
   minimumRevenueRate: number

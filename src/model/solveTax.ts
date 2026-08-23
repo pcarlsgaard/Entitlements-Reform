@@ -15,8 +15,8 @@ import type {
 } from './types'
 
 const MAX_ITERATIONS = 80
-const RATE_TOLERANCE = 1e-10
-const DEBT_TOLERANCE = 1e-7
+const RATE_TOLERANCE = 1e-13
+const DEBT_TOLERANCE = 1e-11
 
 export type ConstantRevenueSimulator = (
   revenueRate: number,
@@ -268,10 +268,17 @@ function endpointDebtTargetForObjective(
 }
 
 /**
- * Construct a unique annual revenue path by moving end-of-year debt/GDP on a
- * straight glidepath from the starting ratio to the objective-consistent
- * policy-horizon target. After the cutoff, revenue adjusts annually to hold
- * debt at that target through the visible actuarial extension.
+ * Construct the minimum-opening, nonincreasing revenue path.
+ *
+ * Through the scored policy window, the minimum opening rate that can meet
+ * the same fiscal objective without ever increasing later is exactly the
+ * constant-rate solution. Any lower opening rate would cap every later rate
+ * below the already-minimal constant solution and therefore miss the target.
+ *
+ * After the cutoff, revenue may fall to the amount needed to hold the target
+ * debt ratio, but it may never rise above the prior year's rate. This keeps
+ * the visible actuarial extension from manufacturing negative debt while
+ * preserving the user's no-future-tax-increase constraint.
  */
 export function solveAnnualRevenuePathUsing(
   assumptions: ModelAssumptions,
@@ -280,42 +287,50 @@ export function solveAnnualRevenuePathUsing(
 ): AnnualRevenuePathSolution {
   const horizonEnd = policyHorizonEndYear(assumptions)
   const target = endpointDebtTargetForObjective(assumptions, permanent)
+  let previousRate = permanent.rate
   const schedule: RevenueSchedule = (year, context) => {
-    const elapsedYears = year - assumptions.reformYear + 1
-    const progress = Math.min(
-      1,
-      Math.max(0, elapsedYears / assumptions.policyHorizonYears),
-    )
-    const targetDebtGDP =
-      assumptions.startingDebtGDP +
-      progress * (target - assumptions.startingDebtGDP)
-    const targetEndingDebt = targetDebtGDP * context.nominalGDP
-    const requiredRevenue =
-      context.totalFederalSpending +
-      context.beginningDebt -
-      targetEndingDebt
-    return requiredRevenue / context.nominalGDP
+    if (year <= horizonEnd) return permanent.rate
+
+    const targetEndingDebt = target * context.nominalGDP
+    const maintenanceRate =
+      (context.totalFederalSpending +
+        context.beginningDebt -
+        targetEndingDebt) /
+      context.nominalGDP
+    const rate = Math.max(0, Math.min(previousRate, maintenanceRate))
+    previousRate = rate
+    return rate
   }
   const simulation = makeSimulation(schedule)
   const policyRows = simulation.years.filter((row) => row.year <= horizonEnd)
+  const visibleRows = simulation.years
   const endpoint = policyRows.at(-1)
   if (!endpoint || policyRows.length === 0) {
     throw new Error('Annual revenue path has no policy-horizon rows.')
   }
-  const peakRevenue = policyRows.reduce((current, row) =>
+  const peakRevenue = visibleRows.reduce((current, row) =>
     row.revenueRate > current.revenueRate ? row : current,
   )
-  const minimumRevenue = policyRows.reduce((current, row) =>
+  const minimumRevenue = visibleRows.reduce((current, row) =>
     row.revenueRate < current.revenueRate ? row : current,
   )
   const peakDebt = policyRows.reduce((current, row) =>
     row.endingDebtGDP > current.endingDebtGDP ? row : current,
   )
+  const nonIncreasing = visibleRows.every(
+    (row, index) =>
+      index === 0 ||
+      row.revenueRate <= visibleRows[index - 1]!.revenueRate + RATE_TOLERANCE,
+  )
   return {
-    converged: Math.abs(endpoint.endingDebtGDP - target) <= DEBT_TOLERANCE,
+    converged:
+      Math.abs(endpoint.endingDebtGDP - target) <= DEBT_TOLERANCE &&
+      nonIncreasing,
     policyHorizonEndYear: horizonEnd,
     endpointDebtTargetGDP: target,
     endpointDebtGDP: endpoint.endingDebtGDP,
+    startingRevenueRate: visibleRows[0]!.revenueRate,
+    nonIncreasing,
     peakRevenueRate: peakRevenue.revenueRate,
     peakRevenueYear: peakRevenue.year,
     minimumRevenueRate: minimumRevenue.revenueRate,

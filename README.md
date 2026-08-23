@@ -59,7 +59,7 @@ The annual model approximates the partial depletion years, interpolates publishe
 
 Legacy senior Medicare is an all-in Parts A, B, D, and Medicare Advantage benefit growing at the selected current-law cost rate, initially 1.5% real per beneficiary. Medicare Advantage payments are allocated between Part A and Part B financing rather than modeled as a separate trust fund. The payable baseline leaves the scheduled trajectory intact and applies nonpayment only to the HI-financed share.
 
-The primary score uses a 70-year policy horizon through 2095, with companion 30- and 50-year scores. The model keeps the longer path through 2160 visible as a marked actuarial stress test. It reports both a constant-rate benchmark and a unique annual required-revenue path: end-of-year debt/GDP follows a straight glidepath to the selected 2095 target, after which annual revenue adjusts to hold that debt ratio. The Results view also reports 90%, 95%, and 99% transition-runoff milestones so the comparison does not hinge on the final modeled survivor at age 110.
+The primary score uses a 70-year policy horizon through 2095, with companion 30- and 50-year calculations retained in the model. The Results page keeps the longer path through 2160 visible as a marked actuarial stress test. Its operational revenue path starts at the minimum single rate that can meet the 2095 objective without a later tax increase. It stays at that rate through the cutoff, then may decline when maintaining the target debt ratio requires less revenue.
 
 The 2026 scheduled-current-law calibration reconciles to CBO's 20.0% of GDP in primary spending and 23.3% in total spending. The model applies SSA survival from birth before counting cohorts at Medicare or Social Security eligibility; reform prefunding deposits then appear explicitly on top of that baseline.
 
@@ -151,7 +151,7 @@ The test suite should demonstrate at least:
 - 15% debt-rate pass-through closes 15% of the remaining target-rate gap each year.
 - Spending decomposition exactly reconciles.
 - Constant-rate solver satisfies the selected policy-horizon objective.
-- Annual required-revenue path reaches the same endpoint debt target, reports peak/minimum rates, and prevents post-cutoff negative debt.
+- Non-rising revenue path reaches the same endpoint debt target, starts at the single-rate result, never increases, and reports the lowest visible rate.
 
 ## Modeling discipline
 

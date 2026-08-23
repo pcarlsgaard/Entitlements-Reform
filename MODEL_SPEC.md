@@ -343,9 +343,9 @@ The cohort ledger must make it visually obvious that transition cohorts continue
 Report both:
 
 1. A minimum **single constant federal revenue rate as %GDP** needed to meet the selected objective at the policy cutoff.
-2. An **annual required-revenue path**. Move end-of-year debt/GDP on a straight glidepath from the starting ratio to the objective-consistent policy-horizon target, then adjust annual revenue to hold the target ratio through the actuarial extension.
+2. A **minimum-opening, nonincreasing revenue path**. Apply the single constant rate through the policy cutoff. Afterward, reduce revenue whenever the target debt ratio can be maintained at a lower rate, but never raise the rate above its prior-year value.
 
-The second rule makes the annual path unique, prevents a rate solved for one cutoff from driving debt negative later, and provides derived peak/minimum revenue rates. Do not use a separate transition/mature two-rate schedule.
+The opening rate must equal the constant-rate solution: if it were lower, the no-increase constraint would force every later rate below the already-minimal constant solution and the same fiscal objective could not be met. The post-cutoff rule prevents over-collection and negative debt when the maintenance requirement falls. Do not use a separate transition/mature two-rate schedule.
 
 ## 8.2 Debt dynamics
 
@@ -573,4 +573,4 @@ The implementation is not considered reliable until automated tests verify:
 - rate pass-through semantics are correct,
 - decomposition reconciles exactly,
 - constant-revenue solver satisfies its selected policy-horizon condition without changing the tax rate,
-- annual required-revenue path reaches the same endpoint target, reports exact peak/minimum rates, and holds the target debt ratio after the cutoff.
+- annual required-revenue path reaches the same endpoint target, begins at the constant rate, never rises, and reports the exact minimum across the visible simulation.

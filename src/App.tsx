@@ -14,16 +14,12 @@ import {
 } from 'recharts'
 import { sources } from './data/sources'
 import { defaultAssumptions } from './model/defaults'
-import { currentLawDeliveryShares } from './model/currentLaw'
 import {
   fundingStrategies,
   fundingStrategyLabels,
 } from './model/fundingStrategy'
 import { reconciliationErrors } from './model/audit'
-import {
-  comparePolicyHorizons,
-  compareScenarios,
-} from './model/scenarios'
+import { compareScenarios } from './model/scenarios'
 import {
   centralMacroBudgetReference,
   hasNoncentralMacroBudgetAssumptions,
@@ -60,7 +56,7 @@ const termDefinitions = [
   ['Nondefense discretionary (NDD)', 'Annually appropriated domestic and international programs outside national defense—for example education, transportation, housing, public health, research, justice, and foreign affairs. It excludes mandatory benefits such as Social Security, Medicare, and Medicaid.'],
   ['Other primary excluding NDD', 'The 2026 residual outside separately modeled Social Security, Medicare, and NDD. It includes defense, Medicaid/CHIP/ACA subsidies, income security, veterans and federal retirement, agriculture, other mandatory programs, and offsetting receipts.'],
   ['Constant revenue rate', 'One federal revenue share of GDP applied every year through the policy cutoff. It is a tax-smoothing benchmark, not a forecast that Congress would leave the rate unchanged forever.'],
-  ['Annual required revenue path', 'The year-by-year revenue share that keeps end-of-year debt on a straight glidepath to the selected policy-horizon target, then holds that debt ratio after the cutoff.'],
+  ['Non-rising revenue path', 'The minimum opening revenue share that meets the fiscal target without a later tax increase. It equals the single constant-rate score through the cutoff, then may decline when less revenue is needed to maintain the target debt ratio.'],
   ['Policy horizon', 'The years used to score the fiscal objective. The default is 70 fiscal years, 2026–2095; later years are an actuarial stress-test extension.'],
   ['Net interest', 'Budget outlays for servicing debt held by the public, using the model’s average effective nominal interest rate.'],
 ] as const
@@ -352,7 +348,7 @@ function PolicyPanel({
           suffix="% GDP"
           min={0}
           max={500}
-          note="Used directly by the selected endpoint-debt objective and by the annual required-revenue glidepath."
+          note="Used directly by the selected endpoint-debt objective and the minimum non-rising revenue path."
         />
         <NumericInput
           label="Debt-rate pass-through"
@@ -523,312 +519,35 @@ function yearOrDash(value: number | null): string {
 }
 
 function ComparisonTable({ comparison }: { comparison: ReturnType<typeof compareScenarios> }) {
-  const scheduledRate = comparison.baselines.scheduled.permanent.rate
-  const payableRate = comparison.baselines.payable.permanent.rate
   const policyEnd = comparison.paygo.revenuePath.policyHorizonEndYear
   return (
     <div className="table-scroll">
       <table className="comparison-table">
-        <thead><tr><th>Financing strategy</th><th>Constant rate</th><th>vs current law scheduled</th><th>vs current law payable</th><th>Annual-path peak</th><th>Annual-path minimum</th><th>{policyEnd} debt</th><th>90% runoff</th><th>95% runoff</th><th>99% runoff</th><th>SS dividend positive</th><th>Medicare deposits begin</th><th>First funded cohort enters Medicare</th><th>First 100%-funded Medicare cohort</th></tr></thead>
+        <thead><tr><th>Financing strategy</th><th>Starting / single rate</th><th>Lowest visible rate</th><th>Peak debt</th><th>{policyEnd} debt</th><th>Mature primary spending</th><th>95% runoff</th><th>Medicare deposits begin</th><th>First 100%-funded Medicare cohort</th></tr></thead>
         <tbody>{fundingStrategies.map((strategy) => {
           const scenario = comparison.scenarios[strategy]
-          const versusScheduled = scenario.permanent.rate - scheduledRate
-          const versusPayable = scenario.permanent.rate - payableRate
           return (
             <tr key={strategy}>
               <th>{scenario.label}</th>
-              <td>{percent(scenario.permanent.rate)}</td>
-              <td className={versusScheduled < 0 ? 'favorable' : versusScheduled > 0 ? 'adverse' : ''}>{percentagePointDelta(versusScheduled)}</td>
-              <td className={versusPayable < 0 ? 'favorable' : versusPayable > 0 ? 'adverse' : ''}>{percentagePointDelta(versusPayable)}</td>
-              <td>{percent(scenario.revenuePath.peakRevenueRate)}<br /><small>{scenario.revenuePath.peakRevenueYear}</small></td>
+              <td>{percent(scenario.revenuePath.startingRevenueRate)}<br /><small>2026</small></td>
               <td>{percent(scenario.revenuePath.minimumRevenueRate)}<br /><small>{scenario.revenuePath.minimumRevenueYear}</small></td>
+              <td>{percent(scenario.revenuePath.peakDebtGDP, 1)}<br /><small>{scenario.revenuePath.peakDebtYear}</small></td>
               <td>{percent(scenario.revenuePath.endpointDebtGDP, 1)}</td>
-              <td>{scenario.transitionRunoffYears.ninetyPercent}</td>
+              <td>{percent(scenario.maturePrimarySpendingGDP, 1)}<br /><small>{scenario.matureSystemYear}</small></td>
               <td>{scenario.transitionRunoffYears.ninetyFivePercent}</td>
-              <td>{scenario.transitionRunoffYears.ninetyNinePercent}</td>
-              <td>{yearOrDash(scenario.firstPositiveSocialSecurityDividendYear)}</td>
               <td>{yearOrDash(scenario.firstMedicarePrefundingYear)}</td>
-              <td>{yearOrDash(scenario.firstMedicarePrefundedEligibilityYear)}</td>
               <td>{yearOrDash(scenario.firstFullMedicarePrefundingYear)}</td>
             </tr>
           )
         })}</tbody>
       </table>
-      <p className="baseline-note">The annual-path peak and minimum use the same {policyEnd} debt objective as the constant-rate score. Runoff dates use the period-life-table survival of the youngest cohort carrying the old financing treatment (or the final blended retiree under PAYGO).</p>
+      <p className="baseline-note">The opening rate is the minimum single rate that meets the {policyEnd} objective. Under deterministic assumptions, a lower opening rate plus a no-increase rule cannot raise enough revenue to meet the same target. Rates may fall after {policyEnd} when maintaining the target debt ratio requires less.</p>
     </div>
-  )
-}
-
-function PolicyHorizonComparison({
-  comparison,
-}: {
-  comparison: ReturnType<typeof compareScenarios>
-}) {
-  const horizons = useMemo(
-    () => comparePolicyHorizons(comparison.paygo.assumptions),
-    [comparison],
-  )
-  const rows = [
-    {
-      key: 'scheduled',
-      label: 'Current law — scheduled benefits',
-      rates: horizons.map((horizon) =>
-        horizon.baselines.scheduled.rate,
-      ),
-    },
-    {
-      key: 'payable',
-      label: 'Current law — payable benefits',
-      rates: horizons.map((horizon) => horizon.baselines.payable.rate),
-    },
-    ...fundingStrategies.map((strategy) => ({
-      key: strategy,
-      label: fundingStrategyLabels[strategy],
-      rates: horizons.map((horizon) => horizon.scenarios[strategy].rate),
-    })),
-  ]
-  return (
-    <section className="card horizon-card">
-      <div className="section-heading">
-        <div>
-          <div className="eyebrow">Policy horizon</div>
-          <h3>30-, 50-, and 70-year fiscal scores</h3>
-        </div>
-        <span>Constant-rate benchmark · same debt objective at each endpoint</span>
-      </div>
-      <div className="table-scroll">
-        <table className="comparison-table">
-          <thead><tr><th>Scenario</th>{horizons.map((horizon) => <th key={horizon.years}>{horizon.years} years<br /><small>through {horizon.endYear}</small></th>)}</tr></thead>
-          <tbody>{rows.map((row) => (
-            <tr key={row.key}>
-              <th>{row.label}</th>
-              {row.rates.map((rate, index) => <td key={horizons[index]!.years}>{percent(rate)}</td>)}
-            </tr>
-          ))}</tbody>
-        </table>
-      </div>
-      <p className="baseline-note">The 70-year score through 2095 is the primary result. The 30- and 50-year columns show how much the answer depends on the scoring window; years after the cutoff remain visible only as an actuarial stress test.</p>
-    </section>
   )
 }
 
 function ChartCard({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
   return <section className="card chart-card"><div><h3>{title}</h3>{note && <p>{note}</p>}</div><div className="chart-frame">{children}</div></section>
-}
-
-function BudgetCalibration2026({
-  comparison,
-  selected,
-}: {
-  comparison: ReturnType<typeof compareScenarios>
-  selected: ScenarioResult
-}) {
-  const scheduled = comparison.baselines.scheduled.revenuePath.simulation.years[0]!
-  const reform = selected.revenuePath.simulation.years[0]!
-  const rows = [
-    { label: 'Scheduled current law', row: scheduled },
-    { label: selected.label, row: reform },
-  ]
-  return (
-    <section className="card baseline-card">
-      <div className="section-heading">
-        <div><div className="eyebrow">2026 calibration</div><h3>Primary spending + net interest = total spending</h3></div>
-        <span>CBO benchmark before reform deposits: 20.0% + 3.3% = 23.3% of GDP</span>
-      </div>
-      <div className="table-scroll">
-        <table className="comparison-table">
-          <thead><tr><th>Scenario</th><th>Primary spending</th><th>of which prefunding</th><th>Net interest</th><th>Total federal spending</th></tr></thead>
-          <tbody>{rows.map(({ label, row }) => (
-            <tr key={label}><th>{label}</th><td>{percent(row.totalPrimarySpending / row.nominalGDP, 1)}</td><td>{percent(row.newCohortPrefunding / row.nominalGDP, 1)}</td><td>{percent(row.netInterest / row.nominalGDP, 1)}</td><td>{percent(row.totalFederalSpending / row.nominalGDP, 1)}</td></tr>
-          ))}</tbody>
-        </table>
-      </div>
-      <p className="baseline-note">The prior high baseline came from counting the full 4.2 million birth cohort as alive at ages 65 and 70. The model now applies SSA life-table survival before counting benefit entrants; any remaining increase above current law is explicitly identified as reform prefunding.</p>
-    </section>
-  )
-}
-
-function CurrentLawBaselines({
-  comparison,
-}: {
-  comparison: ReturnType<typeof compareScenarios>
-}) {
-  const assumptions = comparison.paygo.assumptions
-  const milestoneYear = Math.min(2050, assumptions.endYear)
-  const longRangeYear = Math.min(2100, assumptions.endYear)
-  const scheduled = comparison.baselines.scheduled
-  const rows = (['scheduled', 'payable'] as const).map((mode) => {
-    const baseline = comparison.baselines[mode]
-    const milestoneDelivery = currentLawDeliveryShares(
-      milestoneYear,
-      assumptions,
-      mode,
-    )
-    const longRangeDelivery = currentLawDeliveryShares(
-      longRangeYear,
-      assumptions,
-      mode,
-    )
-    const milestoneScheduledRow =
-      scheduled.permanent.simulation.years.find(
-        (row) => row.year === milestoneYear,
-      )
-    const milestoneRow = baseline.permanent.simulation.years.find(
-      (row) => row.year === milestoneYear,
-    )
-    const longRangeScheduledRow =
-      scheduled.permanent.simulation.years.find(
-        (row) => row.year === longRangeYear,
-      )
-    const longRangeRow = baseline.permanent.simulation.years.find(
-      (row) => row.year === longRangeYear,
-    )
-    return {
-      mode,
-      baseline,
-      milestoneDelivery,
-      longRangeDelivery,
-      milestoneShortfall:
-        milestoneScheduledRow && milestoneRow
-          ? (milestoneScheduledRow.totalPrimarySpending -
-              milestoneRow.totalPrimarySpending) /
-            milestoneScheduledRow.nominalGDP
-          : Number.NaN,
-      longRangeShortfall:
-        longRangeScheduledRow && longRangeRow
-          ? (longRangeScheduledRow.totalPrimarySpending -
-              longRangeRow.totalPrimarySpending) /
-            longRangeScheduledRow.nominalGDP
-          : Number.NaN,
-    }
-  })
-  return (
-    <section className="card baseline-card">
-      <div className="section-heading">
-        <div>
-          <div className="eyebrow">Current-law benchmark</div>
-          <h3>Scheduled promises versus payable benefits</h3>
-        </div>
-        <span>Same cohort, macro, debt, and revenue assumptions as the reform runs</span>
-      </div>
-      <div className="table-scroll">
-        <table className="comparison-table baseline-table">
-          <thead><tr><th>Current-law treatment</th><th>Constant rate</th><th>vs scheduled</th><th>Annual-path peak</th><th>Annual-path minimum</th><th>{milestoneYear} modeled OASI delivered</th><th>{milestoneYear} senior Medicare delivered</th><th>{milestoneYear} unpaid benefits</th><th>{longRangeYear} modeled OASI delivered</th><th>{longRangeYear} senior Medicare delivered</th><th>{longRangeYear} unpaid benefits</th></tr></thead>
-          <tbody>{rows.map((row) => {
-            const rateDifference =
-              row.baseline.permanent.rate - scheduled.permanent.rate
-            return (
-              <tr key={row.mode}>
-                <th>{row.baseline.label}</th>
-                <td>{percent(row.baseline.permanent.rate)}</td>
-                <td className={rateDifference < 0 ? 'favorable' : rateDifference > 0 ? 'adverse' : ''}>{percentagePointDelta(rateDifference)}</td>
-                <td>{percent(row.baseline.revenuePath.peakRevenueRate)}<br /><small>{row.baseline.revenuePath.peakRevenueYear}</small></td>
-                <td>{percent(row.baseline.revenuePath.minimumRevenueRate)}<br /><small>{row.baseline.revenuePath.minimumRevenueYear}</small></td>
-                <td>{percent(row.milestoneDelivery.socialSecurity, 1)}</td>
-                <td>{percent(row.milestoneDelivery.seniorMedicare, 1)}</td>
-                <td>{percent(row.milestoneShortfall, 1)} GDP</td>
-                <td>{percent(row.longRangeDelivery.socialSecurity, 1)}</td>
-                <td>{percent(row.longRangeDelivery.seniorMedicare, 1)}</td>
-                <td>{percent(row.longRangeShortfall, 1)} GDP</td>
-              </tr>
-            )
-          })}</tbody>
-        </table>
-      </div>
-      <p className="baseline-note"><strong>Payable is not a reform savings estimate.</strong> The all-in Parts A, B, D, and Medicare Advantage cost path continues at the selected legacy growth rate; the lower fiscal requirement is scheduled Part A services going unpaid after HI depletion. Medicare Advantage payments are allocated between their Part A and Part B financing components, not treated as a separate trust fund. The OASI factor applies to the modeled old-age stream while “other OASDI” remains at its separate scheduled calibration.</p>
-    </section>
-  )
-}
-
-function LongRunComparison({
-  comparison,
-}: {
-  comparison: ReturnType<typeof compareScenarios>
-}) {
-  const endpointYear = comparison.paygo.revenuePath.policyHorizonEndYear
-  const baselineRows = (['scheduled', 'payable'] as const).map((mode) => {
-    const baseline = comparison.baselines[mode]
-    const endpoint = baseline.revenuePath.simulation.years.find(
-      (row) => row.year === endpointYear,
-    )
-    if (!endpoint) throw new Error('Current-law baseline produced no endpoint.')
-    return {
-      key: `baseline-${mode}`,
-      label: baseline.label,
-      isBaseline: true,
-      permanentRate: baseline.permanent.rate,
-      peakDebtGDP: baseline.permanent.peakDebtGDP,
-      matureYear: null,
-      maturePrimaryGDP: null,
-      matureInterestGDP: null,
-      matureTotalGDP: null,
-      endpointPrimaryGDP:
-        endpoint.totalPrimarySpending / endpoint.nominalGDP,
-      endpointInterestGDP: endpoint.netInterest / endpoint.nominalGDP,
-      endpointTotalGDP:
-        endpoint.totalFederalSpending / endpoint.nominalGDP,
-      endpointDebtGDP: baseline.revenuePath.endpointDebtGDP,
-    }
-  })
-  const reformRows = fundingStrategies.map((strategy) => {
-    const scenario = comparison.scenarios[strategy]
-    const endpoint = scenario.revenuePath.simulation.years.find(
-      (row) => row.year === endpointYear,
-    )
-    if (!endpoint) {
-      throw new Error('Reform scenario produced no long-run comparison year.')
-    }
-    return {
-      key: strategy,
-      label: scenario.label,
-      isBaseline: false,
-      permanentRate: scenario.permanent.rate,
-      peakDebtGDP: scenario.permanent.peakDebtGDP,
-      matureYear: scenario.matureSystemYear,
-      maturePrimaryGDP: scenario.maturePrimarySpendingGDP,
-      matureInterestGDP: scenario.matureNetInterestGDP,
-      matureTotalGDP: scenario.matureTotalSpendingGDP,
-      endpointPrimaryGDP:
-        endpoint.totalPrimarySpending / endpoint.nominalGDP,
-      endpointInterestGDP: endpoint.netInterest / endpoint.nominalGDP,
-      endpointTotalGDP:
-        endpoint.totalFederalSpending / endpoint.nominalGDP,
-      endpointDebtGDP: scenario.revenuePath.endpointDebtGDP,
-    }
-  })
-  const rows = [...baselineRows, ...reformRows]
-  return (
-    <section className="card long-run-card">
-      <div className="section-heading">
-        <div>
-          <div className="eyebrow">Long-run comparison</div>
-          <h3>Mature spending and endpoint fiscal state</h3>
-        </div>
-        <span>{endpointYear} policy endpoint plus visible actuarial extension · total includes net interest</span>
-      </div>
-      <div className="table-scroll">
-        <table className="comparison-table long-run-table">
-          <thead><tr><th>Scenario</th><th>Constant rate</th><th>Peak debt</th><th>Mature year</th><th>Primary at maturity</th><th>Interest at maturity</th><th>Total at maturity</th><th>{endpointYear} primary</th><th>{endpointYear} net interest</th><th>{endpointYear} total</th><th>{endpointYear} debt</th></tr></thead>
-          <tbody>{rows.map((row) => (
-            <tr key={row.key} className={row.isBaseline ? 'baseline-row' : ''}>
-              <th>{row.label}</th>
-              <td>{percent(row.permanentRate)}</td>
-              <td>{percent(row.peakDebtGDP, 1)}</td>
-              <td>{row.matureYear ?? 'No reform transition'}</td>
-              <td>{row.maturePrimaryGDP === null ? '—' : percent(row.maturePrimaryGDP, 1)}</td>
-              <td>{row.matureInterestGDP === null ? '—' : percent(row.matureInterestGDP, 1)}</td>
-              <td>{row.matureTotalGDP === null ? '—' : percent(row.matureTotalGDP, 1)}</td>
-              <td>{percent(row.endpointPrimaryGDP, 1)}</td>
-              <td>{percent(row.endpointInterestGDP, 1)}</td>
-              <td>{percent(row.endpointTotalGDP, 1)}</td>
-              <td>{percent(row.endpointDebtGDP, 1)}</td>
-            </tr>
-          ))}</tbody>
-        </table>
-      </div>
-      <p className="baseline-note">Current law has no reform-transition maturity date, so its {endpointYear} endpoint spending is the comparable policy-window measure. Reform maturity figures use the annual required-revenue path in the visible extension. Endpoint debt is deliberately identical when every scenario is assigned the same debt target; spending and the required revenue path show the substantive differences.</p>
-    </section>
-  )
 }
 
 function MacroBudgetSensitivity({
@@ -861,10 +580,9 @@ function MacroBudgetSensitivity({
     const baseline = referenceComparison.scenarios[strategy]
     return {
       strategy,
-      permanent: scenario.permanent.rate - baseline.permanent.rate,
-      peak:
-        scenario.revenuePath.peakRevenueRate -
-        baseline.revenuePath.peakRevenueRate,
+      starting:
+        scenario.revenuePath.startingRevenueRate -
+        baseline.revenuePath.startingRevenueRate,
       minimum:
         scenario.revenuePath.minimumRevenueRate -
         baseline.revenuePath.minimumRevenueRate,
@@ -893,11 +611,11 @@ function MacroBudgetSensitivity({
       </div>
       <div className="table-scroll">
         <table className="comparison-table sensitivity-table">
-          <thead><tr><th>Required-rate impact vs central</th><th>Constant</th><th>Annual-path peak</th><th>Annual-path minimum</th></tr></thead>
+          <thead><tr><th>Required-rate impact vs central</th><th>Starting / single rate</th><th>Lowest visible rate</th></tr></thead>
           <tbody>{rows.map((row) => (
             <tr key={row.strategy}>
               <th>{fundingStrategyLabels[row.strategy]}</th>
-              {[row.permanent, row.peak, row.minimum].map((value, index) => (
+              {[row.starting, row.minimum].map((value, index) => (
                 <td key={index} className={value < 0 ? 'favorable' : value > 0 ? 'adverse' : ''}>{percentagePointDelta(value)}</td>
               ))}
             </tr>
@@ -951,30 +669,21 @@ function ResultsPanel({ comparison, referenceComparison, macroBudgetChanged, sce
     targetRate: row.nominalTargetInterestRate * 100,
     effectiveRate: row.effectiveNominalInterestRate * 100,
   }))
-  const savingsFunded = comparison.scenarios.savingsFundedSequential
-  const savingsEndpoint =
-    savingsFunded.revenuePath.simulation.years.find(
-      (row) => row.year === savingsFunded.revenuePath.policyHorizonEndYear,
-    )
   return (
     <>
       <section className="card hero-card">
-        <div><div className="eyebrow">Financing comparison</div><h2>Six reform strategies, two current-law benchmarks</h2><p>The primary fiscal cutoff is {policyEnd}. The longer path remains visible as an explicitly marked actuarial stress test, while annual revenues adjust to prevent debt from overshooting the target and turning negative.</p></div>
-        <div className="effect-box"><span>Savings-funded Medicare deposits begin</span><strong>{yearOrDash(savingsFunded.firstMedicarePrefundingYear)}</strong><small>{savingsEndpoint ? `${percent(savingsEndpoint.socialSecurityPrefundedShare, 1)} of the ${policyEnd} SS cohort sleeve funded` : 'No endpoint result'}</small></div>
+        <div><div className="eyebrow">Financing comparison</div><h2>Same benefit promise, six financing strategies</h2><p>Each path begins at the minimum rate that can meet the fiscal objective without a later tax increase. The longer actuarial path stays visible, with the {policyEnd} cutoff marked on every chart.</p></div>
+        <div className="effect-box"><span>Selected starting revenue</span><strong>{percent(selected.revenuePath.startingRevenueRate)}</strong><small>same as the single-rate solution · lowest visible {percent(selected.revenuePath.minimumRevenueRate)} in {selected.revenuePath.minimumRevenueYear}</small></div>
       </section>
-      <BudgetCalibration2026 comparison={comparison} selected={selected} />
-      <CurrentLawBaselines comparison={comparison} />
       <MacroBudgetSensitivity comparison={comparison} referenceComparison={referenceComparison} changed={macroBudgetChanged} />
-      <PolicyHorizonComparison comparison={comparison} />
-      <section className="card strategy-card"><div className="section-heading"><div><div className="eyebrow">Strategy matrix</div><h3>Revenue burden and sequencing milestones</h3></div><span>{personDollars(comparison.prefunded.endowment.socialSecurityPV)} SS + {personDollars(comparison.prefunded.endowment.medicarePV)} Medicare per fully funded entrant</span></div><ComparisonTable comparison={comparison} /></section>
-      <LongRunComparison comparison={comparison} />
+      <section className="card strategy-card"><div className="section-heading"><div><div className="eyebrow">Strategy matrix</div><h3>Revenue burden, mature spending, and sequencing</h3></div><span>{personDollars(comparison.prefunded.endowment.socialSecurityPV)} SS + {personDollars(comparison.prefunded.endowment.medicarePV)} Medicare per fully funded entrant</span></div><ComparisonTable comparison={comparison} /></section>
       <TermDefinitions />
       <div className="view-controls">
         <div className="segmented strategy-segmented">{fundingStrategies.map((strategy) => <button key={strategy} className={scenarioChoice === strategy ? 'active' : ''} onClick={() => setScenarioChoice(strategy)}>{fundingStrategyLabels[strategy]}</button>)}</div>
       </div>
       <div className="chart-grid">
-        <ChartCard title="Debt held by the public" note="End-of-year debt follows the selected glidepath through the policy cutoff and is held at the endpoint target afterward."><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip /><ReferenceLine x={policyEnd} stroke="#253b56" strokeDasharray="5 4" label={cutoffLabel} /><Line type="monotone" dataKey="debt" name="Debt / GDP" stroke="#ef8354" strokeWidth={3} dot={false} /></LineChart></ResponsiveContainer></ChartCard>
-        <ChartCard title="Annual federal revenue required" note={`Peak ${percent(selected.revenuePath.peakRevenueRate)} in ${selected.revenuePath.peakRevenueYear}; minimum ${percent(selected.revenuePath.minimumRevenueRate)} in ${selected.revenuePath.minimumRevenueYear}, measured through ${policyEnd}.`}><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip /><ReferenceLine x={policyEnd} stroke="#253b56" strokeDasharray="5 4" label={cutoffLabel} /><Line type="monotone" dataKey="revenue" name="Required revenue / GDP" stroke="#26845f" strokeWidth={3} dot={false} /></LineChart></ResponsiveContainer></ChartCard>
+        <ChartCard title="Debt held by the public" note={`The minimum single rate is applied through ${policyEnd}; afterward revenue may fall as long as the debt target can be maintained without a tax increase.`}><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip /><ReferenceLine x={policyEnd} stroke="#253b56" strokeDasharray="5 4" label={cutoffLabel} /><Line type="monotone" dataKey="debt" name="Debt / GDP" stroke="#ef8354" strokeWidth={3} dot={false} /></LineChart></ResponsiveContainer></ChartCard>
+        <ChartCard title="Federal revenue path" note={`Starts at ${percent(selected.revenuePath.startingRevenueRate)}—never above the single-rate score—and never rises. Lowest visible rate: ${percent(selected.revenuePath.minimumRevenueRate)} in ${selected.revenuePath.minimumRevenueYear}.`}><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip /><ReferenceLine x={policyEnd} stroke="#253b56" strokeDasharray="5 4" label={cutoffLabel} /><Line type="monotone" dataKey="revenue" name="Required revenue / GDP" stroke="#26845f" strokeWidth={3} dot={false} /></LineChart></ResponsiveContainer></ChartCard>
         <ChartCard title="Total federal spending decomposition" note="The stacked areas now include net interest; the dark line is their explicit sum."><ResponsiveContainer width="100%" height="100%"><ComposedChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip /><Legend /><ReferenceLine x={policyEnd} stroke="#253b56" strokeDasharray="5 4" label={cutoffLabel} /><Area stackId="1" dataKey="legacySS" name="Legacy SS" fill="#6f7d94" stroke="#6f7d94" /><Area stackId="1" dataKey="flatSS" name="Flat SS PAYGO" fill="#3c91e6" stroke="#3c91e6" /><Area stackId="1" dataKey="legacyMedicare" name="Legacy Medicare" fill="#9f86c0" stroke="#9f86c0" /><Area stackId="1" dataKey="premiumSupport" name="Premium support PAYGO" fill="#56cfe1" stroke="#56cfe1" /><Area stackId="1" dataKey="ssPrefunding" name="SS prefunding" fill="#50b58a" stroke="#26845f" /><Area stackId="1" dataKey="medicarePrefunding" name="Medicare prefunding" fill="#8ad4b5" stroke="#4aa784" /><Area stackId="1" dataKey="nonDefenseDiscretionary" name="Nondefense discretionary" fill="#f4b860" stroke="#d69639" /><Area stackId="1" dataKey="otherPrimary" name="Other primary" fill="#b8c1cc" stroke="#8794a3" /><Area stackId="1" dataKey="interest" name="Net interest" fill="#ef9a7a" stroke="#d96c4a" /><Line type="monotone" dataKey="totalSpending" name="Total federal spending" stroke="#172033" strokeWidth={2.5} dot={false} /></ComposedChart></ResponsiveContainer></ChartCard>
         <ChartCard title="Interest spending and rates" note="Lambda moves the effective debt rate toward—not above—the debt-sensitive market target."><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip /><Legend /><ReferenceLine x={policyEnd} stroke="#253b56" strokeDasharray="5 4" label={cutoffLabel} /><Line dataKey="interest" name="Net interest / GDP" stroke="#ef8354" dot={false} /><Line dataKey="targetRate" name="Target nominal rate" stroke="#9f86c0" dot={false} /><Line dataKey="effectiveRate" name="Effective nominal rate" stroke="#3c91e6" dot={false} /></LineChart></ResponsiveContainer></ChartCard>
         <ChartCard title="Legacy vs reformed system" note="Cohort mortality—not an aggregate phaseout—runs off legacy SS."><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip /><Legend /><ReferenceLine x={policyEnd} stroke="#253b56" strokeDasharray="5 4" label={cutoffLabel} /><Line dataKey="legacySS" name="Legacy SS" stroke="#6f7d94" dot={false} /><Line dataKey="flatSS" name="Flat SS PAYGO" stroke="#3c91e6" dot={false} /><Line dataKey="legacyMedicare" name="Legacy Medicare" stroke="#9f86c0" dot={false} /><Line dataKey="premiumSupport" name="Premium support PAYGO" stroke="#56cfe1" dot={false} /></LineChart></ResponsiveContainer></ChartCard>
@@ -1000,8 +709,8 @@ function AuditPanel({ scenario }: { scenario: ScenarioResult }) {
   const ss = simulation.socialSecurityByYear.get(row.year)
   const cohort = ss?.cohorts.find((item) => item.retirementYear === retirementYear)
   const regime = row.year <= scenario.revenuePath.policyHorizonEndYear
-    ? 'annual revenue glidepath to policy target'
-    : 'post-cutoff debt-ratio maintenance'
+    ? 'minimum constant revenue through the fiscal cutoff'
+    : 'post-cutoff non-rising debt-maintenance path'
   const isSavingsFunded =
     scenario.assumptions.fundingStrategy === 'savingsFundedSequential'
   const errors = reconciliationErrors(row)
@@ -1039,7 +748,7 @@ function AuditPanel({ scenario }: { scenario: ScenarioResult }) {
 }
 
 function SourcesPanel() {
-  return <><section className="card hero-card"><div><div className="eyebrow">Model & sources</div><h2>Inputs have names, provenance, and limits</h2><p>Official inputs, policy choices, modeling assumptions, and outputs remain distinct. The mortality table is period mortality; it does not claim cohort longevity improvement.</p></div></section><TermDefinitions /><section className="card"><div className="conflict"><strong>Revenue-path convention</strong><p>The constant rate is retained as a tax-smoothing benchmark. The operational chart uses an annual rate that keeps debt on a straight path to the selected 70-year endpoint and then holds that debt ratio through the actuarial extension. This makes the annual path unique and prevents a fixed rate solved for one cutoff from driving debt below zero afterward.</p></div><div className="source-list">{sources.map((source) => <article key={source.id}><span className={`source-kind ${source.kind.replace(' ', '-')}`}>{source.kind}</span><h3>{source.agency}</h3><a href={source.url} target="_blank" rel="noreferrer">{source.datasetOrReport}</a><p><strong>{source.relevantTable}</strong> · {source.publicationDate}</p><p>{source.notes}</p></article>)}</div></section></>
+  return <><section className="card hero-card"><div><div className="eyebrow">Model & sources</div><h2>Inputs have names, provenance, and limits</h2><p>Official inputs, policy choices, modeling assumptions, and outputs remain distinct. The mortality table is period mortality; it does not claim cohort longevity improvement.</p></div></section><TermDefinitions /><section className="card"><div className="conflict"><strong>Revenue-path convention</strong><p>The operational path begins at the minimum constant rate that meets the fiscal objective. It cannot begin lower and still promise no later tax increase: every future rate would then be below the already-minimal single-rate solution. After the cutoff, the rate may decline when less revenue is needed to maintain the target debt ratio, but it never rises.</p></div><div className="source-list">{sources.map((source) => <article key={source.id}><span className={`source-kind ${source.kind.replace(' ', '-')}`}>{source.kind}</span><h3>{source.agency}</h3><a href={source.url} target="_blank" rel="noreferrer">{source.datasetOrReport}</a><p><strong>{source.relevantTable}</strong> · {source.publicationDate}</p><p>{source.notes}</p></article>)}</div></section></>
 }
 
 export default function App() {

@@ -130,7 +130,7 @@ Also calculate two non-reform reference cases defined in `MODEL_SPEC.md`:
 - current law with scheduled benefits paid in full;
 - current law with only payable benefits delivered after OASI and HI depletion.
 
-Use both revenue presentations below for the reference cases. Do not assign a benefit-design maturity date to current law. For every reform strategy, report the constant-rate difference against both current-law references. Label the payable comparison carefully because its lower spending reflects unpaid scheduled benefits rather than enacted reform savings.
+Use both revenue presentations below for the reference cases and retain them for audit and validation. Do not assign a benefit-design maturity date to current law. The main Results layout need not surface these reference cases; if shown elsewhere, label the payable comparison carefully because its lower spending reflects unpaid scheduled benefits rather than enacted reform savings.
 
 ## 3. Two revenue presentations
 
@@ -140,26 +140,36 @@ For every scenario calculate BOTH:
 
 One constant federal revenue rate `T_constant` applies in every scored year. Solve it to the selected objective at the policy cutoff. The longer simulation may display what would happen if that fixed rate continued, but the operational charts should use the annual path below so post-cutoff debt does not become economically meaningless.
 
-### B. Annual required-revenue path
+### B. Minimum-opening, nonincreasing revenue path
 
-For each year, solve the revenue share that places end-of-year debt/GDP on a straight glidepath from starting debt to the objective-consistent policy-horizon target:
+Use the solved constant rate in every year through the policy cutoff:
 
 ```text
-progress_t = clamp((t - reformYear + 1) / policyHorizonYears, 0, 1)
-
-targetDebtGDP_t = startingDebtGDP
-  + progress_t * (endpointDebtTargetGDP - startingDebtGDP)
-
-requiredRevenue_t = totalFederalSpending_t
-  + beginningDebt_t
-  - targetDebtGDP_t * nominalGDP_t
+requiredRevenueRate_t = T_constant, for t <= policyHorizonEndYear
 ```
 
-After the cutoff, hold `targetDebtGDP_t = endpointDebtTargetGDP`; annual revenue must continue adjusting to maintain that debt ratio through the visible extension.
+This is the minimum possible opening rate under a no-future-increase constraint. If the first-year rate were below `T_constant`, all future rates would also be below the already-minimal constant solution and the fiscal objective could not be met.
+
+After the cutoff, calculate the rate required to hold the objective-consistent endpoint debt ratio, then cap it at the prior-year rate:
+
+```text
+maintenanceRate_t = (
+    totalFederalSpending_t
+  + beginningDebt_t
+  - endpointDebtTargetGDP * nominalGDP_t
+) / nominalGDP_t
+
+requiredRevenueRate_t = max(
+  0,
+  min(requiredRevenueRate_(t-1), maintenanceRate_t)
+)
+```
+
+This lets the revenue burden fall when the transition runs off without ever requiring it to rise. If the maintenance requirement later rises above the cap, preserve the no-increase rule and allow post-cutoff debt to drift rather than silently raising taxes.
 
 For the explicit endpoint-debt objective, `endpointDebtTargetGDP` is the user-selected target. For return-to-starting-debt it is starting debt. For the other legacy objectives, use the endpoint produced by the constant-rate solution so both presentations remain objective-consistent.
 
-Report peak and minimum revenue/GDP and their years within the policy window, the endpoint revenue rate, and endpoint debt/GDP. Do not call those extrema “transition” and “mature” rates.
+Report the starting revenue/GDP, the minimum revenue/GDP and its year across the visible simulation, the endpoint revenue rate, and endpoint debt/GDP. Do not call these values “transition” and “mature” rates.
 
 ## 4. Mature-system year
 
@@ -251,21 +261,14 @@ Show a compact comparison with rows:
 
 And columns at minimum:
 
-- policy-horizon endpoint year and debt target
-- constant revenue rate
-- annual-path peak revenue rate and year
-- annual-path minimum revenue rate and year
-- annual-path endpoint revenue rate
-- endpoint debt/GDP
-- peak debt/GDP under the constant-rate benchmark
-- mature-system year
-- cumulative prefunding contributions/GDP or dollars (0 when OFF)
-- mature primary spending/GDP
-- mature net interest and total spending/GDP under the annual path
-- first positive Social Security prefunding dividend year
-- first Medicare prefunding-deposit year
-- first funded cohort's Medicare eligibility year
-- first fully funded Medicare cohort year, or an explicit `not reached by horizon`
+- starting/single revenue rate;
+- minimum visible revenue rate and year;
+- peak debt/GDP and year;
+- policy-cutoff debt/GDP;
+- mature-system year and mature primary spending/GDP;
+- 95% transition-runoff year;
+- first Medicare prefunding-deposit year;
+- first fully funded Medicare cohort year, or an explicit `not reached by horizon`.
 
 The user should be able to answer immediately:
 
@@ -301,7 +304,7 @@ For `socialSecurityFirst`, also show avoided SS PAYGO, SS prefunding deposit, si
 
 For `savingsFundedSequential`, also show scheduled-current-law benefit-design savings, full and actual SS sleeve costs, the SS funded fraction, full and actual Medicare sleeve costs, the Medicare funded fraction, and unused reform savings. The audit must reconcile `total prefunding <= available reform savings` in every year.
 
-The audit must identify whether the selected year is on the policy-horizon debt glidepath or in post-cutoff debt-ratio maintenance. It must show annual revenue, net interest, total federal spending, and ending debt/GDP.
+The audit must identify whether the selected year uses the minimum constant rate through the cutoff or the post-cutoff non-rising maintenance rule. It must show annual revenue, net interest, total federal spending, and ending debt/GDP.
 
 ## 7. Required tests
 
@@ -315,8 +318,8 @@ Add tests proving:
 6. Default 20-year SS phase-in with both programs PAYGO produces mature-system year 2086 when FRA=70, max age=110, and Year B=2035.
 7. The constant-rate solver uses exactly one revenue rate in every scored year.
 8. The annual path reaches the configured policy-horizon debt target within numerical tolerance.
-9. The annual path holds debt/GDP at that target in every post-cutoff year.
-10. Reported peak and minimum rates equal the actual extrema within the policy window.
+9. The annual path starts at the constant-rate solution and never increases through the visible simulation.
+10. The reported minimum rate equals the actual minimum across the visible simulation.
 11. Interest and overall-deficit accounting reconcile under both revenue presentations and all six strategies.
 12. Scenario comparisons use identical benefit assumptions except for `fundingStrategy`.
 13. Sequential Medicare deposits are zero while the SS dividend is negative.
@@ -335,12 +338,12 @@ Add tests proving:
 On the Results page, place a **Financing comparison** matrix near the top with one row per strategy:
 
 ```text
-Strategy                    Constant   Path peak   Path min   SS dividend   Medicare starts
-Both PAYGO                    x.xx%       x.xx%      x.xx%         —               —
-SS prefunded                 x.xx%       x.xx%      x.xx%        2081             —
-Medicare prefunded           x.xx%       x.xx%      x.xx%         —              2026
-Both prefunded               x.xx%       x.xx%      x.xx%        2081            2026
-SS-first                     x.xx%       x.xx%      x.xx%        2081            2081
+Strategy                    Start/single   Lowest visible   Peak debt   Mature primary   Medicare starts
+Both PAYGO                      x.xx%           x.xx%          xxx%          x.xx%               —
+SS prefunded                   x.xx%           x.xx%          xxx%          x.xx%               —
+Medicare prefunded             x.xx%           x.xx%          xxx%          x.xx%              2026
+Both prefunded                 x.xx%           x.xx%          xxx%          x.xx%              2026
+SS-first                       x.xx%           x.xx%          xxx%          x.xx%              2081
 ```
 
 Below it, show a control to inspect any strategy in the charts and decomposition audit. Long charts must show a vertical policy-cutoff marker. The spending chart must stack net interest on primary components and draw an explicit total-federal-spending line. Provide a click-to-open glossary, including a plain-language definition of nondefense discretionary spending.
