@@ -91,16 +91,18 @@ describe('annual required-revenue path', () => {
       )
     })
 
-    it(`holds debt at the endpoint target after the cutoff with ${fundingStrategy} financing`, () => {
-      const solution = solveAnnualRevenuePath(
-        withAssumptions({ fundingStrategy, endYear: 2160 }),
+    it(`starts at the single rate and never rises with ${fundingStrategy} financing`, () => {
+      const assumptions = withAssumptions({ fundingStrategy, endYear: 2160 })
+      const permanent = solvePermanentRevenueRate(assumptions)
+      const solution = solveAnnualRevenuePath(assumptions, permanent)
+      expect(solution.startingRevenueRate).toBeCloseTo(permanent.rate, 12)
+      expect(solution.startingRevenueRate).toBeLessThanOrEqual(
+        permanent.rate + 1e-12,
       )
-      for (const row of solution.simulation.years.filter(
-        (item) => item.year >= solution.policyHorizonEndYear,
-      )) {
-        expect(row.endingDebtGDP).toBeCloseTo(
-          solution.endpointDebtTargetGDP,
-          10,
+      expect(solution.nonIncreasing).toBe(true)
+      for (let index = 1; index < solution.simulation.years.length; index += 1) {
+        expect(solution.simulation.years[index]!.revenueRate).toBeLessThanOrEqual(
+          solution.simulation.years[index - 1]!.revenueRate + 1e-12,
         )
       }
       expect(
@@ -109,18 +111,20 @@ describe('annual required-revenue path', () => {
     })
   }
 
-  it('reports exact peak and minimum rates within the policy window', () => {
+  it('reports the opening peak and exact minimum across the visible path', () => {
     const solution = solveAnnualRevenuePath(withAssumptions({ endYear: 2160 }))
-    const policyRows = solution.simulation.years.filter(
-      (row) => row.year <= solution.policyHorizonEndYear,
-    )
+    const visibleRows = solution.simulation.years
     expect(solution.peakRevenueRate).toBe(
-      Math.max(...policyRows.map((row) => row.revenueRate)),
+      Math.max(...visibleRows.map((row) => row.revenueRate)),
     )
+    expect(solution.peakRevenueRate).toBe(solution.startingRevenueRate)
+    expect(solution.peakRevenueYear).toBe(2026)
     expect(solution.minimumRevenueRate).toBe(
-      Math.min(...policyRows.map((row) => row.revenueRate)),
+      Math.min(...visibleRows.map((row) => row.revenueRate)),
     )
-    expect(solution.peakRevenueRate).not.toBe(solution.minimumRevenueRate)
+    expect(solution.minimumRevenueRate).toBeLessThanOrEqual(
+      solution.startingRevenueRate,
+    )
   })
 })
 
