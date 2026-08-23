@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { withAssumptions } from '../src/model/defaults'
+import { cbo2026RevenueGDP } from '../src/data/cboBaseline'
 import {
   comparePolicyHorizons,
   compareScenarios,
@@ -97,6 +98,10 @@ describe('annual required-revenue path', () => {
       const permanent = solvePermanentRevenueRate(assumptions)
       const solution = solveAnnualRevenuePath(assumptions, permanent)
       expect(solution.startingRevenueRate).toBeCloseTo(permanent.rate, 12)
+      expect(solution.openingFiscalAdjustmentGDP).toBeCloseTo(
+        solution.startingRevenueRate - cbo2026RevenueGDP,
+        12,
+      )
       expect(solution.startingRevenueRate).toBeLessThanOrEqual(
         permanent.rate + 1e-12,
       )

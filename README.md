@@ -61,7 +61,7 @@ Legacy senior Medicare is an all-in Parts A, B, D, and Medicare Advantage benefi
 
 The primary score uses a 70-year policy horizon through 2095, with companion 30- and 50-year calculations retained in the model. The Results page keeps the longer path through 2160 visible as a marked actuarial stress test. Users select a peak-debt ceiling and an endpoint debt target no higher than that ceiling. The operational revenue path starts at the minimum single rate satisfying both limits. If the peak binds early, revenue begins a smooth decline in the earliest safe year and reaches the endpoint target without a later increase; otherwise it stays at the opening rate through the cutoff.
 
-The 2026 scheduled-current-law calibration reconciles to CBO's 20.0% of GDP in primary spending and 23.3% in total spending. The model applies SSA survival from birth before counting cohorts at Medicare or Social Security eligibility; reform prefunding deposits then appear explicitly on top of that baseline.
+The 2026 scheduled-current-law calibration reconciles to CBO's 17.5% of GDP in federal revenue, 20.0% in primary spending, and 23.3% in total spending. Next to every opening required-revenue rate, Results shows the difference from 17.5% as the opening fiscal adjustment; that gap can be closed with revenue, other spending reductions, or a mix. The model applies SSA survival from birth before counting cohorts at Medicare or Social Security eligibility; reform prefunding deposits then appear explicitly on top of that baseline.
 
 ## Core modeling principle
 
@@ -152,6 +152,7 @@ The test suite should demonstrate at least:
 - Spending decomposition exactly reconciles.
 - Constant-rate solver satisfies both the peak-debt ceiling and endpoint debt target.
 - Non-rising revenue path reaches the endpoint target without breaching the peak ceiling, starts at the single-rate result, never increases, and reports its first decline and lowest visible rate.
+- Opening fiscal adjustment equals the opening rate minus CBO's 17.5%-of-GDP 2026 current-law revenue baseline.
 
 ## Modeling discipline
 

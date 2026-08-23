@@ -103,6 +103,7 @@ At minimum preserve tests proving:
 - Spending decomposition sums to total primary spending within floating-point tolerance.
 - The constant-rate solver uses the same federal revenue rate in every scored year and satisfies both the peak ceiling and endpoint debt target.
 - The annual required-revenue path reaches the endpoint target without breaching the peak ceiling, starts at the constant rate, never rises, and reports its first decline year and minimum visible rate.
+- The opening fiscal adjustment equals the opening required-revenue rate minus CBO's 17.5%-of-GDP 2026 current-law revenue baseline; label it as achievable through revenue, other spending reductions, or both.
 
 If a UI change breaks a model test, fix the UI or identify a genuine model-spec change. Do not weaken the test merely to make CI pass.
 

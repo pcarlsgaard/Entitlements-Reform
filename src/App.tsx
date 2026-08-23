@@ -12,6 +12,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import { cbo2026RevenueGDP } from './data/cboBaseline'
 import { sources } from './data/sources'
 import { defaultAssumptions } from './model/defaults'
 import {
@@ -56,6 +57,7 @@ const termDefinitions = [
   ['Other primary excluding NDD', 'The 2026 residual outside separately modeled Social Security, Medicare, and NDD. It includes defense, Medicaid/CHIP/ACA subsidies, income security, veterans and federal retirement, agriculture, other mandatory programs, and offsetting receipts.'],
   ['Constant revenue rate', 'The minimum single federal revenue share that would satisfy both the peak-debt ceiling and endpoint target if applied throughout the policy window. It is the opening-rate benchmark.'],
   ['Non-rising revenue path', 'Begins at the minimum constant-rate benchmark. If the peak ceiling binds before the endpoint, revenue begins a smooth decline as soon as it can do so without breaching the ceiling, and reaches the selected endpoint debt target without a later tax increase.'],
+  ['Opening fiscal adjustment', 'The opening required-revenue rate minus CBO’s projected 2026 current-law revenue of 17.5% of GDP. It can be achieved through higher revenue, lower spending elsewhere, or a combination.'],
   ['Policy horizon', 'The years used to score the fiscal objective. The default is 70 fiscal years, 2026–2095; later years are an actuarial stress-test extension.'],
   ['Net interest', 'Budget outlays for servicing debt held by the public, using the model’s average effective nominal interest rate.'],
 ] as const
@@ -513,7 +515,7 @@ function ComparisonTable({ comparison }: { comparison: ReturnType<typeof compare
           return (
             <tr key={strategy}>
               <th>{scenario.label}</th>
-              <td>{percent(scenario.revenuePath.startingRevenueRate)}<br /><small>2026</small></td>
+              <td>{percent(scenario.revenuePath.startingRevenueRate)}<br /><small>({percentagePointDelta(scenario.revenuePath.openingFiscalAdjustmentGDP)} vs CBO {percent(cbo2026RevenueGDP, 1)})</small></td>
               <td>{percent(scenario.revenuePath.minimumRevenueRate)}<br /><small>{scenario.revenuePath.revenueDeclineYear === null ? 'never falls' : `falls ${scenario.revenuePath.revenueDeclineYear} · min ${scenario.revenuePath.minimumRevenueYear}`}</small></td>
               <td>{percent(scenario.revenuePath.peakDebtGDP, 1)}<br /><small>{scenario.revenuePath.peakDebtYear}</small></td>
               <td>{percent(scenario.revenuePath.endpointDebtGDP, 1)}</td>
@@ -525,7 +527,7 @@ function ComparisonTable({ comparison }: { comparison: ReturnType<typeof compare
           )
         })}</tbody>
       </table>
-      <p className="baseline-note">The opening rate is the minimum single rate that satisfies both debt limits. If the peak ceiling binds early, the operational rate begins falling at the earliest year a smooth decline can still respect the ceiling and reach the {policyEnd} endpoint target.</p>
+      <p className="baseline-note">The parenthetical figure is the opening fiscal adjustment versus CBO’s 17.5%-of-GDP current-revenue baseline; it can come from revenue, other spending reductions, or both. The opening rate is the minimum single rate that satisfies both debt limits. If the peak ceiling binds early, the operational rate begins falling at the earliest year a smooth decline can still respect the ceiling and reach the {policyEnd} endpoint target.</p>
     </div>
   )
 }
@@ -658,7 +660,7 @@ function ResultsPanel({ comparison, referenceComparison, macroBudgetChanged, sce
     <>
       <section className="card hero-card">
         <div><div className="eyebrow">Financing comparison</div><h2>Same benefit promise, six financing strategies</h2><p>Each path begins at the minimum rate that satisfies both the peak ceiling and endpoint debt target without a later tax increase. The longer actuarial path stays visible, with the {policyEnd} cutoff marked on every chart.</p></div>
-        <div className="effect-box"><span>Selected opening revenue</span><strong>{percent(selected.revenuePath.startingRevenueRate)}</strong><small>{selected.revenuePath.revenueDeclineYear === null ? 'rate does not fall in the visible period' : `first falls in ${selected.revenuePath.revenueDeclineYear}`} · lowest visible {percent(selected.revenuePath.minimumRevenueRate)} in {selected.revenuePath.minimumRevenueYear}</small></div>
+        <div className="effect-box"><span>Selected opening revenue</span><strong>{percent(selected.revenuePath.startingRevenueRate)}</strong><small>{percentagePointDelta(selected.revenuePath.openingFiscalAdjustmentGDP)} vs CBO’s {percent(cbo2026RevenueGDP, 1)} · {selected.revenuePath.revenueDeclineYear === null ? 'rate does not fall in the visible period' : `first falls in ${selected.revenuePath.revenueDeclineYear}`} · lowest visible {percent(selected.revenuePath.minimumRevenueRate)} in {selected.revenuePath.minimumRevenueYear}</small></div>
       </section>
       <MacroBudgetSensitivity comparison={comparison} referenceComparison={referenceComparison} changed={macroBudgetChanged} />
       <section className="card strategy-card"><div className="section-heading"><div><div className="eyebrow">Strategy matrix</div><h3>Revenue burden, mature spending, and sequencing</h3></div><span>{personDollars(comparison.prefunded.endowment.socialSecurityPV)} SS + {personDollars(comparison.prefunded.endowment.medicarePV)} Medicare per fully funded entrant</span></div><ComparisonTable comparison={comparison} /></section>
