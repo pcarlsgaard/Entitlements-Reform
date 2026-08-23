@@ -48,7 +48,6 @@ export const defaultAssumptions: ModelAssumptions = {
   otherPrimaryGDP: 0.07235,
   policyHorizonYears: 70,
   policyHorizonDebtTargetGDP: 1.01,
-  fiscalObjective: 'targetDebtAtPolicyHorizon',
   peakDebtCeilingGDP: 1.5,
 }
 

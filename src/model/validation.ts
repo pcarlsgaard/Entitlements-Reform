@@ -159,6 +159,21 @@ export function validateModelAssumptions(
       'The policy-horizon debt target cannot be negative.',
     )
   }
+  if (assumptions.peakDebtCeilingGDP < assumptions.startingDebtGDP) {
+    add(
+      'peakDebtCeilingGDP',
+      'The peak-debt ceiling cannot be below starting debt.',
+    )
+  }
+  if (
+    assumptions.policyHorizonDebtTargetGDP >
+    assumptions.peakDebtCeilingGDP
+  ) {
+    add(
+      'policyHorizonDebtTargetGDP',
+      'The endpoint debt target cannot exceed the peak-debt ceiling.',
+    )
+  }
   if (assumptions.otherOASDIGDP < 0)
     add('otherOASDIGDP', 'The other-OASDI share cannot be negative.')
   if (assumptions.under65MedicareGDP < 0)

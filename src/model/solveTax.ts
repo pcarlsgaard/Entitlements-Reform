@@ -6,7 +6,6 @@ import {
 import { hasAnyPrefunding } from './fundingStrategy'
 import { survivalProbability } from './mortality'
 import type {
-  FiscalObjective,
   AnnualRevenuePathSolution,
   ModelAssumptions,
   PermanentRateSolution,
@@ -15,8 +14,10 @@ import type {
 } from './types'
 
 const MAX_ITERATIONS = 80
+const PATH_MAX_ITERATIONS = 48
 const RATE_TOLERANCE = 1e-13
 const DEBT_TOLERANCE = 1e-11
+const PATH_DEBT_TOLERANCE = 1e-8
 
 export type ConstantRevenueSimulator = (
   revenueRate: number,
@@ -70,7 +71,6 @@ export function simulationDiagnostics(
 
 export function objectiveSatisfied(
   simulation: SimulationResult,
-  objective: FiscalObjective,
   assumptions: ModelAssumptions,
 ): boolean {
   const diagnostics = simulationDiagnostics(simulation, 0, 0, false)
@@ -81,28 +81,13 @@ export function objectiveSatisfied(
   ) {
     return false
   }
-  const stable = diagnostics.terminalAnnualDebtChange <= DEBT_TOLERANCE
-  const returned =
-    diagnostics.terminalDebtGDP <=
-    assumptions.startingDebtGDP + DEBT_TOLERANCE
   const belowPeak =
     diagnostics.peakDebtGDP <=
     assumptions.peakDebtCeilingGDP + DEBT_TOLERANCE
-  switch (objective) {
-    case 'targetDebtAtPolicyHorizon':
-      return (
-        diagnostics.terminalDebtGDP <=
-        assumptions.policyHorizonDebtTargetGDP + DEBT_TOLERANCE
-      )
-    case 'stableTerminalDebt':
-      return stable
-    case 'returnToStartingDebt':
-      return returned
-    case 'peakDebtCeiling':
-      return belowPeak
-    case 'combinedStableAndPeak':
-      return stable && belowPeak
-  }
+  const belowEndpoint =
+    diagnostics.terminalDebtGDP <=
+    assumptions.policyHorizonDebtTargetGDP + DEBT_TOLERANCE
+  return belowPeak && belowEndpoint
 }
 
 function solvePermanentRevenueRateUsing(
@@ -112,13 +97,7 @@ function solvePermanentRevenueRateUsing(
   upperBound = 0.6,
 ): PermanentRateSolution {
   const upperSimulation = makeSimulation(upperBound)
-  if (
-    !objectiveSatisfied(
-      upperSimulation,
-      assumptions.fiscalObjective,
-      assumptions,
-    )
-  ) {
+  if (!objectiveSatisfied(upperSimulation, assumptions)) {
     return {
       ...simulationDiagnostics(upperSimulation, upperBound, 0, false),
       simulation: upperSimulation,
@@ -131,9 +110,7 @@ function solvePermanentRevenueRateUsing(
   while (iterations < MAX_ITERATIONS && high - low > RATE_TOLERANCE) {
     const midpoint = (low + high) / 2
     const candidate = makeSimulation(midpoint)
-    if (
-      objectiveSatisfied(candidate, assumptions.fiscalObjective, assumptions)
-    ) {
+    if (objectiveSatisfied(candidate, assumptions)) {
       high = midpoint
     } else {
       low = midpoint
@@ -251,34 +228,16 @@ export function calculateTransitionRunoffYears(
   }
 }
 
-function endpointDebtTargetForObjective(
-  assumptions: ModelAssumptions,
-  permanent: PermanentRateSolution,
-): number {
-  switch (assumptions.fiscalObjective) {
-    case 'targetDebtAtPolicyHorizon':
-      return assumptions.policyHorizonDebtTargetGDP
-    case 'returnToStartingDebt':
-      return assumptions.startingDebtGDP
-    case 'stableTerminalDebt':
-    case 'peakDebtCeiling':
-    case 'combinedStableAndPeak':
-      return permanent.terminalDebtGDP
-  }
-}
-
 /**
  * Construct the minimum-opening, nonincreasing revenue path.
  *
- * Through the scored policy window, the minimum opening rate that can meet
- * the same fiscal objective without ever increasing later is exactly the
- * constant-rate solution. Any lower opening rate would cap every later rate
- * below the already-minimal constant solution and therefore miss the target.
- *
- * After the cutoff, revenue may fall to the amount needed to hold the target
- * debt ratio, but it may never rise above the prior year's rate. This keeps
- * the visible actuarial extension from manufacturing negative debt while
- * preserving the user's no-future-tax-increase constraint.
+ * The opening rate is the minimum constant rate that satisfies both the peak
+ * ceiling and endpoint target. If the endpoint constraint binds, that rate is
+ * held through the cutoff. If the peak ceiling binds earlier and leaves the
+ * constant path below the endpoint target, revenue declines linearly from the
+ * earliest safe year to an end rate solved to hit the endpoint exactly. The
+ * hold-through year is delayed only when an earlier decline would create a
+ * second peak above the selected ceiling.
  */
 export function solveAnnualRevenuePathUsing(
   assumptions: ModelAssumptions,
@@ -286,22 +245,79 @@ export function solveAnnualRevenuePathUsing(
   permanent: PermanentRateSolution,
 ): AnnualRevenuePathSolution {
   const horizonEnd = policyHorizonEndYear(assumptions)
-  const target = endpointDebtTargetForObjective(assumptions, permanent)
-  let previousRate = permanent.rate
-  const schedule: RevenueSchedule = (year, context) => {
-    if (year <= horizonEnd) return permanent.rate
+  const target = assumptions.policyHorizonDebtTargetGDP
+  const ceiling = assumptions.peakDebtCeilingGDP
 
-    const targetEndingDebt = target * context.nominalGDP
-    const maintenanceRate =
-      (context.totalFederalSpending +
-        context.beginningDebt -
-        targetEndingDebt) /
-      context.nominalGDP
-    const rate = Math.max(0, Math.min(previousRate, maintenanceRate))
-    previousRate = rate
-    return rate
+  const makePathSimulation = (
+    holdThroughYear: number,
+    endpointRate: number,
+  ): SimulationResult => {
+    let previousRate = endpointRate
+    const schedule: RevenueSchedule = (year, context) => {
+      if (year <= holdThroughYear) return permanent.rate
+      if (year <= horizonEnd) {
+        const progress =
+          (year - holdThroughYear) / (horizonEnd - holdThroughYear)
+        return permanent.rate + progress * (endpointRate - permanent.rate)
+      }
+
+      const targetEndingDebt = target * context.nominalGDP
+      const maintenanceRate =
+        (context.totalFederalSpending +
+          context.beginningDebt -
+          targetEndingDebt) /
+        context.nominalGDP
+      const rate = Math.max(0, Math.min(previousRate, maintenanceRate))
+      previousRate = rate
+      return rate
+    }
+    return makeSimulation(schedule)
   }
-  const simulation = makeSimulation(schedule)
+
+  let simulation = makePathSimulation(horizonEnd, permanent.rate)
+
+  if (permanent.terminalDebtGDP < target - PATH_DEBT_TOLERANCE) {
+    const firstCandidateYear = Math.min(permanent.peakYear, horizonEnd - 1)
+    for (
+      let candidateYear = firstCandidateYear;
+      candidateYear < horizonEnd;
+      candidateYear += 1
+    ) {
+      const zeroRateSimulation = makePathSimulation(candidateYear, 0)
+      const zeroRateEndpoint = zeroRateSimulation.years.find(
+        (row) => row.year === horizonEnd,
+      )
+      if (!zeroRateEndpoint || zeroRateEndpoint.endingDebtGDP < target) {
+        break
+      }
+
+      let low = 0
+      let high = permanent.rate
+      let candidateSimulation = zeroRateSimulation
+      for (let iteration = 0; iteration < PATH_MAX_ITERATIONS; iteration += 1) {
+        const midpoint = (low + high) / 2
+        candidateSimulation = makePathSimulation(candidateYear, midpoint)
+        const endpoint = candidateSimulation.years.find(
+          (row) => row.year === horizonEnd,
+        )
+        if (!endpoint) throw new Error('Revenue-path endpoint is missing.')
+        if (endpoint.endingDebtGDP > target) low = midpoint
+        else high = midpoint
+      }
+      candidateSimulation = makePathSimulation(candidateYear, high)
+      const candidateRows = candidateSimulation.years.filter(
+        (row) => row.year <= horizonEnd,
+      )
+      const candidatePeak = Math.max(
+        ...candidateRows.map((row) => row.endingDebtGDP),
+      )
+      if (candidatePeak <= ceiling + PATH_DEBT_TOLERANCE) {
+        simulation = candidateSimulation
+        break
+      }
+    }
+  }
+
   const policyRows = simulation.years.filter((row) => row.year <= horizonEnd)
   const visibleRows = simulation.years
   const endpoint = policyRows.at(-1)
@@ -322,14 +338,19 @@ export function solveAnnualRevenuePathUsing(
       index === 0 ||
       row.revenueRate <= visibleRows[index - 1]!.revenueRate + RATE_TOLERANCE,
   )
+  const revenueDecline = visibleRows.find(
+    (row) => row.revenueRate < permanent.rate - RATE_TOLERANCE,
+  )
   return {
     converged:
-      Math.abs(endpoint.endingDebtGDP - target) <= DEBT_TOLERANCE &&
+      Math.abs(endpoint.endingDebtGDP - target) <= PATH_DEBT_TOLERANCE &&
+      peakDebt.endingDebtGDP <= ceiling + PATH_DEBT_TOLERANCE &&
       nonIncreasing,
     policyHorizonEndYear: horizonEnd,
     endpointDebtTargetGDP: target,
     endpointDebtGDP: endpoint.endingDebtGDP,
     startingRevenueRate: visibleRows[0]!.revenueRate,
+    revenueDeclineYear: revenueDecline?.year ?? null,
     nonIncreasing,
     peakRevenueRate: peakRevenue.revenueRate,
     peakRevenueYear: peakRevenue.year,

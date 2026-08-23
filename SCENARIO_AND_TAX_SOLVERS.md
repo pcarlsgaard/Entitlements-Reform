@@ -121,7 +121,7 @@ A user control may select which scenario is shown in detailed charts, but the he
 
 ### Policy-score horizons
 
-The primary policy score covers 70 fiscal years, 2026 through 2095 inclusive. Also report otherwise-identical 30-year (through 2055) and 50-year (through 2075) scores. Each horizon independently solves the selected objective at its own endpoint.
+The primary policy score covers 70 fiscal years, 2026 through 2095 inclusive. Also report otherwise-identical 30-year (through 2055) and 50-year (through 2075) scores. Each horizon independently solves the same peak-ceiling and endpoint-target constraints.
 
 Keep the simulation visible through 2160 as an actuarial stress-test extension. Every long chart must mark the policy cutoff with a vertical line. Do not describe post-cutoff extrapolations as part of the 70-year score.
 
@@ -138,17 +138,36 @@ For every scenario calculate BOTH:
 
 ### A. Constant revenue-rate benchmark
 
-One constant federal revenue rate `T_constant` applies in every scored year. Solve it to the selected objective at the policy cutoff. The longer simulation may display what would happen if that fixed rate continued, but the operational charts should use the annual path below so post-cutoff debt does not become economically meaningless.
+One constant federal revenue rate `T_constant` applies in every scored year. Solve the minimum rate satisfying both:
+
+```text
+max(debtGDP_t for t <= policyHorizonEndYear) <= peakDebtCeilingGDP
+debtGDP_policyHorizonEndYear <= endpointDebtTargetGDP
+```
+
+Require `startingDebtGDP <= peakDebtCeilingGDP` and `endpointDebtTargetGDP <= peakDebtCeilingGDP`. The longer simulation may display what would happen if that fixed rate continued, but the operational charts should use the annual path below so an early-binding peak does not force unnecessary later collections.
 
 ### B. Minimum-opening, nonincreasing revenue path
 
-Use the solved constant rate in every year through the policy cutoff:
+Begin with the solved constant rate. If its endpoint debt is at the endpoint target, use it in every year through the policy cutoff:
 
 ```text
 requiredRevenueRate_t = T_constant, for t <= policyHorizonEndYear
 ```
 
-This is the minimum possible opening rate under a no-future-increase constraint. If the first-year rate were below `T_constant`, all future rates would also be below the already-minimal constant solution and the fiscal objective could not be met.
+This is the minimum possible opening rate under a no-future-increase constraint. If the first-year rate were below `T_constant`, all future rates would also be below the already-minimal constant solution and at least one debt constraint would fail.
+
+If the constant path instead touches the peak ceiling early and finishes below the endpoint target, find the earliest safe hold-through year `Y`. Hold `T_constant` through `Y`, then decline linearly:
+
+```text
+requiredRevenueRate_t = T_constant, for t <= Y
+
+requiredRevenueRate_t = T_constant
+  + ((t - Y) / (policyHorizonEndYear - Y))
+  * (T_endpoint - T_constant), for Y < t <= policyHorizonEndYear
+```
+
+Solve `T_endpoint <= T_constant` so endpoint debt equals `endpointDebtTargetGDP`. Choose the earliest `Y` for which the full scored path remains at or below `peakDebtCeilingGDP`. This allows taxes to begin falling shortly after an early peak while ruling out a later tax increase or a second debt overshoot.
 
 After the cutoff, calculate the rate required to hold the objective-consistent endpoint debt ratio, then cap it at the prior-year rate:
 
@@ -167,9 +186,7 @@ requiredRevenueRate_t = max(
 
 This lets the revenue burden fall when the transition runs off without ever requiring it to rise. If the maintenance requirement later rises above the cap, preserve the no-increase rule and allow post-cutoff debt to drift rather than silently raising taxes.
 
-For the explicit endpoint-debt objective, `endpointDebtTargetGDP` is the user-selected target. For return-to-starting-debt it is starting debt. For the other legacy objectives, use the endpoint produced by the constant-rate solution so both presentations remain objective-consistent.
-
-Report the starting revenue/GDP, the minimum revenue/GDP and its year across the visible simulation, the endpoint revenue rate, and endpoint debt/GDP. Do not call these values “transition” and “mature” rates.
+`endpointDebtTargetGDP` is always the user-selected target; there are no alternate fiscal-objective modes. Report starting revenue/GDP, the first decline year, minimum revenue/GDP and its year across the visible simulation, endpoint revenue rate, peak debt/GDP, and endpoint debt/GDP. Do not call these values “transition” and “mature” rates.
 
 ## 4. Mature-system year
 
@@ -304,7 +321,7 @@ For `socialSecurityFirst`, also show avoided SS PAYGO, SS prefunding deposit, si
 
 For `savingsFundedSequential`, also show scheduled-current-law benefit-design savings, full and actual SS sleeve costs, the SS funded fraction, full and actual Medicare sleeve costs, the Medicare funded fraction, and unused reform savings. The audit must reconcile `total prefunding <= available reform savings` in every year.
 
-The audit must identify whether the selected year uses the minimum constant rate through the cutoff or the post-cutoff non-rising maintenance rule. It must show annual revenue, net interest, total federal spending, and ending debt/GDP.
+The audit must identify whether the selected year uses the minimum opening rate, the policy-window decline released by the peak ceiling, or the post-cutoff non-rising maintenance rule. It must show annual revenue, net interest, total federal spending, and ending debt/GDP.
 
 ## 7. Required tests
 

@@ -12,13 +12,6 @@ export type FundingStrategy =
   | 'socialSecurityFirst'
   | 'savingsFundedSequential'
 
-export type FiscalObjective =
-  | 'targetDebtAtPolicyHorizon'
-  | 'stableTerminalDebt'
-  | 'returnToStartingDebt'
-  | 'peakDebtCeiling'
-  | 'combinedStableAndPeak'
-
 export interface ModelAssumptions {
   reformYear: number
   endYear: number
@@ -59,7 +52,6 @@ export interface ModelAssumptions {
   otherPrimaryGDP: number
   policyHorizonYears: number
   policyHorizonDebtTargetGDP: number
-  fiscalObjective: FiscalObjective
   peakDebtCeilingGDP: number
 }
 
@@ -203,6 +195,7 @@ export interface AnnualRevenuePathSolution {
   endpointDebtTargetGDP: number
   endpointDebtGDP: number
   startingRevenueRate: number
+  revenueDeclineYear: number | null
   nonIncreasing: boolean
   peakRevenueRate: number
   peakRevenueYear: number
