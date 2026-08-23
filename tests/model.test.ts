@@ -12,6 +12,7 @@ import {
 } from '../src/model/medicare'
 import { survivalProbability } from '../src/model/mortality'
 import {
+  cohortSizeAtAgeMillions,
   firstPrefundedSSRetirementYear,
   flatBenefitReal,
   socialSecurityBenefitShares,
@@ -21,6 +22,16 @@ import {
 describe('SSA mortality', () => {
   it('uses l_x ratios for conditional survival', () => {
     expect(survivalProbability(70, 80)).toBeCloseTo(57_695.5 / 77_145, 12)
+  })
+
+  it('applies survival from birth before counting benefit entrants', () => {
+    expect(
+      cohortSizeAtAgeMillions(2026, 65, defaultAssumptions),
+    ).toBeCloseTo(
+      defaultAssumptions.cohortSizeMillions2026 *
+        survivalProbability(0, 65),
+      12,
+    )
   })
 })
 

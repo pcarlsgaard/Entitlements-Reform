@@ -1,13 +1,19 @@
 export type FundingStartAge = 0 | 18
 
+export type EntitlementDesign = 'reform' | 'currentLaw'
+
+export type CurrentLawBaselineMode = 'scheduled' | 'payable'
+
 export type FundingStrategy =
   | 'paygo'
   | 'socialSecurityOnly'
   | 'medicareOnly'
   | 'both'
   | 'socialSecurityFirst'
+  | 'savingsFundedSequential'
 
 export type FiscalObjective =
+  | 'targetDebtAtPolicyHorizon'
   | 'stableTerminalDebt'
   | 'returnToStartingDebt'
   | 'peakDebtCeiling'
@@ -33,6 +39,7 @@ export interface ModelAssumptions {
   premiumSupportRealGrowth: number
   legacyMedicareCost2026: number
   legacyMedicareRealGrowth: number
+  legacyMedicareHIShare2026: number
   medicareYearA: number
   medicareYearB: number
   cohortSizeMillions2026: number
@@ -50,9 +57,10 @@ export interface ModelAssumptions {
   nonDefenseDiscretionaryGDP2026: number
   nonDefenseDiscretionaryRealGrowth: number
   otherPrimaryGDP: number
+  policyHorizonYears: number
+  policyHorizonDebtTargetGDP: number
   fiscalObjective: FiscalObjective
   peakDebtCeilingGDP: number
-  matureDebtTargetGDP: number
 }
 
 export interface BenefitShares {
@@ -66,6 +74,7 @@ export interface SSCohortAudit extends BenefitShares {
   survivingBeneficiariesMillions: number
   survivalFraction: number
   prefunded: boolean
+  prefundedShare: number
   legacyPaygoBillions: number
   flatBenefitBillions: number
   flatPaygoBillions: number
@@ -104,13 +113,17 @@ export interface EndowmentPerPerson {
 
 export interface AnnualFundingPlan {
   year: number
+  fullSocialSecurityPrefundingCost: number
   socialSecurityPrefunding: number
+  socialSecurityPrefundedShare: number
   fullMedicarePrefundingCost: number
   medicarePrefunding: number
   totalPrefunding: number
   avoidedSocialSecurityPaygo: number
   socialSecurityPrefundingDividend: number
   medicarePrefundedShare: number
+  availableReformSavings: number
+  unusedReformSavings: number
 }
 
 export interface PrimaryComponents {
@@ -129,11 +142,15 @@ export interface SimulationYear extends PrimaryComponents {
   year: number
   nominalGDP: number
   socialSecurityPrefunding: number
+  fullSocialSecurityPrefundingCost: number
+  socialSecurityPrefundedShare: number
   medicarePrefunding: number
   fullMedicarePrefundingCost: number
   avoidedSocialSecurityPaygo: number
   socialSecurityPrefundingDividend: number
   medicarePrefundedShare: number
+  availableReformSavings: number
+  unusedReformSavings: number
   totalPrimarySpending: number
   revenue: number
   revenueRate: number
@@ -180,15 +197,18 @@ export interface PermanentRateSolution extends SolverDiagnostics {
   simulation: SimulationResult
 }
 
-export interface TwoRateSolution {
+export interface AnnualRevenuePathSolution {
   converged: boolean
-  transitionConverged: boolean
-  matureConverged: boolean
-  transitionRate: number
-  matureRate: number
-  matureSystemYear: number
-  handoffDebtTargetGDP: number
-  handoffDebtGDP: number
+  policyHorizonEndYear: number
+  endpointDebtTargetGDP: number
+  endpointDebtGDP: number
+  peakRevenueRate: number
+  peakRevenueYear: number
+  minimumRevenueRate: number
+  minimumRevenueYear: number
+  endpointRevenueRate: number
+  peakDebtGDP: number
+  peakDebtYear: number
   simulation: SimulationResult
 }
 
@@ -196,8 +216,13 @@ export interface ScenarioResult {
   label: string
   assumptions: ModelAssumptions
   permanent: PermanentRateSolution
-  twoRate: TwoRateSolution
+  revenuePath: AnnualRevenuePathSolution
   matureSystemYear: number
+  transitionRunoffYears: {
+    ninetyPercent: number
+    ninetyFivePercent: number
+    ninetyNinePercent: number
+  }
   maturePrimarySpendingGDP: number
   matureNetInterestGDP: number
   matureTotalSpendingGDP: number
@@ -208,13 +233,29 @@ export interface ScenarioResult {
   firstFullMedicarePrefundingYear: number | null
 }
 
+export interface PolicyHorizonResult {
+  years: 30 | 50 | 70
+  endYear: number
+  baselines: Record<CurrentLawBaselineMode, PermanentRateSolution>
+  scenarios: Record<FundingStrategy, PermanentRateSolution>
+}
+
+export interface CurrentLawBaselineResult {
+  mode: CurrentLawBaselineMode
+  label: string
+  assumptions: ModelAssumptions
+  permanent: PermanentRateSolution
+  revenuePath: AnnualRevenuePathSolution
+}
+
 export interface ScenarioComparison {
   scenarios: Record<FundingStrategy, ScenarioResult>
+  baselines: Record<CurrentLawBaselineMode, CurrentLawBaselineResult>
   paygo: ScenarioResult
   prefunded: ScenarioResult
   prefundingTransitionFinancingEffect: {
     permanentRateDifference: number
-    transitionRateDifference: number
-    matureRateDifference: number
+    peakRevenueRateDifference: number
+    minimumRevenueRateDifference: number
   }
 }

@@ -3,6 +3,7 @@ import {
   fundingPlanForAssumptions,
 } from './endowment'
 import { nonDefenseDiscretionaryBillions } from './budget'
+import { currentLawDeliveryShares } from './currentLaw'
 import {
   nominalGDPGrowth,
   nominalRateFromReal,
@@ -12,13 +13,27 @@ import {
 import { medicareForYear } from './medicare'
 import { socialSecurityForYear } from './socialSecurity'
 import type {
+  AnnualFundingPlan,
+  CurrentLawBaselineMode,
   ModelAssumptions,
   PrimaryComponents,
   SimulationResult,
   SimulationYear,
 } from './types'
 
-export type RevenueSchedule = (year: number) => number
+export interface RevenueScheduleContext {
+  nominalGDP: number
+  totalPrimarySpending: number
+  beginningDebt: number
+  beginningDebtGDP: number
+  netInterest: number
+  totalFederalSpending: number
+}
+
+export type RevenueSchedule = (
+  year: number,
+  context: RevenueScheduleContext,
+) => number
 
 export interface InitialFiscalState {
   beginningDebtBillions?: number
@@ -43,11 +58,14 @@ export function simulate(
   assumptions: ModelAssumptions,
   revenueSchedule: RevenueSchedule,
   initialState: InitialFiscalState = {},
+  currentLawBaselineMode?: CurrentLawBaselineMode,
 ): SimulationResult {
   const years: SimulationYear[] = []
   const socialSecurityByYear = new Map()
   const medicareByYear = new Map()
-  const fundingPlan = fundingPlanForAssumptions(assumptions)
+  const fundingPlan = currentLawBaselineMode
+    ? null
+    : fundingPlanForAssumptions(assumptions)
   const gdpGrowth = nominalGDPGrowth(assumptions)
   let nominalGDP = assumptions.startingNominalGDPBillions
   let beginningDebt =
@@ -62,28 +80,68 @@ export function simulate(
     year <= assumptions.endYear;
     year += 1
   ) {
-    const socialSecurity = socialSecurityForYear(year, assumptions)
-    const medicare = medicareForYear(
+    const socialSecurity = currentLawBaselineMode
+      ? socialSecurityForYear(year, assumptions, 'currentLaw')
+      : socialSecurityForYear(
+          year,
+          assumptions,
+          'reform',
+          (retirementYear) => {
+            const fundingYear =
+              retirementYear -
+              (assumptions.fullRetirementAge -
+                assumptions.prefundingStartAge)
+            return (
+              fundingPlan?.get(fundingYear)
+                ?.socialSecurityPrefundedShare ?? 0
+            )
+          },
+        )
+    const medicare = currentLawBaselineMode
+      ? medicareForYear(year, assumptions, undefined, 'currentLaw')
+      : medicareForYear(year, assumptions, (eligibilityYear) => {
+          const fundingYear =
+            eligibilityYear -
+            (assumptions.medicareEligibilityAge -
+              assumptions.prefundingStartAge)
+          return fundingPlan?.get(fundingYear)?.medicarePrefundedShare ?? 0
+        })
+    let funding: AnnualFundingPlan
+    if (currentLawBaselineMode) {
+      funding = {
+        year,
+        fullSocialSecurityPrefundingCost: 0,
+        socialSecurityPrefunding: 0,
+        socialSecurityPrefundedShare: 0,
+        fullMedicarePrefundingCost: 0,
+        medicarePrefunding: 0,
+        totalPrefunding: 0,
+        avoidedSocialSecurityPaygo: 0,
+        socialSecurityPrefundingDividend: 0,
+        medicarePrefundedShare: 0,
+        availableReformSavings: 0,
+        unusedReformSavings: 0,
+      }
+    } else {
+      const plannedFunding = fundingPlan?.get(year)
+      if (!plannedFunding) throw new Error(`Missing funding plan for ${year}.`)
+      funding = plannedFunding
+    }
+    const deliveryShares = currentLawDeliveryShares(
       year,
       assumptions,
-      (eligibilityYear) => {
-        const fundingYear =
-          eligibilityYear -
-          (assumptions.medicareEligibilityAge -
-            assumptions.prefundingStartAge)
-        return fundingPlan.get(fundingYear)?.medicarePrefundedShare ?? 0
-      },
+      currentLawBaselineMode ?? 'scheduled',
     )
-    const funding = fundingPlan.get(year)
-    if (!funding) throw new Error(`Missing funding plan for ${year}.`)
     socialSecurityByYear.set(year, socialSecurity)
     medicareByYear.set(year, medicare)
 
     const components: PrimaryComponents = {
-      legacySocialSecurity: socialSecurity.legacyBillions,
+      legacySocialSecurity:
+        socialSecurity.legacyBillions * deliveryShares.socialSecurity,
       flatSocialSecurityPaygo: socialSecurity.flatPaygoBillions,
       otherOASDI: assumptions.otherOASDIGDP * nominalGDP,
-      legacySeniorMedicare: medicare.legacyBillions,
+      legacySeniorMedicare:
+        medicare.legacyBillions * deliveryShares.seniorMedicare,
       premiumSupportPaygo: medicare.premiumSupportPaygoBillions,
       under65Medicare: assumptions.under65MedicareGDP * nominalGDP,
       nonDefenseDiscretionary: nonDefenseDiscretionaryBillions(
@@ -94,10 +152,6 @@ export function simulate(
       otherPrimarySpending: assumptions.otherPrimaryGDP * nominalGDP,
     }
     const totalPrimarySpending = primaryComponentSum(components)
-    const revenueRate = revenueSchedule(year)
-    const revenue = revenueRate * nominalGDP
-    const primaryBalance = revenue - totalPrimarySpending
-    const primaryDeficit = -primaryBalance
     const beginningDebtGDP = beginningDebt / nominalGDP
     const realTargetInterestRate = realMarketRateTarget(
       beginningDebtGDP,
@@ -117,6 +171,17 @@ export function simulate(
           )
     const netInterest = effectiveNominalInterestRate * beginningDebt
     const totalFederalSpending = totalPrimarySpending + netInterest
+    const revenueRate = revenueSchedule(year, {
+      nominalGDP,
+      totalPrimarySpending,
+      beginningDebt,
+      beginningDebtGDP,
+      netInterest,
+      totalFederalSpending,
+    })
+    const revenue = revenueRate * nominalGDP
+    const primaryBalance = revenue - totalPrimarySpending
+    const primaryDeficit = -primaryBalance
     const overallDeficit = primaryDeficit + netInterest
     const endingDebt = beginningDebt + overallDeficit
     const endingDebtGDP = endingDebt / nominalGDP
@@ -125,12 +190,18 @@ export function simulate(
       year,
       nominalGDP,
       socialSecurityPrefunding: funding.socialSecurityPrefunding,
+      fullSocialSecurityPrefundingCost:
+        funding.fullSocialSecurityPrefundingCost,
+      socialSecurityPrefundedShare:
+        funding.socialSecurityPrefundedShare,
       medicarePrefunding: funding.medicarePrefunding,
       fullMedicarePrefundingCost: funding.fullMedicarePrefundingCost,
       avoidedSocialSecurityPaygo: funding.avoidedSocialSecurityPaygo,
       socialSecurityPrefundingDividend:
         funding.socialSecurityPrefundingDividend,
       medicarePrefundedShare: funding.medicarePrefundedShare,
+      availableReformSavings: funding.availableReformSavings,
+      unusedReformSavings: funding.unusedReformSavings,
       ...components,
       totalPrimarySpending,
       revenue,
@@ -181,4 +252,20 @@ export function simulateConstantRevenue(
   revenueRate: number,
 ): SimulationResult {
   return simulate(assumptions, () => revenueRate)
+}
+
+export function simulateCurrentLawConstantRevenue(
+  assumptions: ModelAssumptions,
+  mode: CurrentLawBaselineMode,
+  revenueRate: number,
+): SimulationResult {
+  return simulate(assumptions, () => revenueRate, {}, mode)
+}
+
+export function simulateCurrentLaw(
+  assumptions: ModelAssumptions,
+  mode: CurrentLawBaselineMode,
+  revenueSchedule: RevenueSchedule,
+): SimulationResult {
+  return simulate(assumptions, revenueSchedule, {}, mode)
 }

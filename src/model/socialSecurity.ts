@@ -1,7 +1,11 @@
 import { survivalProbability } from './mortality'
-import { prefundsSocialSecurity } from './fundingStrategy'
+import {
+  fullyPrefundsSocialSecurity,
+  usesSavingsFundedSequence,
+} from './fundingStrategy'
 import type {
   BenefitShares,
+  EntitlementDesign,
   ModelAssumptions,
   SSCohortAudit,
   SocialSecurityYearResult,
@@ -48,10 +52,14 @@ export function isSSFlatComponentPrefunded(
   assumptions: ModelAssumptions,
 ): boolean {
   return (
-    prefundsSocialSecurity(assumptions.fundingStrategy) &&
+    fullyPrefundsSocialSecurity(assumptions.fundingStrategy) &&
     retirementYear >= firstPrefundedSSRetirementYear(assumptions)
   )
 }
+
+export type SocialSecurityPrefundedShareResolver = (
+  retirementYear: number,
+) => number
 
 export function cohortSizeMillions(
   cohortEntryYear: number,
@@ -64,10 +72,39 @@ export function cohortSizeMillions(
   )
 }
 
+/**
+ * The cohort-size primitive is a birth-cohort calibration. Convert it to the
+ * population reaching a later age with the same life table used everywhere
+ * else in the model. The year index remains the year the cohort reaches the
+ * modeled age, which keeps the first-pass cohort-growth assumption explicit
+ * without pretending to have a historical birth series.
+ */
+export function cohortSizeAtAgeMillions(
+  cohortEntryYear: number,
+  age: number,
+  assumptions: ModelAssumptions,
+): number {
+  return (
+    cohortSizeMillions(cohortEntryYear, assumptions) *
+    survivalProbability(0, age)
+  )
+}
+
 export function socialSecurityForYear(
   year: number,
   assumptions: ModelAssumptions,
+  entitlementDesign: EntitlementDesign = 'reform',
+  resolvePrefundedShare?: SocialSecurityPrefundedShareResolver,
 ): SocialSecurityYearResult {
+  if (
+    entitlementDesign === 'reform' &&
+    usesSavingsFundedSequence(assumptions.fundingStrategy) &&
+    !resolvePrefundedShare
+  ) {
+    throw new Error(
+      'Savings-funded Social Security financing requires its cohort funding schedule.',
+    )
+  }
   const cohorts: SSCohortAudit[] = []
   const firstRetirementYear =
     year - (assumptions.maxModeledAge - assumptions.fullRetirementAge)
@@ -90,28 +127,33 @@ export function socialSecurityForYear(
       assumptions.fullRetirementAge,
       age,
     )
-    const initialCohortMillions = cohortSizeMillions(
+    const initialCohortMillions = cohortSizeAtAgeMillions(
       retirementYear,
+      assumptions.fullRetirementAge,
       assumptions,
     )
     const survivingBeneficiariesMillions =
       initialCohortMillions * survivalFraction
-    const { legacyShare, flatShare } = socialSecurityBenefitShares(
-      retirementYear,
-      assumptions,
+    const { legacyShare, flatShare } =
+      entitlementDesign === 'currentLaw'
+        ? { legacyShare: 1, flatShare: 0 }
+        : socialSecurityBenefitShares(retirementYear, assumptions)
+    const prefundedShare = clamp(
+      entitlementDesign === 'currentLaw'
+        ? 0
+        : resolvePrefundedShare
+          ? resolvePrefundedShare(retirementYear)
+          : isSSFlatComponentPrefunded(retirementYear, assumptions)
+            ? 1
+            : 0,
     )
-    const prefunded = isSSFlatComponentPrefunded(
-      retirementYear,
-      assumptions,
-    )
+    const prefunded = prefundedShare > 0
     const legacyPaygoBillions =
       (survivingBeneficiariesMillions * legacyShare * currentLawBenefit) /
       1_000
     const flatBenefitBillions =
       (survivingBeneficiariesMillions * flatShare * flatBenefit) / 1_000
-    const flatPaygoBillions = prefunded
-      ? 0
-      : flatBenefitBillions
+    const flatPaygoBillions = flatBenefitBillions * (1 - prefundedShare)
 
     cohorts.push({
       retirementYear,
@@ -121,6 +163,7 @@ export function socialSecurityForYear(
       legacyShare,
       flatShare,
       prefunded,
+      prefundedShare,
       legacyPaygoBillions,
       flatBenefitBillions,
       flatPaygoBillions,

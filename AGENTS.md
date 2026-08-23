@@ -33,8 +33,10 @@ The economic model is more important than the interface. UI work must never sile
    - Default Year A = 2030: all new Medicare entrants use premium support.
    - Default Year B = 2035: all remaining senior Medicare beneficiaries use premium-support payment rules.
 
-6. **One constant federal revenue rate is solved for the entire simulation.**
-   - Do not introduce separate transition and mature tax rates unless the user explicitly changes the policy question.
+6. **Show both the constant-rate benchmark and the annual required-revenue path.**
+   - The constant rate is solved to the selected policy-horizon objective.
+   - The annual path must use a documented, unique rule: a straight end-of-year debt/GDP glidepath to the policy-horizon target, followed by debt-ratio maintenance in the actuarial extension.
+   - Do not reintroduce an underdetermined transition/mature two-rate schedule.
 
 7. **Debt-rate sensitivity and debt refinancing speed are separate concepts.**
    - Debt sensitivity sets the target market interest rate as debt/GDP rises.
@@ -97,7 +99,8 @@ At minimum preserve tests proving:
 - Pass-through lambda = 1 reprices immediately.
 - Pass-through lambda = 0.15 closes exactly 15% of the remaining rate gap each year.
 - Spending decomposition sums to total primary spending within floating-point tolerance.
-- The solver uses the same constant federal revenue rate in every year and satisfies the selected objective.
+- The constant-rate solver uses the same federal revenue rate in every scored year and satisfies the selected policy-horizon objective.
+- The annual required-revenue path reaches the same debt target, reports its peak and minimum rates, and holds debt at the target after the cutoff.
 
 If a UI change breaks a model test, fix the UI or identify a genuine model-spec change. Do not weaken the test merely to make CI pass.
 

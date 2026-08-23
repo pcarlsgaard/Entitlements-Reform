@@ -1,12 +1,14 @@
-import { medicarePremiumSupportShare } from './medicare'
+import { medicareForYear, medicarePremiumSupportShare } from './medicare'
 import { survivalProbability } from './mortality'
 import {
   fullyPrefundsMedicare,
+  fullyPrefundsSocialSecurity,
   prefundsSocialSecurity,
+  usesSavingsFundedSequence,
   usesSocialSecurityDividend,
 } from './fundingStrategy'
 import {
-  cohortSizeMillions,
+  cohortSizeAtAgeMillions,
   flatBenefitReal,
   socialSecurityBenefitShares,
   socialSecurityForYear,
@@ -93,7 +95,11 @@ function fullSleevePrefundingBillions(
   assumptions: ModelAssumptions,
 ): { socialSecurity: number; medicare: number } {
   const endowment = calculateEndowmentPerPerson(assumptions, year)
-  const cohortMillions = cohortSizeMillions(year, assumptions)
+  const cohortMillions = cohortSizeAtAgeMillions(
+    year,
+    assumptions.prefundingStartAge,
+    assumptions,
+  )
   const inflationFactor =
     (1 + assumptions.inflation) ** (year - assumptions.reformYear)
   return {
@@ -103,6 +109,64 @@ function fullSleevePrefundingBillions(
     medicare:
       (endowment.medicarePV * cohortMillions * inflationFactor) / 1_000,
   }
+}
+
+function scheduledCurrentLawBenefitSpending(
+  year: number,
+  assumptions: ModelAssumptions,
+): number {
+  const socialSecurity = socialSecurityForYear(
+    year,
+    assumptions,
+    'currentLaw',
+  )
+  const medicare = medicareForYear(
+    year,
+    assumptions,
+    undefined,
+    'currentLaw',
+  )
+  return socialSecurity.legacyBillions + medicare.legacyBillions
+}
+
+function reformPaygoBenefitSpending(
+  year: number,
+  assumptions: ModelAssumptions,
+): number {
+  const paygoAssumptions: ModelAssumptions = {
+    ...assumptions,
+    fundingStrategy: 'paygo',
+  }
+  const socialSecurity = socialSecurityForYear(year, paygoAssumptions)
+  const medicare = medicareForYear(year, paygoAssumptions)
+  return (
+    socialSecurity.legacyBillions +
+    socialSecurity.flatPaygoBillions +
+    medicare.legacyBillions +
+    medicare.premiumSupportPaygoBillions
+  )
+}
+
+export function benefitDesignSavingsBillions(
+  year: number,
+  assumptions: ModelAssumptions,
+): number {
+  return Math.max(
+    0,
+    scheduledCurrentLawBenefitSpending(year, assumptions) -
+      reformPaygoBenefitSpending(year, assumptions),
+  )
+}
+
+function socialSecurityPrefundedShareForRetirementYear(
+  retirementYear: number,
+  assumptions: ModelAssumptions,
+  plan: ReadonlyMap<number, AnnualFundingPlan>,
+): number {
+  const fundingYear =
+    retirementYear -
+    (assumptions.fullRetirementAge - assumptions.prefundingStartAge)
+  return plan.get(fundingYear)?.socialSecurityPrefundedShare ?? 0
 }
 
 function buildFundingPlan(
@@ -116,12 +180,35 @@ function buildFundingPlan(
     year += 1
   ) {
     const full = fullSleevePrefundingBillions(year, assumptions)
-    const socialSecurityPrefunding = prefundsSocialSecurity(
+    const availableReformSavings = usesSavingsFundedSequence(
       assumptions.fundingStrategy,
     )
-      ? full.socialSecurity
+      ? benefitDesignSavingsBillions(year, assumptions)
       : 0
-    const socialSecurity = socialSecurityForYear(year, assumptions)
+    const socialSecurityPrefunding = usesSavingsFundedSequence(
+      assumptions.fundingStrategy,
+    )
+      ? Math.min(availableReformSavings, full.socialSecurity)
+      : fullyPrefundsSocialSecurity(assumptions.fundingStrategy)
+        ? full.socialSecurity
+        : 0
+    const socialSecurityPrefundedShare =
+      full.socialSecurity > 0
+        ? socialSecurityPrefunding / full.socialSecurity
+        : 0
+    const socialSecurity = socialSecurityForYear(
+      year,
+      assumptions,
+      'reform',
+      usesSavingsFundedSequence(assumptions.fundingStrategy)
+        ? (retirementYear) =>
+            socialSecurityPrefundedShareForRetirementYear(
+              retirementYear,
+              assumptions,
+              plan,
+            )
+        : undefined,
+    )
     const avoidedSocialSecurityPaygo = prefundsSocialSecurity(
       assumptions.fundingStrategy,
     )
@@ -133,22 +220,30 @@ function buildFundingPlan(
     )
       ? avoidedSocialSecurityPaygo - socialSecurityPrefunding
       : 0
-    const medicarePrefunding = fullyPrefundsMedicare(
+    const savingsRemainingAfterSocialSecurity = Math.max(
+      0,
+      availableReformSavings - socialSecurityPrefunding,
+    )
+    const medicarePrefunding = usesSavingsFundedSequence(
       assumptions.fundingStrategy,
     )
-      ? full.medicare
-      : usesSocialSecurityDividend(assumptions.fundingStrategy)
-        ? Math.min(
-            full.medicare,
-            Math.max(0, socialSecurityPrefundingDividend),
-          )
-        : 0
+      ? Math.min(full.medicare, savingsRemainingAfterSocialSecurity)
+      : fullyPrefundsMedicare(assumptions.fundingStrategy)
+        ? full.medicare
+        : usesSocialSecurityDividend(assumptions.fundingStrategy)
+          ? Math.min(
+              full.medicare,
+              Math.max(0, socialSecurityPrefundingDividend),
+            )
+          : 0
     const medicarePrefundedShare =
       full.medicare > 0 ? medicarePrefunding / full.medicare : 0
 
     plan.set(year, {
       year,
+      fullSocialSecurityPrefundingCost: full.socialSecurity,
       socialSecurityPrefunding,
+      socialSecurityPrefundedShare,
       fullMedicarePrefundingCost: full.medicare,
       medicarePrefunding,
       totalPrefunding:
@@ -156,6 +251,13 @@ function buildFundingPlan(
       avoidedSocialSecurityPaygo,
       socialSecurityPrefundingDividend,
       medicarePrefundedShare,
+      availableReformSavings,
+      unusedReformSavings: Math.max(
+        0,
+        availableReformSavings -
+          socialSecurityPrefunding -
+          medicarePrefunding,
+      ),
     })
   }
 
@@ -179,13 +281,17 @@ export function annualFundingPlan(
   return (
     fundingPlanForAssumptions(assumptions).get(year) ?? {
       year,
+      fullSocialSecurityPrefundingCost: 0,
       socialSecurityPrefunding: 0,
+      socialSecurityPrefundedShare: 0,
       fullMedicarePrefundingCost: 0,
       medicarePrefunding: 0,
       totalPrefunding: 0,
       avoidedSocialSecurityPaygo: 0,
       socialSecurityPrefundingDividend: 0,
       medicarePrefundedShare: 0,
+      availableReformSavings: 0,
+      unusedReformSavings: 0,
     }
   )
 }

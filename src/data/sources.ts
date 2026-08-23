@@ -57,6 +57,26 @@ export const sources: readonly SourceRecord[] = [
     notes: 'Used as a reasonableness check for the explicitly named annual-cohort-size calibration; the first pass does not ingest a monthly enrollment path.',
   },
   {
+    id: 'ssa-trustees-payable-2026',
+    kind: 'empirical input',
+    agency: 'Social Security Administration',
+    datasetOrReport: '2026 Social Security Trustees Report Summary',
+    publicationDate: '2026-06-09',
+    relevantTable: 'Table 1 and Table 8, OASI and DI trust-fund adequacy',
+    url: 'https://www.ssa.gov/oact/trsum/',
+    notes: 'Current-law payable benchmark uses OASI depletion in Q4 2032, 78% payable at depletion, and 62% in 2100. The annual simulator applies a partial-year depletion approximation and linear interpolation, holds 62% after 2100, applies the factor only to the modeled old-age stream, and leaves the separate other-OASDI calibration scheduled. DI remains fully payable through 2100.',
+  },
+  {
+    id: 'medicare-trustees-payable-2026',
+    kind: 'empirical input',
+    agency: 'Centers for Medicare & Medicaid Services',
+    datasetOrReport: '2026 Medicare Trustees Report',
+    publicationDate: '2026-06-09',
+    relevantTable: 'HI depletion summary, Table III.B7, and Table II.B1 per-enrollee benefits',
+    url: 'https://www.cms.gov/oact/tr/2026',
+    notes: 'Current-law payable benchmark uses HI depletion in Q2 2033 and the published 89%/85%/93% payable points for 2033/2050/2100. The all-in senior Medicare factor applies those reductions only to the 34.0% Part A share calibrated from per-enrollee Part A, B, and D benefits; Parts B and D remain fully financed. Published points are linearly interpolated and the 2100 value is held thereafter.',
+  },
+  {
     id: 'entitlement-policy',
     kind: 'policy assumption',
     agency: 'Project specification',
@@ -64,7 +84,7 @@ export const sources: readonly SourceRecord[] = [
     publicationDate: 'repository current version',
     relevantTable: 'Policy defaults',
     url: 'https://github.com/pcarlsgaard/Entitlements-Reform',
-    notes: 'Defines FPL multiple, FRA, vesting, premium support, transition years, prefunding ages, five program-financing strategies including SS-first sequencing, and the two tax presentations.',
+    notes: 'Defines FPL multiple, FRA, vesting, premium support, transition years, prefunding ages, six program-financing strategies including two sequencing rules, 30/50/70-year policy scores, transition-runoff milestones, a constant-rate benchmark, and an annual debt-target revenue path.',
   },
   {
     id: 'first-pass-calibrations',
@@ -74,6 +94,6 @@ export const sources: readonly SourceRecord[] = [
     publicationDate: '2026-08-09',
     relevantTable: 'src/model/defaults.ts',
     url: 'https://github.com/pcarlsgaard/Entitlements-Reform',
-    notes: 'Current-law SS benefit, legacy Medicare cost, cohort size/growth, other OASDI, under-65 Medicare, NDD growth, and other-primary-excluding-NDD share are exposed typed assumptions rather than hidden residuals. Central NDD real growth matches real GDP growth to preserve the previous baseline; it is not presented as CBO policy.',
+    notes: 'Current-law SS benefit, legacy Medicare cost, cohort size/growth, other OASDI, under-65 Medicare, NDD growth, and other-primary-excluding-NDD share are exposed typed assumptions. Eligibility populations apply SSA survival from birth. The 2026 other-primary residual is calibrated so scheduled current-law primary spending equals CBO’s 20.0% of GDP before reform prefunding deposits.',
   },
 ]

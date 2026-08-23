@@ -25,6 +25,7 @@ const numericKeys = [
   'premiumSupportRealGrowth',
   'legacyMedicareCost2026',
   'legacyMedicareRealGrowth',
+  'legacyMedicareHIShare2026',
   'medicareYearA',
   'medicareYearB',
   'cohortSizeMillions2026',
@@ -42,8 +43,9 @@ const numericKeys = [
   'nonDefenseDiscretionaryGDP2026',
   'nonDefenseDiscretionaryRealGrowth',
   'otherPrimaryGDP',
+  'policyHorizonYears',
+  'policyHorizonDebtTargetGDP',
   'peakDebtCeilingGDP',
-  'matureDebtTargetGDP',
 ] as const satisfies readonly (keyof ModelAssumptions)[]
 
 export function validateModelAssumptions(
@@ -64,6 +66,17 @@ export function validateModelAssumptions(
 
   if (assumptions.endYear <= assumptions.reformYear) {
     add('endYear', 'The simulation end year must follow the reform year.')
+  }
+  if (
+    !Number.isInteger(assumptions.policyHorizonYears) ||
+    assumptions.policyHorizonYears < 2 ||
+    assumptions.reformYear + assumptions.policyHorizonYears - 1 >
+      assumptions.endYear
+  ) {
+    add(
+      'policyHorizonYears',
+      'The policy horizon must be a whole number of years within the simulation.',
+    )
   }
   if (assumptions.benefitPhaseInYears <= 0) {
     add('benefitPhaseInYears', 'The phase-in must be at least one year.')
@@ -110,6 +123,15 @@ export function validateModelAssumptions(
       'Legacy Medicare cost growth must be greater than -100%.',
     )
   }
+  if (
+    assumptions.legacyMedicareHIShare2026 < 0 ||
+    assumptions.legacyMedicareHIShare2026 > 1
+  ) {
+    add(
+      'legacyMedicareHIShare2026',
+      'The Medicare Part A share must be between 0% and 100%.',
+    )
+  }
   if (assumptions.nonDefenseDiscretionaryRealGrowth <= -1) {
     add(
       'nonDefenseDiscretionaryRealGrowth',
@@ -131,8 +153,11 @@ export function validateModelAssumptions(
   if (assumptions.startingDebtGDP < 0) {
     add('startingDebtGDP', 'Starting debt cannot be negative.')
   }
-  if (assumptions.matureDebtTargetGDP <= 0) {
-    add('matureDebtTargetGDP', 'The handoff debt target must be positive.')
+  if (assumptions.policyHorizonDebtTargetGDP < 0) {
+    add(
+      'policyHorizonDebtTargetGDP',
+      'The policy-horizon debt target cannot be negative.',
+    )
   }
   if (assumptions.otherOASDIGDP < 0)
     add('otherOASDIGDP', 'The other-OASDI share cannot be negative.')

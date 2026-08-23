@@ -2,6 +2,8 @@ import type { ModelAssumptions } from './types'
 
 export const defaultAssumptions: ModelAssumptions = {
   reformYear: 2026,
+  // Keep the actuarial extension visible while scoring the fiscal objective
+  // at a separate, clearly marked policy horizon.
   endYear: 2160,
   maxModeledAge: 110,
   benefitPhaseInYears: 20,
@@ -20,6 +22,9 @@ export const defaultAssumptions: ModelAssumptions = {
   premiumSupportRealGrowth: 0.01,
   legacyMedicareCost2026: 19_000,
   legacyMedicareRealGrowth: 0.015,
+  // 2026 Medicare Trustees Report's 2025 per-enrollee Part A benefit divided
+  // by the sum of Parts A, B, and D benefits: $6,344 / $18,650.
+  legacyMedicareHIShare2026: 6_344 / 18_650,
   medicareYearA: 2030,
   medicareYearB: 2035,
   cohortSizeMillions2026: 4.2,
@@ -35,14 +40,16 @@ export const defaultAssumptions: ModelAssumptions = {
   otherOASDIGDP: 0.01,
   under65MedicareGDP: 0.006,
   nonDefenseDiscretionaryGDP2026: 0.031,
-  // The prior model held all other primary spending at a constant GDP share.
-  // Matching NDD real growth to GDP preserves that baseline until the user
-  // deliberately applies a different discretionary-growth path.
+  // Matching NDD real growth to GDP holds its baseline share constant until
+  // the user deliberately applies a different discretionary-growth path.
   nonDefenseDiscretionaryRealGrowth: 0.018,
-  otherPrimaryGDP: 0.063,
-  fiscalObjective: 'returnToStartingDebt',
+  // Residual calibrated after the explicit 2026 components so scheduled
+  // current-law primary spending is approximately CBO's 20.0% of GDP.
+  otherPrimaryGDP: 0.07235,
+  policyHorizonYears: 70,
+  policyHorizonDebtTargetGDP: 1.01,
+  fiscalObjective: 'targetDebtAtPolicyHorizon',
   peakDebtCeilingGDP: 1.5,
-  matureDebtTargetGDP: 1.01,
 }
 
 export function withAssumptions(
