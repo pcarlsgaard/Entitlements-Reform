@@ -42,7 +42,7 @@ const numericKeys = [
   'under65MedicareGDP',
   'nonDefenseDiscretionaryGDP2026',
   'nonDefenseDiscretionaryRealGrowth',
-  'otherPrimaryGDP',
+  'otherMandatoryGDP2026',
   'policyHorizonYears',
   'policyHorizonDebtTargetGDP',
   'peakDebtCeilingGDP',
@@ -183,8 +183,11 @@ export function validateModelAssumptions(
       'nonDefenseDiscretionaryGDP2026',
       'The nondefense discretionary share cannot be negative.',
     )
-  if (assumptions.otherPrimaryGDP < 0)
-    add('otherPrimaryGDP', 'The other-primary share cannot be negative.')
+  if (assumptions.otherMandatoryGDP2026 < 0)
+    add(
+      'otherMandatoryGDP2026',
+      'The other-mandatory share cannot be negative.',
+    )
 
   return issues
 }

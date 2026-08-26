@@ -22,9 +22,11 @@ primary_spending_t =
   + legacy_Medicare_t
   + premium_support_PAYGO_t
   + under65_Medicare_t
+  + Medicaid_CHIP_marketplace_t
+  + other_mandatory_t
+  + defense_discretionary_t
   + nondefense_discretionary_t
   + new_cohort_prefunding_t
-  + other_primary_spending_excluding_NDD_t
 ```
 
 ### 2. Primary balance
@@ -157,13 +159,17 @@ At minimum display, in dollars and %GDP:
 
 - Legacy/current-law Social Security
 - Flat Social Security PAYGO
-- Other OASDI
+- Other Social Security
+- **Social Security subtotal**
 - Legacy/current-law senior Medicare
 - Premium-support PAYGO
-- Under-65 Medicare
+- Under-65 Medicare and net offsets
+- **Medicare subtotal**
+- Medicaid, CHIP, and marketplace subsidies
+- Other mandatory spending
+- Defense discretionary spending
 - Nondefense discretionary spending
 - New-cohort prefunding
-- Other primary spending excluding nondefense discretionary spending
 - **Total primary spending**
 
 ### Financing and interest

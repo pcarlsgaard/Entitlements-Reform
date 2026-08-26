@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { nonDefenseDiscretionaryBillions } from '../src/model/budget'
-import { cbo2026RevenueGDP } from '../src/data/cboBaseline'
+import {
+  cbo2026PrimarySpendingGDP,
+  cbo2026RevenueGDP,
+  cboNondefenseDiscretionaryGDP,
+  cboPrimarySpendingGDP,
+} from '../src/data/cboBaseline'
 import { defaultAssumptions, withAssumptions } from '../src/model/defaults'
 import {
   centralMacroBudgetReference,
@@ -13,14 +18,14 @@ import {
 import { solvePermanentRevenueRate } from '../src/model/solveTax'
 
 describe('nondefense discretionary path', () => {
-  it('records CBO 2026 current-law revenue at 17.5% of GDP', () => {
-    expect(cbo2026RevenueGDP).toBe(0.175)
+  it('records CBO 2026 current-law revenue at 17.541% of GDP', () => {
+    expect(cbo2026RevenueGDP).toBe(0.17541)
   })
 
-  it('calibrates 2026 NDD to 3.1% of GDP', () => {
+  it('calibrates 2026 NDD to 3.121% of GDP', () => {
     expect(
       nonDefenseDiscretionaryBillions(2026, defaultAssumptions),
-    ).toBe(0.031 * defaultAssumptions.startingNominalGDPBillions)
+    ).toBe(0.03121 * defaultAssumptions.startingNominalGDPBillions)
   })
 
   it('calibrates scheduled-current-law 2026 primary spending to CBO', () => {
@@ -29,14 +34,21 @@ describe('nondefense discretionary path', () => {
       'scheduled',
       0.22,
     ).years[0]!
-    expect(row.totalPrimarySpending / row.nominalGDP).toBeCloseTo(0.2, 3)
+    expect(row.totalPrimarySpending / row.nominalGDP).toBeCloseTo(
+      cboPrimarySpendingGDP(2026),
+      10,
+    )
+    expect(row.totalPrimarySpending / row.nominalGDP).toBeCloseTo(
+      cbo2026PrimarySpendingGDP,
+      5,
+    )
   })
 
-  it('holds its GDP share constant when NDD and real GDP growth match', () => {
+  it('follows CBO\'s central NDD path under central assumptions', () => {
     const simulation = simulateConstantRevenue(defaultAssumptions, 0.22)
     const row = simulation.years.find((item) => item.year === 2050)!
     expect(row.nonDefenseDiscretionary / row.nominalGDP).toBeCloseTo(
-      defaultAssumptions.nonDefenseDiscretionaryGDP2026,
+      cboNondefenseDiscretionaryGDP(2050),
       12,
     )
   })
@@ -83,11 +95,11 @@ describe('ceteris-paribus macro and budget comparison', () => {
     expect(fasterGrowth.rate).toBeLessThan(baseline.rate)
   })
 
-  it('requires less permanent revenue when NDD real growth is capped at 1%', () => {
+  it('requires less permanent revenue when real NDD spending is frozen', () => {
     const baseline = solvePermanentRevenueRate(defaultAssumptions)
-    const capped = solvePermanentRevenueRate(
-      withAssumptions({ nonDefenseDiscretionaryRealGrowth: 0.01 }),
+    const frozen = solvePermanentRevenueRate(
+      withAssumptions({ nonDefenseDiscretionaryRealGrowth: 0 }),
     )
-    expect(capped.rate).toBeLessThan(baseline.rate)
+    expect(frozen.rate).toBeLessThan(baseline.rate)
   })
 })

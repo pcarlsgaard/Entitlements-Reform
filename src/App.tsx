@@ -36,6 +36,7 @@ import type {
 
 type Tab = 'policy' | 'results' | 'audit' | 'sources'
 type ScenarioChoice = FundingStrategy
+type EntitlementChartView = 'both' | 'socialSecurity' | 'medicare'
 
 const percent = (value: number, digits = 2) =>
   `${(value * 100).toFixed(digits)}%`
@@ -54,10 +55,14 @@ const termDefinitions = [
   ['Primary spending', 'All federal program outlays other than net interest. Reform prefunding deposits count as primary spending.'],
   ['Total federal spending', 'Primary spending plus net interest on debt held by the public.'],
   ['Nondefense discretionary (NDD)', 'Annually appropriated domestic and international programs outside national defense—for example education, transportation, housing, public health, research, justice, and foreign affairs. It excludes mandatory benefits such as Social Security, Medicare, and Medicaid.'],
-  ['Other primary excluding NDD', 'The 2026 residual outside separately modeled Social Security, Medicare, and NDD. It includes defense, Medicaid/CHIP/ACA subsidies, income security, veterans and federal retirement, agriculture, other mandatory programs, and offsetting receipts.'],
+  ['Other Social Security', 'Social Security benefits outside the modeled retired-worker reform slice, including disability and survivor/family benefits. It is shown separately and included in the Social Security subtotal.'],
+  ['Net Medicare', 'CBO Medicare outlays after beneficiary premiums and other offsetting receipts. The model shows senior legacy or premium-support spending separately from its under-65/offsetting-receipts calibration.'],
+  ['Medicaid, CHIP & marketplace subsidies', 'Federal Medicaid and CHIP outlays plus premium-tax-credit and related marketplace spending, following CBO’s February 2026 baseline path.'],
+  ['Other mandatory', 'Mandatory spending outside Social Security and the major health programs, including income security, veterans benefits, federal retirement, agriculture, and other programs, net of applicable offsetting receipts.'],
+  ['Defense discretionary', 'Annually appropriated national-defense outlays. This is separate from nondefense discretionary spending.'],
   ['Constant revenue rate', 'The minimum single federal revenue share that would satisfy both the peak-debt ceiling and endpoint target if applied throughout the policy window. It is the opening-rate benchmark.'],
   ['Non-rising revenue path', 'Begins at the minimum constant-rate benchmark. If the peak ceiling binds before the endpoint, revenue begins a smooth decline as soon as it can do so without breaching the ceiling, and reaches the selected endpoint debt target without a later tax increase.'],
-  ['Opening fiscal adjustment', 'The opening required-revenue rate minus CBO’s projected 2026 current-law revenue of 17.5% of GDP. It can be achieved through higher revenue, lower spending elsewhere, or a combination.'],
+  ['Opening fiscal adjustment', 'The opening required-revenue rate minus CBO’s unrounded 2026 current-law revenue projection of 17.541% of GDP (shown as 17.5% in compact labels). It can be achieved through higher revenue, lower spending elsewhere, or a combination.'],
   ['Policy horizon', 'The years used to score the fiscal objective. The default is 70 fiscal years, 2026–2095; later years are an actuarial stress-test extension.'],
   ['Net interest', 'Budget outlays for servicing debt held by the public, using the model’s average effective nominal interest rate.'],
 ] as const
@@ -454,7 +459,7 @@ function PolicyPanel({
           suffix="% GDP"
           min={0}
           max={20}
-          note="CBO February 2026 baseline: 3.1% of GDP."
+          note="CBO February 2026 baseline: 3.121% of GDP."
         />
         <NumericInput
           label="NDD spending growth"
@@ -485,14 +490,14 @@ function PolicyPanel({
           max={20}
         />
         <NumericInput
-          label="Other primary excluding NDD"
-          value={assumptions.otherPrimaryGDP * 100}
-          onChange={(value) => update('otherPrimaryGDP', value / 100)}
+          label="2026 other mandatory"
+          value={assumptions.otherMandatoryGDP2026 * 100}
+          onChange={(value) => update('otherMandatoryGDP2026', value / 100)}
           step={0.1}
           suffix="% GDP"
           min={0}
           max={30}
-          note="Named residual calibrated so scheduled-current-law 2026 primary spending totals 20.0% of GDP; held at a constant GDP share thereafter."
+          note="CBO February 2026 baseline: 2.994% of GDP. Later years follow CBO’s published long-term path, scaled from this starting level."
         />
         <TermDefinitions />
       </section>
@@ -532,8 +537,56 @@ function ComparisonTable({ comparison }: { comparison: ReturnType<typeof compare
   )
 }
 
-function ChartCard({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
-  return <section className="card chart-card"><div><h3>{title}</h3>{note && <p>{note}</p>}</div><div className="chart-frame">{children}</div></section>
+function ChartCard({ title, note, controls, children }: { title: string; note?: string; controls?: React.ReactNode; children: React.ReactNode }) {
+  return <section className="card chart-card"><div className="chart-card-heading"><div><h3>{title}</h3>{note && <p>{note}</p>}</div>{controls}</div><div className="chart-frame">{children}</div></section>
+}
+
+const opaqueTooltipProps = {
+  contentStyle: {
+    backgroundColor: '#ffffff',
+    border: '1px solid #cfd7de',
+    borderRadius: 10,
+    boxShadow: '0 10px 28px rgba(23, 32, 51, .18)',
+    opacity: 1,
+  },
+  wrapperStyle: { zIndex: 1000, pointerEvents: 'none' as const },
+  labelStyle: { color: '#172033', fontWeight: 800 },
+}
+
+interface TooltipEntry {
+  color?: string
+  name?: string
+  value?: number | string
+}
+
+function EntitlementTooltip({
+  active,
+  label,
+  payload,
+}: {
+  active?: boolean
+  label?: number | string
+  payload?: readonly TooltipEntry[]
+}) {
+  if (!active || !payload?.length) return null
+  const entries = payload.filter(
+    (entry) => typeof entry.value === 'number' && Number.isFinite(entry.value),
+  )
+  const total = entries.reduce((sum, entry) => sum + Number(entry.value), 0)
+  return (
+    <div className="chart-tooltip">
+      <strong>{label}</strong>
+      {entries.map((entry) => (
+        <div key={entry.name}>
+          <span><i style={{ background: entry.color }} />{entry.name}</span>
+          <b>{Number(entry.value).toFixed(2)}%</b>
+        </div>
+      ))}
+      <div className="chart-tooltip-total">
+        <span>Displayed total</span><b>{total.toFixed(2)}%</b>
+      </div>
+    </div>
+  )
 }
 
 function MacroBudgetSensitivity({
@@ -620,6 +673,8 @@ function ResultsPanel({ comparison, referenceComparison, macroBudgetChanged, sce
   scenarioChoice: ScenarioChoice
   setScenarioChoice: (value: ScenarioChoice) => void
 }) {
+  const [entitlementView, setEntitlementView] =
+    useState<EntitlementChartView>('both')
   const selected = comparison.scenarios[scenarioChoice]
   const simulation = selected.revenuePath.simulation
   const policyEnd = selected.revenuePath.policyHorizonEndYear
@@ -639,8 +694,15 @@ function ResultsPanel({ comparison, referenceComparison, macroBudgetChanged, sce
     revenue: row.revenueRate * 100,
     legacySS: row.legacySocialSecurity / row.nominalGDP * 100,
     flatSS: row.flatSocialSecurityPaygo / row.nominalGDP * 100,
+    otherSS: row.otherOASDI / row.nominalGDP * 100,
     legacyMedicare: row.legacySeniorMedicare / row.nominalGDP * 100,
     premiumSupport: row.premiumSupportPaygo / row.nominalGDP * 100,
+    under65Medicare: row.under65Medicare / row.nominalGDP * 100,
+    medicaidChipMarketplace:
+      row.medicaidChipMarketplace / row.nominalGDP * 100,
+    otherMandatory: row.otherMandatory / row.nominalGDP * 100,
+    defenseDiscretionary:
+      row.defenseDiscretionary / row.nominalGDP * 100,
     ssPrefunding: row.socialSecurityPrefunding / row.nominalGDP * 100,
     medicarePrefunding: row.medicarePrefunding / row.nominalGDP * 100,
     ssDividend:
@@ -650,9 +712,6 @@ function ResultsPanel({ comparison, referenceComparison, macroBudgetChanged, sce
     medicareFundedShare: row.medicarePrefundedShare * 100,
     nonDefenseDiscretionary:
       row.nonDefenseDiscretionary / row.nominalGDP * 100,
-    otherPrimary:
-      (row.otherOASDI + row.under65Medicare + row.otherPrimarySpending) /
-      row.nominalGDP * 100,
     targetRate: row.nominalTargetInterestRate * 100,
     effectiveRate: row.effectiveNominalInterestRate * 100,
   }))
@@ -669,19 +728,106 @@ function ResultsPanel({ comparison, referenceComparison, macroBudgetChanged, sce
         <div className="segmented strategy-segmented">{fundingStrategies.map((strategy) => <button key={strategy} className={scenarioChoice === strategy ? 'active' : ''} onClick={() => setScenarioChoice(strategy)}>{fundingStrategyLabels[strategy]}</button>)}</div>
       </div>
       <div className="chart-grid">
-        <ChartCard title="Debt held by the public" note={`Debt cannot exceed ${percent(selected.assumptions.peakDebtCeilingGDP, 0)} before ${policyEnd} and must reach ${percent(selected.assumptions.policyHorizonDebtTargetGDP, 0)} at the cutoff.`}><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip /><ReferenceLine y={selected.assumptions.peakDebtCeilingGDP * 100} stroke="#d96c4a" strokeDasharray="3 3" label="Peak ceiling" />{Math.abs(selected.assumptions.policyHorizonDebtTargetGDP - selected.assumptions.peakDebtCeilingGDP) > 1e-9 && <ReferenceLine y={selected.assumptions.policyHorizonDebtTargetGDP * 100} stroke="#3c91e6" strokeDasharray="3 3" label="Endpoint target" />}<ReferenceLine x={policyEnd} stroke="#253b56" strokeDasharray="5 4" label={cutoffLabel} /><Line type="monotone" dataKey="debt" name="Debt / GDP" stroke="#ef8354" strokeWidth={3} dot={false} /></LineChart></ResponsiveContainer></ChartCard>
-        <ChartCard title="Federal revenue path" note={`Starts at ${percent(selected.revenuePath.startingRevenueRate)} and never rises. ${selected.revenuePath.revenueDeclineYear === null ? 'It does not fall in the visible period.' : `It first falls in ${selected.revenuePath.revenueDeclineYear}, once the debt ceiling permits.`} Lowest visible rate: ${percent(selected.revenuePath.minimumRevenueRate)} in ${selected.revenuePath.minimumRevenueYear}.`}><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip /><ReferenceLine x={policyEnd} stroke="#253b56" strokeDasharray="5 4" label={cutoffLabel} />{selected.revenuePath.revenueDeclineYear !== null && selected.revenuePath.revenueDeclineYear < policyEnd && <ReferenceLine x={selected.revenuePath.revenueDeclineYear} stroke="#26845f" strokeDasharray="3 3" label="Rate declines" />}<Line type="monotone" dataKey="revenue" name="Required revenue / GDP" stroke="#26845f" strokeWidth={3} dot={false} /></LineChart></ResponsiveContainer></ChartCard>
-        <ChartCard title="Total federal spending decomposition" note="The stacked areas now include net interest; the dark line is their explicit sum."><ResponsiveContainer width="100%" height="100%"><ComposedChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip /><Legend /><ReferenceLine x={policyEnd} stroke="#253b56" strokeDasharray="5 4" label={cutoffLabel} /><Area stackId="1" dataKey="legacySS" name="Legacy SS" fill="#6f7d94" stroke="#6f7d94" /><Area stackId="1" dataKey="flatSS" name="Flat SS PAYGO" fill="#3c91e6" stroke="#3c91e6" /><Area stackId="1" dataKey="legacyMedicare" name="Legacy Medicare" fill="#9f86c0" stroke="#9f86c0" /><Area stackId="1" dataKey="premiumSupport" name="Premium support PAYGO" fill="#56cfe1" stroke="#56cfe1" /><Area stackId="1" dataKey="ssPrefunding" name="SS prefunding" fill="#50b58a" stroke="#26845f" /><Area stackId="1" dataKey="medicarePrefunding" name="Medicare prefunding" fill="#8ad4b5" stroke="#4aa784" /><Area stackId="1" dataKey="nonDefenseDiscretionary" name="Nondefense discretionary" fill="#f4b860" stroke="#d69639" /><Area stackId="1" dataKey="otherPrimary" name="Other primary" fill="#b8c1cc" stroke="#8794a3" /><Area stackId="1" dataKey="interest" name="Net interest" fill="#ef9a7a" stroke="#d96c4a" /><Line type="monotone" dataKey="totalSpending" name="Total federal spending" stroke="#172033" strokeWidth={2.5} dot={false} /></ComposedChart></ResponsiveContainer></ChartCard>
-        <ChartCard title="Interest spending and rates" note="Lambda moves the effective debt rate toward—not above—the debt-sensitive market target."><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip /><Legend /><ReferenceLine x={policyEnd} stroke="#253b56" strokeDasharray="5 4" label={cutoffLabel} /><Line dataKey="interest" name="Net interest / GDP" stroke="#ef8354" dot={false} /><Line dataKey="targetRate" name="Target nominal rate" stroke="#9f86c0" dot={false} /><Line dataKey="effectiveRate" name="Effective nominal rate" stroke="#3c91e6" dot={false} /></LineChart></ResponsiveContainer></ChartCard>
-        <ChartCard title="Legacy vs reformed system" note="Cohort mortality—not an aggregate phaseout—runs off legacy SS."><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip /><Legend /><ReferenceLine x={policyEnd} stroke="#253b56" strokeDasharray="5 4" label={cutoffLabel} /><Line dataKey="legacySS" name="Legacy SS" stroke="#6f7d94" dot={false} /><Line dataKey="flatSS" name="Flat SS PAYGO" stroke="#3c91e6" dot={false} /><Line dataKey="legacyMedicare" name="Legacy Medicare" stroke="#9f86c0" dot={false} /><Line dataKey="premiumSupport" name="Premium support PAYGO" stroke="#56cfe1" dot={false} /></LineChart></ResponsiveContainer></ChartCard>
-        <ChartCard title={scenarioChoice === 'savingsFundedSequential' ? 'Savings-funded sequence' : 'Sequential funding gate'} note={scenarioChoice === 'savingsFundedSequential' ? 'Scheduled-current-law benefit savings buy the new cohort’s SS sleeve first, then Medicare; deposits cannot exceed those exogenous savings.' : 'The SS-first strategy can use a positive Social Security dividend for the new cohort’s Medicare sleeve.'}><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip /><Legend /><ReferenceLine x={policyEnd} stroke="#253b56" strokeDasharray="5 4" label={cutoffLabel} />{scenarioChoice === 'savingsFundedSequential' ? <Line dataKey="availableSavings" name="Available reform savings / GDP" stroke="#26845f" dot={false} /> : <Line dataKey="ssDividend" name="SS dividend / GDP" stroke="#26845f" dot={false} />}<Line dataKey="ssFundedShare" name="New SS cohort funded %" stroke="#3c91e6" dot={false} /><Line dataKey="medicareFundedShare" name="New Medicare cohort funded %" stroke="#9f86c0" dot={false} /></LineChart></ResponsiveContainer></ChartCard>
+        <ChartCard title="Debt held by the public" note={`Debt cannot exceed ${percent(selected.assumptions.peakDebtCeilingGDP, 0)} before ${policyEnd} and must reach ${percent(selected.assumptions.policyHorizonDebtTargetGDP, 0)} at the cutoff.`}>
+          <ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip {...opaqueTooltipProps} />
+            <ReferenceLine y={selected.assumptions.peakDebtCeilingGDP * 100} stroke="#d96c4a" strokeDasharray="3 3" label="Peak ceiling" />
+            {Math.abs(selected.assumptions.policyHorizonDebtTargetGDP - selected.assumptions.peakDebtCeilingGDP) > 1e-9 && <ReferenceLine y={selected.assumptions.policyHorizonDebtTargetGDP * 100} stroke="#3c91e6" strokeDasharray="3 3" label="Endpoint target" />}
+            <ReferenceLine x={policyEnd} stroke="#253b56" strokeDasharray="5 4" label={cutoffLabel} />
+            <Line type="monotone" dataKey="debt" name="Debt / GDP" stroke="#ef8354" strokeWidth={3} dot={false} />
+          </LineChart></ResponsiveContainer>
+        </ChartCard>
+        <ChartCard title="Federal revenue path" note={`Starts at ${percent(selected.revenuePath.startingRevenueRate)} and never rises. ${selected.revenuePath.revenueDeclineYear === null ? 'It does not fall in the visible period.' : `It first falls in ${selected.revenuePath.revenueDeclineYear}, once the debt ceiling permits.`} Lowest visible rate: ${percent(selected.revenuePath.minimumRevenueRate)} in ${selected.revenuePath.minimumRevenueYear}.`}>
+          <ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip {...opaqueTooltipProps} />
+            <ReferenceLine x={policyEnd} stroke="#253b56" strokeDasharray="5 4" label={cutoffLabel} />
+            {selected.revenuePath.revenueDeclineYear !== null && selected.revenuePath.revenueDeclineYear < policyEnd && <ReferenceLine x={selected.revenuePath.revenueDeclineYear} stroke="#26845f" strokeDasharray="3 3" label="Rate declines" />}
+            <Line type="monotone" dataKey="revenue" name="Required revenue / GDP" stroke="#26845f" strokeWidth={3} dot={false} />
+          </LineChart></ResponsiveContainer>
+        </ChartCard>
+        <ChartCard title="Total federal spending decomposition" note="CBO-anchored primary categories plus modeled reform prefunding and net interest; the dark line is their explicit sum.">
+          <ResponsiveContainer width="100%" height="100%"><ComposedChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip {...opaqueTooltipProps} /><Legend />
+            <ReferenceLine x={policyEnd} stroke="#253b56" strokeDasharray="5 4" label={cutoffLabel} />
+            <Area stackId="1" dataKey="legacySS" name="Current-law-formula SS" fill="#6f7d94" stroke="#6f7d94" />
+            <Area stackId="1" dataKey="flatSS" name="Flat SS PAYGO" fill="#3c91e6" stroke="#3c91e6" />
+            <Area stackId="1" dataKey="otherSS" name="Other Social Security" fill="#9bb3ca" stroke="#7892ab" />
+            <Area stackId="1" dataKey="legacyMedicare" name="Legacy senior Medicare" fill="#9f86c0" stroke="#9f86c0" />
+            <Area stackId="1" dataKey="premiumSupport" name="Premium support PAYGO" fill="#56cfe1" stroke="#56cfe1" />
+            <Area stackId="1" dataKey="under65Medicare" name="Under-65 Medicare & net offsets" fill="#87d9e4" stroke="#55b8c6" />
+            <Area stackId="1" dataKey="medicaidChipMarketplace" name="Medicaid, CHIP & marketplace" fill="#d7b6e8" stroke="#ad83c2" />
+            <Area stackId="1" dataKey="ssPrefunding" name="SS prefunding" fill="#50b58a" stroke="#26845f" />
+            <Area stackId="1" dataKey="medicarePrefunding" name="Medicare prefunding" fill="#8ad4b5" stroke="#4aa784" />
+            <Area stackId="1" dataKey="defenseDiscretionary" name="Defense discretionary" fill="#efc47d" stroke="#d6a14c" />
+            <Area stackId="1" dataKey="nonDefenseDiscretionary" name="Nondefense discretionary" fill="#f4b860" stroke="#d69639" />
+            <Area stackId="1" dataKey="otherMandatory" name="Other mandatory" fill="#b8c1cc" stroke="#8794a3" />
+            <Area stackId="1" dataKey="interest" name="Net interest" fill="#ef9a7a" stroke="#d96c4a" />
+            <Line type="monotone" dataKey="totalSpending" name="Total federal spending" stroke="#172033" strokeWidth={2.5} dot={false} />
+          </ComposedChart></ResponsiveContainer>
+        </ChartCard>
+        <ChartCard title="Interest spending and rates" note="Lambda moves the effective debt rate toward—not above—the debt-sensitive market target.">
+          <ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip {...opaqueTooltipProps} /><Legend />
+            <ReferenceLine x={policyEnd} stroke="#253b56" strokeDasharray="5 4" label={cutoffLabel} />
+            <Line dataKey="interest" name="Net interest / GDP" stroke="#ef8354" dot={false} />
+            <Line dataKey="targetRate" name="Target nominal rate" stroke="#9f86c0" dot={false} />
+            <Line dataKey="effectiveRate" name="Effective nominal rate" stroke="#3c91e6" dot={false} />
+          </LineChart></ResponsiveContainer>
+        </ChartCard>
+        <ChartCard
+          title="Legacy vs reformed system"
+          note="Choose a program; the tooltip sums only the benefit streams currently displayed."
+          controls={<div className="segmented compact-segmented" aria-label="Programs displayed">{(['both', 'socialSecurity', 'medicare'] as const).map((view) => <button type="button" key={view} aria-pressed={entitlementView === view} className={entitlementView === view ? 'active' : ''} onClick={() => setEntitlementView(view)}>{view === 'both' ? 'Both' : view === 'socialSecurity' ? 'Social Security' : 'Medicare'}</button>)}</div>}
+        >
+          <ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" />
+            <Tooltip content={<EntitlementTooltip />} wrapperStyle={{ zIndex: 1000, pointerEvents: 'none' }} />
+            <Legend /><ReferenceLine x={policyEnd} stroke="#253b56" strokeDasharray="5 4" label={cutoffLabel} />
+            {entitlementView !== 'medicare' && <Line dataKey="legacySS" name="Current-law-formula SS" stroke="#6f7d94" dot={false} />}
+            {entitlementView !== 'medicare' && <Line dataKey="flatSS" name="Flat SS PAYGO" stroke="#3c91e6" dot={false} />}
+            {entitlementView !== 'medicare' && <Line dataKey="otherSS" name="Other Social Security" stroke="#7892ab" dot={false} />}
+            {entitlementView !== 'socialSecurity' && <Line dataKey="legacyMedicare" name="Legacy senior Medicare" stroke="#9f86c0" dot={false} />}
+            {entitlementView !== 'socialSecurity' && <Line dataKey="premiumSupport" name="Premium support PAYGO" stroke="#56cfe1" dot={false} />}
+            {entitlementView !== 'socialSecurity' && <Line dataKey="under65Medicare" name="Under-65 Medicare & net offsets" stroke="#55b8c6" dot={false} />}
+          </LineChart></ResponsiveContainer>
+        </ChartCard>
+        <ChartCard title={scenarioChoice === 'savingsFundedSequential' ? 'Savings-funded sequence' : 'Sequential funding gate'} note={scenarioChoice === 'savingsFundedSequential' ? 'Scheduled-current-law benefit savings buy the new cohort’s SS sleeve first, then Medicare; deposits cannot exceed those exogenous savings.' : 'The SS-first strategy can use a positive Social Security dividend for the new cohort’s Medicare sleeve.'}>
+          <ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis unit="%" /><Tooltip {...opaqueTooltipProps} /><Legend />
+            <ReferenceLine x={policyEnd} stroke="#253b56" strokeDasharray="5 4" label={cutoffLabel} />
+            {scenarioChoice === 'savingsFundedSequential' ? <Line dataKey="availableSavings" name="Available reform savings / GDP" stroke="#26845f" dot={false} /> : <Line dataKey="ssDividend" name="SS dividend / GDP" stroke="#26845f" dot={false} />}
+            <Line dataKey="ssFundedShare" name="New SS cohort funded %" stroke="#3c91e6" dot={false} />
+            <Line dataKey="medicareFundedShare" name="New Medicare cohort funded %" stroke="#9f86c0" dot={false} />
+          </LineChart></ResponsiveContainer>
+        </ChartCard>
       </div>
     </>
   )
 }
 
-const primaryAuditRows: Array<[keyof SimulationYear, string]> = [
-  ['legacySocialSecurity', 'Legacy/current-law Social Security'], ['flatSocialSecurityPaygo', 'Flat Social Security PAYGO'], ['otherOASDI', 'Other OASDI outside reform'], ['legacySeniorMedicare', 'Legacy senior Medicare'], ['premiumSupportPaygo', 'Premium-support PAYGO'], ['under65Medicare', 'Under-65 Medicare'], ['nonDefenseDiscretionary', 'Nondefense discretionary'], ['socialSecurityPrefunding', 'Social Security prefunding'], ['medicarePrefunding', 'Medicare prefunding'], ['otherPrimarySpending', 'Other primary excluding NDD'], ['totalPrimarySpending', 'Total primary spending'],
+interface PrimaryAuditRow {
+  id: string
+  label: string
+  value: (row: SimulationYear) => number
+  emphasis?: 'subtotal' | 'total'
+}
+
+const primaryAuditRows: PrimaryAuditRow[] = [
+  { id: 'legacySocialSecurity', label: 'Current-law-formula Social Security', value: (row) => row.legacySocialSecurity },
+  { id: 'flatSocialSecurityPaygo', label: 'Flat Social Security PAYGO', value: (row) => row.flatSocialSecurityPaygo },
+  { id: 'otherOASDI', label: 'Other Social Security', value: (row) => row.otherOASDI },
+  { id: 'socialSecuritySubtotal', label: 'Social Security subtotal', value: (row) => row.legacySocialSecurity + row.flatSocialSecurityPaygo + row.otherOASDI, emphasis: 'subtotal' },
+  { id: 'legacySeniorMedicare', label: 'Legacy senior Medicare', value: (row) => row.legacySeniorMedicare },
+  { id: 'premiumSupportPaygo', label: 'Premium-support PAYGO', value: (row) => row.premiumSupportPaygo },
+  { id: 'under65Medicare', label: 'Under-65 Medicare & net offsets', value: (row) => row.under65Medicare },
+  { id: 'medicareSubtotal', label: 'Medicare subtotal', value: (row) => row.legacySeniorMedicare + row.premiumSupportPaygo + row.under65Medicare, emphasis: 'subtotal' },
+  { id: 'medicaidChipMarketplace', label: 'Medicaid, CHIP & marketplace subsidies', value: (row) => row.medicaidChipMarketplace },
+  { id: 'otherMandatory', label: 'Other mandatory', value: (row) => row.otherMandatory },
+  { id: 'defenseDiscretionary', label: 'Defense discretionary', value: (row) => row.defenseDiscretionary },
+  { id: 'nonDefenseDiscretionary', label: 'Nondefense discretionary', value: (row) => row.nonDefenseDiscretionary },
+  { id: 'socialSecurityPrefunding', label: 'Social Security prefunding', value: (row) => row.socialSecurityPrefunding },
+  { id: 'medicarePrefunding', label: 'Medicare prefunding', value: (row) => row.medicarePrefunding },
+  { id: 'totalPrimarySpending', label: 'Total primary spending', value: (row) => row.totalPrimarySpending, emphasis: 'total' },
 ]
 
 function AuditValue({ value, gdp }: { value: number; gdp: number }) {
@@ -709,7 +855,7 @@ function AuditPanel({ scenario }: { scenario: ScenarioResult }) {
     <>
       <section className="card audit-header"><div><div className="eyebrow">{scenario.label}</div><h2>{row.year} decomposition audit</h2><p>{regime} · all values shown in nominal dollars and percent of current-year GDP</p></div><label className="year-picker">Audit year<input type="range" min={scenario.assumptions.reformYear} max={scenario.assumptions.endYear} value={row.year} onChange={(event) => setAuditYear(Number(event.target.value))} /><strong>{row.year}</strong></label></section>
       <div className="audit-grid">
-        <section className="card"><div className="section-heading"><div><div className="eyebrow">Ledger 01</div><h3>Primary program spending</h3></div><span className="reconcile">Reconciled · max error {maxError.toExponential(1)}</span></div><table className="audit-table"><thead><tr><th>Component</th><th>Dollars</th><th>% GDP</th></tr></thead><tbody>{primaryAuditRows.map(([key, label]) => <tr key={key} className={key === 'totalPrimarySpending' ? 'total-row' : ''}><th>{label}</th><AuditValue value={row[key] as number} gdp={row.nominalGDP} /></tr>)}</tbody></table></section>
+        <section className="card"><div className="section-heading"><div><div className="eyebrow">Ledger 01</div><h3>Primary program spending</h3></div><span className="reconcile">Reconciled · max error {maxError.toExponential(1)}</span></div><table className="audit-table"><thead><tr><th>Component</th><th>Dollars</th><th>% GDP</th></tr></thead><tbody>{primaryAuditRows.map((auditRow) => <tr key={auditRow.id} className={auditRow.emphasis === 'total' ? 'total-row' : auditRow.emphasis === 'subtotal' ? 'subtotal-row' : ''}><th>{auditRow.label}</th><AuditValue value={auditRow.value(row)} gdp={row.nominalGDP} /></tr>)}</tbody></table></section>
         <section className="card"><div className="section-heading"><div><div className="eyebrow">Ledger 02</div><h3>Financing & interest</h3></div></div><table className="audit-table"><thead><tr><th>Item</th><th>Dollars</th><th>% GDP / rate</th></tr></thead><tbody><tr><th>Revenue</th><AuditValue value={row.revenue} gdp={row.nominalGDP} /></tr><tr><th>Primary balance</th><AuditValue value={row.primaryBalance} gdp={row.nominalGDP} /></tr><tr><th>Beginning debt</th><AuditValue value={row.beginningDebt} gdp={row.nominalGDP} /></tr><tr><th>Target nominal interest rate</th><td>—</td><td>{percent(row.nominalTargetInterestRate)}</td></tr><tr><th>Effective nominal interest rate</th><td>—</td><td>{percent(row.effectiveNominalInterestRate)}</td></tr><tr><th>Net interest</th><AuditValue value={row.netInterest} gdp={row.nominalGDP} /></tr><tr className="total-row"><th>Total federal spending</th><AuditValue value={row.totalFederalSpending} gdp={row.nominalGDP} /></tr><tr><th>Overall deficit</th><AuditValue value={row.overallDeficit} gdp={row.nominalGDP} /></tr><tr><th>Ending debt</th><AuditValue value={row.endingDebt} gdp={row.nominalGDP} /></tr><tr><th>Debt / GDP</th><td>—</td><td>{percent(row.endingDebtGDP)}</td></tr></tbody></table></section>
       </div>
       <section className="card cohort-card">

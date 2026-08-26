@@ -1,5 +1,11 @@
 import { survivalProbability } from './mortality'
 import {
+  cboCalibrationNominalGDPBillions,
+  cboCalibrationOtherOASDIGDP,
+  cboSocialSecurityGDP,
+} from '../data/cboBaseline'
+import { defaultAssumptions } from './defaults'
+import {
   fullyPrefundsSocialSecurity,
   usesSavingsFundedSequence,
 } from './fundingStrategy'
@@ -90,7 +96,7 @@ export function cohortSizeAtAgeMillions(
   )
 }
 
-export function socialSecurityForYear(
+function rawSocialSecurityForYear(
   year: number,
   assumptions: ModelAssumptions,
   entitlementDesign: EntitlementDesign = 'reform',
@@ -185,6 +191,56 @@ export function socialSecurityForYear(
       (sum, cohort) => sum + cohort.flatPaygoBillions,
       0,
     ),
+    cohorts,
+  }
+}
+
+/**
+ * Calibrate the current-law-formula retirement slice to CBO's total Social
+ * Security baseline less the separately shown other-OASDI component. The same
+ * annual factor applies to every legacy cohort, preserving cohort shares and
+ * mortality. The flat benefit remains the unscaled policy promise.
+ */
+export function socialSecurityForYear(
+  year: number,
+  assumptions: ModelAssumptions,
+  entitlementDesign: EntitlementDesign = 'reform',
+  resolvePrefundedShare?: SocialSecurityPrefundedShareResolver,
+): SocialSecurityYearResult {
+  const result = rawSocialSecurityForYear(
+    year,
+    assumptions,
+    entitlementDesign,
+    resolvePrefundedShare,
+  )
+  const centralCurrentLaw = rawSocialSecurityForYear(
+    year,
+    defaultAssumptions,
+    'currentLaw',
+  )
+  const targetLegacyBillions =
+    Math.max(
+      0,
+      cboSocialSecurityGDP(year) - cboCalibrationOtherOASDIGDP,
+    ) * cboCalibrationNominalGDPBillions(year)
+  const legacyScale =
+    centralCurrentLaw.legacyBillions > 0
+      ? targetLegacyBillions / centralCurrentLaw.legacyBillions
+      : 1
+
+  const cohorts = result.cohorts.map((cohort) => {
+    const legacyPaygoBillions = cohort.legacyPaygoBillions * legacyScale
+    return {
+      ...cohort,
+      legacyPaygoBillions,
+      totalCohortSSSpendingBillions:
+        legacyPaygoBillions + cohort.flatPaygoBillions,
+    }
+  })
+
+  return {
+    ...result,
+    legacyBillions: result.legacyBillions * legacyScale,
     cohorts,
   }
 }

@@ -11,9 +11,11 @@ export function primaryComponentsFromYear(
     legacySeniorMedicare: row.legacySeniorMedicare,
     premiumSupportPaygo: row.premiumSupportPaygo,
     under65Medicare: row.under65Medicare,
+    medicaidChipMarketplace: row.medicaidChipMarketplace,
+    otherMandatory: row.otherMandatory,
+    defenseDiscretionary: row.defenseDiscretionary,
     nonDefenseDiscretionary: row.nonDefenseDiscretionary,
     newCohortPrefunding: row.newCohortPrefunding,
-    otherPrimarySpending: row.otherPrimarySpending,
   }
 }
 

@@ -186,7 +186,7 @@ requiredRevenueRate_t = max(
 
 This lets the revenue burden fall when the transition runs off without ever requiring it to rise. If the maintenance requirement later rises above the cap, preserve the no-increase rule and allow post-cutoff debt to drift rather than silently raising taxes.
 
-`endpointDebtTargetGDP` is always the user-selected target; there are no alternate fiscal-objective modes. Report starting revenue/GDP, the opening fiscal adjustment versus CBO's 17.5%-of-GDP 2026 current-law revenue baseline, the first decline year, minimum revenue/GDP and its year across the visible simulation, endpoint revenue rate, peak debt/GDP, and endpoint debt/GDP. The opening fiscal adjustment may be supplied by higher revenues, lower spending elsewhere, or both. Do not call these values “transition” and “mature” rates.
+`endpointDebtTargetGDP` is always the user-selected target; there are no alternate fiscal-objective modes. Report starting revenue/GDP, the opening fiscal adjustment versus CBO's unrounded 17.541%-of-GDP 2026 current-law revenue baseline, the first decline year, minimum revenue/GDP and its year across the visible simulation, endpoint revenue rate, peak debt/GDP, and endpoint debt/GDP. Compact labels may round the benchmark to 17.5%. The opening fiscal adjustment may be supplied by higher revenues, lower spending elsewhere, or both. Do not call these values “transition” and “mature” rates.
 
 ## 4. Mature-system year
 
@@ -347,7 +347,7 @@ Add tests proving:
 18. A partial Social Security funded fraction follows its cohort and proportionally reduces later PAYGO.
 19. The default policy score ends in 2095 while the visible simulation extends through 2160.
 20. The 30-, 50-, and 70-year score endpoints are 2055, 2075, and 2095.
-21. Scheduled-current-law 2026 primary spending reconciles to approximately 20.0% of GDP and total spending to approximately 23.3% before reform deposits.
+21. Scheduled-current-law 2026 spending reconciles category by category to CBO: Social Security 5.222%, net Medicare 3.332%, Medicaid/CHIP/marketplace 2.64997%, other mandatory 2.994%, defense discretionary 2.773%, NDD 3.121%, total primary 20.092%, net interest 3.257%, and total spending 23.348% of GDP before reform deposits.
 22. Birth-cohort size is multiplied by life-table survival before counting Medicare and Social Security eligibility cohorts.
 
 ## 8. UI recommendation

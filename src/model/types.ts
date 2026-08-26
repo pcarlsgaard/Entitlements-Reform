@@ -49,7 +49,7 @@ export interface ModelAssumptions {
   under65MedicareGDP: number
   nonDefenseDiscretionaryGDP2026: number
   nonDefenseDiscretionaryRealGrowth: number
-  otherPrimaryGDP: number
+  otherMandatoryGDP2026: number
   policyHorizonYears: number
   policyHorizonDebtTargetGDP: number
   peakDebtCeilingGDP: number
@@ -125,9 +125,11 @@ export interface PrimaryComponents {
   legacySeniorMedicare: number
   premiumSupportPaygo: number
   under65Medicare: number
+  medicaidChipMarketplace: number
+  otherMandatory: number
+  defenseDiscretionary: number
   nonDefenseDiscretionary: number
   newCohortPrefunding: number
-  otherPrimarySpending: number
 }
 
 export interface SimulationYear extends PrimaryComponents {
