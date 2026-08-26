@@ -1,5 +1,11 @@
 import { survivalProbability } from './mortality'
 import {
+  cboCalibrationNominalGDPBillions,
+  cboCalibrationUnder65MedicareGDP,
+  cboMedicareNetGDP,
+} from '../data/cboBaseline'
+import { defaultAssumptions } from './defaults'
+import {
   fullyPrefundsMedicare,
   usesCohortFundingSchedule,
 } from './fundingStrategy'
@@ -64,7 +70,7 @@ export function isMedicareComponentPrefunded(
   )
 }
 
-export function medicareForYear(
+function rawMedicareForYear(
   year: number,
   assumptions: ModelAssumptions,
   resolvePrefundedShare?: MedicarePrefundedShareResolver,
@@ -154,6 +160,50 @@ export function medicareForYear(
       (sum, cohort) => sum + cohort.premiumSupportPaygoBillions,
       0,
     ),
+    cohorts,
+  }
+}
+
+/**
+ * Calibrate the legacy senior slice so scheduled current law plus the explicit
+ * under-65/offsetting-receipts component equals CBO's net Medicare baseline.
+ * Premium support remains the unscaled gross policy promise.
+ */
+export function medicareForYear(
+  year: number,
+  assumptions: ModelAssumptions,
+  resolvePrefundedShare?: MedicarePrefundedShareResolver,
+  entitlementDesign: EntitlementDesign = 'reform',
+): MedicareYearResult {
+  const result = rawMedicareForYear(
+    year,
+    assumptions,
+    resolvePrefundedShare,
+    entitlementDesign,
+  )
+  const centralCurrentLaw = rawMedicareForYear(
+    year,
+    defaultAssumptions,
+    undefined,
+    'currentLaw',
+  )
+  const targetLegacyBillions =
+    Math.max(
+      0,
+      cboMedicareNetGDP(year) - cboCalibrationUnder65MedicareGDP,
+    ) * cboCalibrationNominalGDPBillions(year)
+  const legacyScale =
+    centralCurrentLaw.legacyBillions > 0
+      ? targetLegacyBillions / centralCurrentLaw.legacyBillions
+      : 1
+  const cohorts = result.cohorts.map((cohort) => ({
+    ...cohort,
+    legacyBillions: cohort.legacyBillions * legacyScale,
+  }))
+
+  return {
+    ...result,
+    legacyBillions: result.legacyBillions * legacyScale,
     cohorts,
   }
 }

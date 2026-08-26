@@ -43,8 +43,8 @@ The project is designed to answer a central fiscal question:
 - Baseline effective real borrowing rate: 2.3%
 - Debt sensitivity: +2 bp long-run target rate per +1 percentage point debt/GDP
 - Annual debt-rate pass-through: 15%
-- 2026 nondefense discretionary outlays: 3.1% of GDP
-- Default real NDD growth: 1.8% (matches central GDP growth to preserve the prior baseline share)
+- 2026 nondefense discretionary outlays: 3.121% of GDP
+- Central NDD path: CBO's published GDP shares through 2056; custom paths can instead apply an independent real-growth assumption
 
 The Policy view exposes financing strategy plus macro and broader-budget sensitivities including real GDP growth, inflation, cohort growth, borrowing rates, debt sensitivity, legacy benefit growth, and an independent nondefense discretionary spending path. The Results view compares all six financing strategies, measures each against current law with scheduled benefits and with trust-fund-payable benefits, and compares any custom macro/budget combination with central assumptions while holding the benefit design and fiscal objective fixed.
 
@@ -61,7 +61,9 @@ Legacy senior Medicare is an all-in Parts A, B, D, and Medicare Advantage benefi
 
 The primary score uses a 70-year policy horizon through 2095, with companion 30- and 50-year calculations retained in the model. The Results page keeps the longer path through 2160 visible as a marked actuarial stress test. Users select a peak-debt ceiling and an endpoint debt target no higher than that ceiling. The operational revenue path starts at the minimum single rate satisfying both limits. If the peak binds early, revenue begins a smooth decline in the earliest safe year and reaches the endpoint target without a later increase; otherwise it stays at the opening rate through the cutoff.
 
-The 2026 scheduled-current-law calibration reconciles to CBO's 17.5% of GDP in federal revenue, 20.0% in primary spending, and 23.3% in total spending. Next to every opening required-revenue rate, Results shows the difference from 17.5% as the opening fiscal adjustment; that gap can be closed with revenue, other spending reductions, or a mix. The model applies SSA survival from birth before counting cohorts at Medicare or Social Security eligibility; reform prefunding deposits then appear explicitly on top of that baseline.
+The 2026 scheduled-current-law calibration reconciles category by category to CBO: 5.222% of GDP for total Social Security, 3.332% for net Medicare, 2.64997% for Medicaid/CHIP/marketplace subsidies, 2.994% for other mandatory spending, 2.773% for defense discretionary, and 3.121% for nondefense discretionary. Those components sum to 20.092% primary spending; adding 3.257% net interest produces 23.348% total spending. CBO's 17.541% revenue and 100.605% debt/GDP are also loaded exactly, although the UI rounds headline labels. Social Security and Medicare policy slices remain separate, with explicit subtotals that match CBO. Reform prefunding deposits appear on top of the baseline.
+
+The CBO category paths run through 2056. The simulator holds the final published shares after 2056 as an actuarial stress test, not a CBO forecast. The macro engine remains stylized: it uses the selected constant real GDP growth and inflation assumptions rather than importing CBO's year-specific macro forecast.
 
 ## Core modeling principle
 
@@ -152,7 +154,7 @@ The test suite should demonstrate at least:
 - Spending decomposition exactly reconciles.
 - Constant-rate solver satisfies both the peak-debt ceiling and endpoint debt target.
 - Non-rising revenue path reaches the endpoint target without breaching the peak ceiling, starts at the single-rate result, never increases, and reports its first decline and lowest visible rate.
-- Opening fiscal adjustment equals the opening rate minus CBO's 17.5%-of-GDP 2026 current-law revenue baseline.
+- Opening fiscal adjustment equals the opening rate minus CBO's unrounded 17.541%-of-GDP 2026 current-law revenue baseline; compact labels round the benchmark to 17.5%.
 
 ## Modeling discipline
 

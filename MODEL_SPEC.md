@@ -297,17 +297,19 @@ Every simulation year should retain at least these components separately:
 3. Other OASDI outside the old-age reform.
 4. Legacy/current-law senior Medicare spending.
 5. Premium-support PAYGO for senior cohorts not prefunded.
-6. Under-65 Medicare outside the senior reform.
-7. Nondefense discretionary spending.
-8. New-cohort prefunding.
-9. Other federal primary spending excluding nondefense discretionary spending.
-10. Net interest.
-11. Total primary spending.
-12. Total federal spending.
-13. Federal revenue.
-14. Primary balance.
-15. Overall deficit.
-16. Debt/GDP.
+6. Under-65 Medicare and net Medicare offsetting-receipts calibration.
+7. Medicaid, CHIP, and marketplace subsidies.
+8. Other mandatory spending.
+9. Defense discretionary spending.
+10. Nondefense discretionary spending.
+11. New-cohort prefunding.
+12. Net interest.
+13. Total primary spending.
+14. Total federal spending.
+15. Federal revenue.
+16. Primary balance.
+17. Overall deficit.
+18. Debt/GDP.
 
 The sum of primary spending components must exactly reconcile to modeled total primary spending within floating-point tolerance.
 
@@ -502,7 +504,7 @@ When exact age-specific Medicare spending is not available in a clean official f
 
 The central model uses one explicit real GDP growth assumption to construct the nominal GDP path together with inflation. A real-GDP sensitivity changes the denominator for all spending and debt ratios and the growth term in debt dynamics; it does not endogenously change benefit rules, population, productivity, interest rates, or other inputs.
 
-Nondefense discretionary spending must be modeled as a named component rather than buried in a fixed “other” share:
+Nondefense discretionary spending must be modeled as a named component rather than buried in a residual. Under central assumptions it follows CBO's published GDP-share path. When the user selects a custom NDD growth assumption, use:
 
 ```text
 NDD_2026 = NDD_share_2026 * GDP_2026
@@ -513,15 +515,26 @@ NDD_t = NDD_2026
 
 Central 2026 calibration:
 
-- current-law federal revenue: **17.5% of GDP**, from CBO's February 2026 baseline;
-- nondefense discretionary outlays: **3.1% of GDP**, from CBO's February 2026 baseline;
-- central real NDD growth for this simulator: **1.8%**, equal to central real GDP growth, which holds NDD's share constant until a user deliberately changes the path;
-- other primary spending excluding NDD: **7.235% of GDP**, the named residual after separately modeled categories;
-- scheduled-current-law primary spending: **20.0% of GDP** and net interest **3.3%**, reconciling to CBO's **23.3% total outlays** before reform prefunding deposits.
+- current-law federal revenue: **17.541% of GDP**;
+- Social Security: **5.222% of GDP**;
+- net Medicare: **3.332% of GDP**;
+- Medicaid, CHIP, and marketplace subsidies: **2.64997% of GDP**;
+- other mandatory spending: **2.994% of GDP**;
+- defense discretionary outlays: **2.773% of GDP**;
+- nondefense discretionary outlays: **3.121% of GDP**;
+- scheduled-current-law primary spending: **20.092% of GDP**;
+- net interest: **3.257% of GDP**;
+- total federal outlays: **23.348% of GDP**;
+- debt held by the public: **100.605% of GDP**;
+- nominal GDP: **$31.902 trillion**.
 
-The 1.8% NDD growth default is a continuity modeling assumption, not a claim that it is CBO's statutory baseline. The UI must allow alternatives such as 1.0% real growth or a real freeze and show the resulting NDD/GDP path.
+CBO's machine-readable February 2026 category paths are used through 2056. CBO publishes defense and nondefense discretionary spending separately through 2036; after that year, apply the 2036 defense/NDD proportions to CBO's published total discretionary path. Hold CBO's final published category shares after 2056 and label those later results as a stress-test extension, not a CBO forecast.
 
-For each scenario, calculate `openingRevenueRate - 17.5% GDP` and display it next to the opening/single rate as the required opening fiscal adjustment. This difference is not necessarily a tax increase: it may be achieved through additional federal revenue, reductions in spending outside the modeled entitlement path, or a combination.
+Keep the Social Security components separate in the model and display. Under scheduled current law, calibrate current-law-formula old-age Social Security so it plus the named other-Social-Security component equals CBO's total Social Security path. Similarly, calibrate legacy senior Medicare so it plus the named under-65/offsetting-receipts component equals CBO's net Medicare path. This preserves transparent policy slices while ensuring that the displayed subtotals, rather than any single slice, match CBO. Flat Social Security benefits and gross premium support remain policy promises and must not be rescaled to the current-law budget baseline.
+
+The UI must allow alternative NDD paths such as 1.0% real growth or a real freeze and show the resulting NDD/GDP path. A custom real-growth selection replaces CBO's central NDD path rather than modifying it.
+
+For each scenario, calculate `openingRevenueRate - 17.541% GDP` using CBO's unrounded input and display it next to the opening/single rate as the required opening fiscal adjustment. Compact UI labels may round the benchmark to 17.5%. This difference is not necessarily a tax increase: it may be achieved through additional federal revenue, reductions in spending outside the modeled entitlement path, or a combination.
 
 When reporting a macro/budget sensitivity against central defaults, hold benefit design, prefunding rules, transition dates, and fiscal objectives fixed. Describe the result as a fiscal sensitivity, not a general-equilibrium forecast.
 
@@ -579,4 +592,5 @@ The implementation is not considered reliable until automated tests verify:
 - decomposition reconciles exactly,
 - constant-revenue solver satisfies both policy-horizon debt constraints without changing the tax rate,
 - annual required-revenue path reaches the endpoint target without breaching the peak ceiling, begins at the constant rate, never rises, and reports its first decline and exact minimum across the visible simulation,
-- opening fiscal adjustment exactly reconciles the opening rate to CBO's 17.5%-of-GDP 2026 current-law revenue baseline.
+- opening fiscal adjustment exactly reconciles the opening rate to CBO's 17.541%-of-GDP 2026 current-law revenue baseline,
+- scheduled-current-law 2026 Social Security, net Medicare, Medicaid/CHIP/marketplace, other mandatory, defense discretionary, NDD, and total primary spending reconcile to their exact CBO category shares.

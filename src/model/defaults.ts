@@ -1,4 +1,11 @@
 import type { ModelAssumptions } from './types'
+import {
+  cboCalibrationOtherOASDIGDP,
+  cboCalibrationUnder65MedicareGDP,
+  cbo2026DebtHeldByPublicGDP,
+  cbo2026NominalGDPBillions,
+  cbo2026NetInterestGDP,
+} from '../data/cboBaseline'
 
 export const defaultAssumptions: ModelAssumptions = {
   reformYear: 2026,
@@ -29,23 +36,22 @@ export const defaultAssumptions: ModelAssumptions = {
   medicareYearB: 2035,
   cohortSizeMillions2026: 4.2,
   cohortSizeGrowth: 0.002,
-  startingNominalGDPBillions: 31_800,
+  startingNominalGDPBillions: cbo2026NominalGDPBillions,
   realGDPGrowth: 0.018,
   inflation: 0.02,
-  startingDebtGDP: 1.01,
+  startingDebtGDP: cbo2026DebtHeldByPublicGDP,
   baselineRealMarketRate: 0.023,
-  startingEffectiveNominalRate: 0.033 / 1.01,
+  startingEffectiveNominalRate:
+    cbo2026NetInterestGDP / cbo2026DebtHeldByPublicGDP,
   debtSensitivity: 0.02,
   debtRatePassThrough: 0.15,
-  otherOASDIGDP: 0.01,
-  under65MedicareGDP: 0.006,
-  nonDefenseDiscretionaryGDP2026: 0.031,
-  // Matching NDD real growth to GDP holds its baseline share constant until
-  // the user deliberately applies a different discretionary-growth path.
+  otherOASDIGDP: cboCalibrationOtherOASDIGDP,
+  under65MedicareGDP: cboCalibrationUnder65MedicareGDP,
+  nonDefenseDiscretionaryGDP2026: 0.03121,
+  // The central path uses CBO's published NDD shares. This value is used when
+  // the user deliberately substitutes an independent NDD growth path.
   nonDefenseDiscretionaryRealGrowth: 0.018,
-  // Residual calibrated after the explicit 2026 components so scheduled
-  // current-law primary spending is approximately CBO's 20.0% of GDP.
-  otherPrimaryGDP: 0.07235,
+  otherMandatoryGDP2026: 0.02994,
   policyHorizonYears: 70,
   policyHorizonDebtTargetGDP: 1.01,
   peakDebtCeilingGDP: 1.5,

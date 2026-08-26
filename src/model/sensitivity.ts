@@ -16,7 +16,7 @@ export const macroBudgetAssumptionKeys = [
   'under65MedicareGDP',
   'nonDefenseDiscretionaryGDP2026',
   'nonDefenseDiscretionaryRealGrowth',
-  'otherPrimaryGDP',
+  'otherMandatoryGDP2026',
 ] as const satisfies readonly (keyof ModelAssumptions)[]
 
 /**

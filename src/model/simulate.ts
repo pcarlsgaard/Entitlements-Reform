@@ -2,7 +2,12 @@ import {
   calculateEndowmentPerPerson,
   fundingPlanForAssumptions,
 } from './endowment'
-import { nonDefenseDiscretionaryBillions } from './budget'
+import {
+  defenseDiscretionaryBillions,
+  medicaidChipMarketplaceBillions,
+  nonDefenseDiscretionaryBillions,
+  otherMandatoryBillions,
+} from './budget'
 import { currentLawDeliveryShares } from './currentLaw'
 import {
   nominalGDPGrowth,
@@ -48,9 +53,11 @@ export function primaryComponentSum(components: PrimaryComponents): number {
     components.legacySeniorMedicare +
     components.premiumSupportPaygo +
     components.under65Medicare +
+    components.medicaidChipMarketplace +
+    components.otherMandatory +
+    components.defenseDiscretionary +
     components.nonDefenseDiscretionary +
-    components.newCohortPrefunding +
-    components.otherPrimarySpending
+    components.newCohortPrefunding
   )
 }
 
@@ -144,12 +151,17 @@ export function simulate(
         medicare.legacyBillions * deliveryShares.seniorMedicare,
       premiumSupportPaygo: medicare.premiumSupportPaygoBillions,
       under65Medicare: assumptions.under65MedicareGDP * nominalGDP,
+      medicaidChipMarketplace: medicaidChipMarketplaceBillions(
+        year,
+        assumptions,
+      ),
+      otherMandatory: otherMandatoryBillions(year, assumptions),
+      defenseDiscretionary: defenseDiscretionaryBillions(year, assumptions),
       nonDefenseDiscretionary: nonDefenseDiscretionaryBillions(
         year,
         assumptions,
       ),
       newCohortPrefunding: funding.totalPrefunding,
-      otherPrimarySpending: assumptions.otherPrimaryGDP * nominalGDP,
     }
     const totalPrimarySpending = primaryComponentSum(components)
     const beginningDebtGDP = beginningDebt / nominalGDP
