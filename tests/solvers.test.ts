@@ -192,32 +192,43 @@ describe('scenario comparison', () => {
     ).toBe(true)
   })
 
-  it('uses identical benefit assumptions except for the funding strategy', () => {
-    const result = compareScenarios(shorter)
-    const { fundingStrategy: paygoStrategy, ...paygo } = result.paygo.assumptions
-    const { fundingStrategy: prefundedStrategy, ...prefunded } =
-      result.prefunded.assumptions
-    expect(paygoStrategy).toBe('paygo')
-    expect(prefundedStrategy).toBe('both')
-    expect(paygo).toEqual(prefunded)
-  })
+  it(
+    'uses identical benefit assumptions except for the funding strategy',
+    () => {
+      const result = compareScenarios(shorter)
+      const { fundingStrategy: paygoStrategy, ...paygo } =
+        result.paygo.assumptions
+      const { fundingStrategy: prefundedStrategy, ...prefunded } =
+        result.prefunded.assumptions
+      expect(paygoStrategy).toBe('paygo')
+      expect(prefundedStrategy).toBe('both')
+      expect(paygo).toEqual(prefunded)
+    },
+    15_000,
+  )
 
-  it('funding strategy changes timing without altering policy primitives', () => {
-    const result = compareScenarios(shorter)
-    expect(result.paygo.permanent.simulation.years[0]?.newCohortPrefunding).toBe(0)
-    expect(
-      result.prefunded.permanent.simulation.years[0]?.newCohortPrefunding,
-    ).toBeGreaterThan(0)
-    expect(result.paygo.assumptions.flatBenefitFPLMultiple).toBe(
-      result.prefunded.assumptions.flatBenefitFPLMultiple,
-    )
-    expect(result.paygo.assumptions.premiumSupport2026).toBe(
-      result.prefunded.assumptions.premiumSupport2026,
-    )
-    const sequential = result.scenarios.socialSecurityFirst
-    expect(sequential.firstPositiveSocialSecurityDividendYear).toBe(2081)
-    expect(sequential.firstMedicarePrefundingYear).toBe(2081)
-    expect(sequential.firstMedicarePrefundedEligibilityYear).toBe(2128)
-    expect(sequential.firstFullMedicarePrefundingYear).toBeNull()
-  })
+  it(
+    'funding strategy changes timing without altering policy primitives',
+    () => {
+      const result = compareScenarios(shorter)
+      expect(
+        result.paygo.permanent.simulation.years[0]?.newCohortPrefunding,
+      ).toBe(0)
+      expect(
+        result.prefunded.permanent.simulation.years[0]?.newCohortPrefunding,
+      ).toBeGreaterThan(0)
+      expect(result.paygo.assumptions.flatBenefitFPLMultiple).toBe(
+        result.prefunded.assumptions.flatBenefitFPLMultiple,
+      )
+      expect(result.paygo.assumptions.premiumSupport2026).toBe(
+        result.prefunded.assumptions.premiumSupport2026,
+      )
+      const sequential = result.scenarios.socialSecurityFirst
+      expect(sequential.firstPositiveSocialSecurityDividendYear).toBe(2081)
+      expect(sequential.firstMedicarePrefundingYear).toBe(2081)
+      expect(sequential.firstMedicarePrefundedEligibilityYear).toBe(2128)
+      expect(sequential.firstFullMedicarePrefundingYear).toBeNull()
+    },
+    15_000,
+  )
 })
