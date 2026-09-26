@@ -229,18 +229,32 @@ export function socialSecurityForYear(
       : 1
 
   const cohorts = result.cohorts.map((cohort) => {
-    const legacyPaygoBillions = cohort.legacyPaygoBillions * legacyScale
+    const uncappedLegacy = cohort.legacyPaygoBillions * legacyScale
+    const uncappedTotal = uncappedLegacy + cohort.flatBenefitBillions
+    const capBillions = entitlementDesign === 'reform' && assumptions.socialSecurityBenefitCap2026 !== null
+      ? assumptions.socialSecurityBenefitCap2026 *
+        (1 + assumptions.inflation) ** (year - assumptions.reformYear) *
+        cohort.survivingBeneficiariesMillions / 1_000
+      : Number.POSITIVE_INFINITY
+    const capScale = uncappedTotal > 0 ? Math.min(1, capBillions / uncappedTotal) : 1
+    const legacyPaygoBillions = uncappedLegacy * capScale
+    const flatBenefitBillions = cohort.flatBenefitBillions * capScale
+    const flatPaygoBillions = cohort.flatPaygoBillions * capScale
     return {
       ...cohort,
       legacyPaygoBillions,
+      flatBenefitBillions,
+      flatPaygoBillions,
       totalCohortSSSpendingBillions:
-        legacyPaygoBillions + cohort.flatPaygoBillions,
+        legacyPaygoBillions + flatPaygoBillions,
     }
   })
 
   return {
     ...result,
-    legacyBillions: result.legacyBillions * legacyScale,
+    legacyBillions: cohorts.reduce((sum, cohort) => sum + cohort.legacyPaygoBillions, 0),
+    flatBenefitBillions: cohorts.reduce((sum, cohort) => sum + cohort.flatBenefitBillions, 0),
+    flatPaygoBillions: cohorts.reduce((sum, cohort) => sum + cohort.flatPaygoBillions, 0),
     cohorts,
   }
 }

@@ -81,6 +81,10 @@ export function validateModelAssumptions(
   if (assumptions.benefitPhaseInYears <= 0) {
     add('benefitPhaseInYears', 'The phase-in must be at least one year.')
   }
+  if (assumptions.socialSecurityBenefitCap2026 !== null &&
+    (!Number.isFinite(assumptions.socialSecurityBenefitCap2026) || assumptions.socialSecurityBenefitCap2026 <= 0)) {
+    add('socialSecurityBenefitCap2026', 'The annual benefit cap must be positive.')
+  }
   if (assumptions.fullRetirementAge < 0 || assumptions.fullRetirementAge >= assumptions.maxModeledAge) {
     add('fullRetirementAge', 'Retirement age must be below the maximum modeled age.')
   }

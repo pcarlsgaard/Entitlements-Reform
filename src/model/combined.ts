@@ -1,6 +1,10 @@
 import { cbo2026RevenueGDP } from '../data/cboBaseline'
 import { calculateMacro, defaultSettings } from '../tax/model/macro'
 import { calculateHousehold } from '../tax/model/household'
+import { calculateHealthAnalysis, defaultHealthPolicySettings } from '../tax/model/health'
+import type { HealthPolicySettings } from '../tax/model/health'
+import { calculateFederalProgramSavings, defaultTransferReplacementSettings } from '../tax/model/transfers'
+import type { TransferReplacementSettings } from '../tax/model/types'
 import type { HouseholdInput, ReformSettings } from '../tax/model/types'
 import { defaultAssumptions } from './defaults'
 import { simulate } from './simulate'
@@ -10,7 +14,8 @@ import type { CurrentLawBaselineMode, ModelAssumptions, SimulationResult } from 
 export interface CombinedPolicy {
   taxEnabled: boolean
   tax: ReformSettings
-  insuranceCreditCostBillions2025: number
+  health: HealthPolicySettings
+  transfers: TransferReplacementSettings
   benefits: BenefitPolicySelection
   assumptions: ModelAssumptions
   baselineMode: CurrentLawBaselineMode
@@ -33,7 +38,8 @@ export const defaultCombinedPolicy: CombinedPolicy = {
     childCredit: 12_000,
     noncomplianceRate: 0.10,
   },
-  insuranceCreditCostBillions2025: 569.3,
+  health: { ...defaultHealthPolicySettings, adultHealthCredit: 3000, childHealthCredit: 1500, replaceAcaAptc: true },
+  transfers: defaultTransferReplacementSettings,
   benefits: { socialSecurityReform: false, medicareReform: false },
   // A zero debt-risk premium keeps the unsolved 70-year debt paths interpretable;
   // the entitlement solver's separate default still uses its 2 bp sensitivity.
@@ -88,11 +94,22 @@ const householdExamples: { label: string; input: HouseholdInput }[] = [
 export function scoreCombined(policy: CombinedPolicy) {
   const assumptions: ModelAssumptions = {
     ...policy.assumptions,
-    fundingStrategy: 'paygo',
+    fundingStrategy: policy.benefits.socialSecurityReform && policy.benefits.medicareReform &&
+      policy.assumptions.socialSecurityBenefitCap2026 === null
+      ? policy.assumptions.fundingStrategy : 'paygo',
     endYear: policy.assumptions.reformYear + 69,
   }
+  const comparatorAssumptions = {
+    ...assumptions, fundingStrategy: 'paygo' as const,
+    fullRetirementAge: defaultAssumptions.fullRetirementAge,
+    medicareEligibilityAge: defaultAssumptions.medicareEligibilityAge,
+    socialSecurityBenefitCap2026: null,
+  }
+  const health = calculateHealthAnalysis(policy.tax, policy.health)
+  const programSavingsBillions = calculateFederalProgramSavings(policy.transfers)
   const tax = calculateMacro(policy.tax, {
-    insuranceCreditCost: policy.insuranceCreditCostBillions2025,
+    insuranceCreditCost: health.totalHealthCreditCostBillions,
+    federalTransferSavings: programSavingsBillions + health.estimatedExistingAptcSavingsBillions,
   })
   // The 2025 static tax estimate is carried forward as a fixed GDP share.
   // Receipts and refundable credit outlay savings remain separate in the ledger.
@@ -100,21 +117,24 @@ export function scoreCombined(policy: CombinedPolicy) {
     ? (tax.netRevenue - tax.targetRevenue) / tax.gdp : 0
   const outlaySavingsGDP = policy.taxEnabled
     ? tax.totalFederalSavings / tax.gdp : 0
-  const baseline = simulate(assumptions, () => cbo2026RevenueGDP, {}, policy.baselineMode)
+  const fiscalBridge = {
+    otherMandatorySavingsGDP: policy.taxEnabled ? (tax.refundableTaxCreditOutlaySavings + programSavingsBillions) / tax.gdp : 0,
+    medicaidMarketplaceSavingsGDP: policy.taxEnabled ? health.estimatedExistingAptcSavingsBillions / tax.gdp : 0,
+  }
+  const baseline = simulate(comparatorAssumptions, () => cbo2026RevenueGDP, {}, policy.baselineMode)
   const taxOnly = simulate(
-    assumptions,
+    comparatorAssumptions,
     () => cbo2026RevenueGDP + netTaxRevenueChangeGDP,
     {}, policy.baselineMode, undefined,
-    { otherMandatorySavingsGDP: outlaySavingsGDP },
+    fiscalBridge,
   )
   const benefitsOnly = simulate(assumptions, () => cbo2026RevenueGDP, {}, policy.baselineMode, policy.benefits)
   const combined = simulate(
     assumptions,
     () => cbo2026RevenueGDP + netTaxRevenueChangeGDP,
     {}, policy.baselineMode, policy.benefits,
-    { otherMandatorySavingsGDP: outlaySavingsGDP },
+    fiscalBridge,
   )
-  const fiscalBridge = { otherMandatorySavingsGDP: outlaySavingsGDP }
   const goal = (extraRevenueGDP: number) => simulate(
     assumptions,
     () => cbo2026RevenueGDP + netTaxRevenueChangeGDP + extraRevenueGDP,
@@ -124,18 +144,21 @@ export function scoreCombined(policy: CombinedPolicy) {
   // This is an equivalent revenue rate; spending cuts could supply the same amount.
   let low = -0.5
   let high = 0.5
-  for (let i = 0; i < 28; i += 1) {
+  const goalWithinRange = debtGoalMet(goal(high), assumptions.policyHorizonDebtTargetGDP, assumptions.peakDebtCeilingGDP)
+  for (let i = 0; i < 28 && goalWithinRange; i += 1) {
     const middle = (low + high) / 2
-    if (debtGoalMet(goal(middle), assumptions.startingDebtGDP, 1.5)) high = middle
+    if (debtGoalMet(goal(middle), assumptions.policyHorizonDebtTargetGDP, assumptions.peakDebtCeilingGDP)) high = middle
     else low = middle
   }
-  const additionalFiscalAdjustmentGDP = high
+  const additionalFiscalAdjustmentGDP = goalWithinRange ? high : Number.NaN
   const household = householdExamples.map(({ label, input }) => ({
     label,
     difference: policy.taxEnabled ? calculateHousehold(input, policy.tax).dollarChange : 0,
   }))
   return {
     tax,
+    health,
+    programSavingsBillions,
     baseline,
     taxOnly,
     benefitsOnly,

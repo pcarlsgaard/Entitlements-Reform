@@ -54,6 +54,7 @@ export interface BenefitPolicySelection {
 export interface FiscalBridge {
   /** Savings classified in other mandatory spending, as a share of GDP. */
   otherMandatorySavingsGDP: number
+  medicaidMarketplaceSavingsGDP?: number
 }
 
 export function primaryComponentSum(components: PrimaryComponents): number {
@@ -80,8 +81,13 @@ export function simulate(
   selection?: BenefitPolicySelection,
   fiscalBridge?: FiscalBridge,
 ): SimulationResult {
-  if (selection && assumptions.fundingStrategy !== 'paygo') {
+  if (selection && assumptions.fundingStrategy !== 'paygo' &&
+    (!selection.socialSecurityReform || !selection.medicareReform)) {
     throw new Error('Independent benefit switches require PAYGO financing.')
+  }
+  if (assumptions.socialSecurityBenefitCap2026 !== null &&
+    assumptions.fundingStrategy !== 'paygo' && selection?.socialSecurityReform) {
+    throw new Error('The retiree benefit cap requires PAYGO financing.')
   }
   const years: SimulationYear[] = []
   const socialSecurityByYear = new Map()
@@ -172,7 +178,7 @@ export function simulate(
       medicaidChipMarketplace: medicaidChipMarketplaceBillions(
         year,
         assumptions,
-      ),
+      ) - (fiscalBridge?.medicaidMarketplaceSavingsGDP ?? 0) * nominalGDP,
       otherMandatory: otherMandatoryBillions(year, assumptions) -
         (fiscalBridge?.otherMandatorySavingsGDP ?? 0) * nominalGDP,
       defenseDiscretionary: defenseDiscretionaryBillions(year, assumptions),
