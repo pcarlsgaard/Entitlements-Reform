@@ -21,6 +21,8 @@ export interface ModelAssumptions {
   individualFPL2026: number
   realFPLGrowth: number
   fullRetirementAge: number
+  /** Optional CPI-indexed cap on a retiree's annual Social Security benefit (2026 dollars). */
+  socialSecurityBenefitCap2026: number | null
   vestingYears: number
   currentLawSSBenefit2026: number
   currentLawSSBenefitRealGrowth: number

@@ -18,6 +18,7 @@ export const defaultAssumptions: ModelAssumptions = {
   individualFPL2026: 15_960,
   realFPLGrowth: 0,
   fullRetirementAge: 70,
+  socialSecurityBenefitCap2026: null,
   vestingYears: 35,
   currentLawSSBenefit2026: 24_500,
   currentLawSSBenefitRealGrowth: 0.005,

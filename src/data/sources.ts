@@ -17,6 +17,16 @@ export interface SourceRecord {
 
 export const sources: readonly SourceRecord[] = [
   {
+    id: 'combined-tax-health-transfers-2025',
+    kind: 'empirical input',
+    agency: 'Consumption Tax Lab (derived from Census ASEC, MEPS, BEA, CMS and federal program estimates)',
+    datasetOrReport: 'Pinned 2025 tax base, health coverage, and transfer snapshots',
+    publicationDate: '2026-09',
+    relevantTable: 'src/tax/data/ and source snapshot methodology metadata',
+    url: 'https://github.com/pcarlsgaard/tax_reform/tree/c828fdb',
+    notes: 'The combined simulator copies tax, health ESI and nongroup, and seven program savings source snapshots at commit c828fdb. The 2025 tax score is converted to a GDP share and extended over the entitlement model horizon. See COMBINED_MODEL.md for ledger classification and long-run limitations.',
+  },
+  {
     id: 'ssa-life-table-2023',
     kind: 'empirical input',
     agency: 'Social Security Administration',
