@@ -1,5 +1,7 @@
 # Entitlements Reform Simulator
 
+The **Play** tab now provides a combined tax, Social Security, and Medicare fiscal game. It compares current law, tax-only, benefit-only, and combined debt paths over 10 and 70 years, with an explicit fiscal bridge to the tax simulator and illustrative household tax changes. See [`COMBINED_MODEL.md`](COMBINED_MODEL.md) for the accounting, pinned tax source, and limits of the welfare indicators.
+
 A cohort-based simulator for a proposed U.S. Social Security and Medicare entitlement reform.
 
 The project is designed to answer a central fiscal question:

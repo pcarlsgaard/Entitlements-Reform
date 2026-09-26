@@ -13,6 +13,7 @@ import {
   YAxis,
 } from 'recharts'
 import { cbo2026RevenueGDP } from './data/cboBaseline'
+import CombinedGame from './CombinedGame'
 import { sources } from './data/sources'
 import { defaultAssumptions } from './model/defaults'
 import {
@@ -34,7 +35,7 @@ import type {
   SimulationYear,
 } from './model/types'
 
-type Tab = 'policy' | 'results' | 'audit' | 'sources'
+type Tab = 'combined' | 'policy' | 'results' | 'audit' | 'sources'
 type ScenarioChoice = FundingStrategy
 type EntitlementChartView = 'both' | 'socialSecurity' | 'medicare'
 
@@ -889,7 +890,7 @@ function SourcesPanel() {
 
 export default function App() {
   const [assumptions, setAssumptions] = useState(defaultAssumptions)
-  const [tab, setTab] = useState<Tab>('results')
+  const [tab, setTab] = useState<Tab>('combined')
   const [scenarioChoice, setScenarioChoice] = useState<ScenarioChoice>(assumptions.fundingStrategy)
   const deferredAssumptions = useDeferredValue(assumptions)
   const calculating = deferredAssumptions !== assumptions
@@ -976,15 +977,16 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <header className="topbar"><div className="brand"><div className="brand-mark">ER</div><div><strong>Entitlements Reform</strong><span>Cohort fiscal simulator · 2026 reform</span></div></div><nav>{(['policy', 'results', 'audit', 'sources'] as Tab[]).map((item) => <button key={item} className={tab === item ? 'active' : ''} onClick={() => setTab(item)}>{item === 'sources' ? 'Model & Sources' : item}</button>)}</nav><div aria-live="polite" className={`solver-status ${!calculating && allSolversConverged ? 'ok' : 'warn'}`}><span />{calculating ? 'Calculating…' : allSolversConverged ? 'All strategy solvers converged' : 'Check solver bounds'}</div></header>
+      <header className="topbar"><div className="brand"><div className="brand-mark">ER</div><div><strong>Fiscal Reform Lab</strong><span>Taxes · Social Security · Medicare</span></div></div><nav>{(['combined', 'policy', 'results', 'audit', 'sources'] as Tab[]).map((item) => <button key={item} className={tab === item ? 'active' : ''} onClick={() => setTab(item)}>{({ combined: 'Play', policy: 'Entitlement policy', results: 'Entitlement results', audit: 'Audit', sources: 'Model & Sources' })[item]}</button>)}</nav><div aria-live="polite" className={`solver-status ${tab === 'combined' || !calculating && allSolversConverged ? 'ok' : 'warn'}`}><span />{tab === 'combined' ? 'Combined fiscal model' : calculating ? 'Calculating…' : allSolversConverged ? 'All strategy solvers converged' : 'Check solver bounds'}</div></header>
       <main>
         {comparisonAttempt.error && <section className="card model-error"><strong>Those assumptions could not be calculated.</strong><span>{comparisonAttempt.error} Showing the last valid results.</span></section>}
+        {tab === 'combined' && <CombinedGame />}
         {tab === 'policy' && <PolicyPanel assumptions={assumptions} update={update} apply={apply} />}
         {tab === 'results' && <ResultsPanel comparison={comparison} referenceComparison={referenceComparison} macroBudgetChanged={macroBudgetChanged} scenarioChoice={scenarioChoice} setScenarioChoice={setScenarioChoice} />}
         {tab === 'audit' && <AuditPanel scenario={selectedScenario} />}
         {tab === 'sources' && <SourcesPanel />}
       </main>
-      <footer><span>All calculations run client-side.</span><span>Total spending includes net interest.</span><span>{assumptions.policyHorizonYears}-year fiscal cutoff · later years are an actuarial extension.</span></footer>
+      <footer><span>All calculations run client-side.</span><span>Total spending includes net interest.</span><span>{tab === 'combined' ? '70-year combined scenario · see model notes for assumptions.' : `${assumptions.policyHorizonYears}-year fiscal cutoff · later years are an actuarial extension.`}</span></footer>
     </div>
   )
 }
