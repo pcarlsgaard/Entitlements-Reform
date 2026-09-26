@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 2,
+  "dataYear": 2025,
+  "units": "billions_of_dollars",
+  "snapshot": "fred-build-2026-08-10-provisional",
+  "gdp": 30762.099,
+  "components": {
+    "compensation": 15726.91,
+    "netCapitalIncomeAfterInvestment": 8208.031,
+    "netImports": 926.487,
+    "housingAdjustment": -740.489
+  },
+  "compensationComponents": {
+    "cashWagesAndSalaries": 12958.656,
+    "employerGovernmentSocialInsurance": 908.979,
+    "employerPensionAndInsurance": 1859.275,
+    "employerHealthInsurance": 1068.118,
+    "employerPensionAndOtherInsurance": 791.157
+  },
+  "componentFormulas": {
+    "netCapitalIncomeAfterInvestment": "CPROFIT + PROPINC + B471RC1Q027SBEA + COFC + GDITAXES - GPDI",
+    "netImports": "IMPGS - EXPGS",
+    "housingAdjustment": "W988RC1A027NBEA - B952RC1A027NBEA"
+  },
+  "defaultNoncomplianceRate": 0.075,
+  "defaultExemptionShare": 0,
+  "populationsMillions": {
+    "adults": 269.763509,
+    "children": 72.021348
+  },
+  "federalReceipts": {
+    "individualIncome": 2656.044,
+    "payroll": 1748.294,
+    "corporateIncome": 452.089,
+    "customs": 194.866
+  },
+  "sources": [
+    {
+      "label": "FRED / BEA 2025 national accounts",
+      "url": "https://fred.stlouisfed.org/",
+      "note": "Annual averages or annual observations built 2026-08-10; identifiers are versioned in data/fred_series.json."
+    },
+    {
+      "label": "Treasury Monthly Treasury Statement, FY2025",
+      "url": "https://fiscaldata.treasury.gov/datasets/monthly-treasury-statement/summary-of-receipts-outlays-and-the-deficit-surplus-of-the-us-government",
+      "note": "September 2025 Table 4 net receipts: individual, social insurance, corporate, and customs."
+    },
+    {
+      "label": "Census Vintage 2025 population estimates",
+      "url": "https://www.census.gov/newsroom/press-releases/2026/vintage-2025-pop-estimates.html",
+      "note": "July 1, 2025: 72.021 million under 18 and 269.764 million adults."
+    },
+    {
+      "label": "BEA housing-sector value added",
+      "url": "https://fred.stlouisfed.org/series/B952RC1A027NBEA",
+      "note": "2025 remains unavailable; the provisional baseline scales the 2024 observation by nominal GDP growth."
+    }
+  ],
+  "provisional": true,
+  "estimates": {
+    "housingValueAdded": {
+      "method": "prior-year value scaled by nominal GDP growth",
+      "sourceYear": 2024,
+      "sourceValue": 1954.169,
+      "formula": "1954.169 \u00d7 (30762.099 / 29298.013)"
+    }
+  }
+}

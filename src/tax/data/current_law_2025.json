@@ -1,0 +1,40 @@
+{
+  "taxYear": 2025,
+  "standardDeduction": { "single": 15750, "married": 31500 },
+  "brackets": {
+    "single": [[11925, 0.10], [48475, 0.12], [103350, 0.22], [197300, 0.24], [250525, 0.32], [626350, 0.35], [null, 0.37]],
+    "married": [[23850, 0.10], [96950, 0.12], [206700, 0.22], [394600, 0.24], [501050, 0.32], [751600, 0.35], [null, 0.37]]
+  },
+  "payroll": {
+    "socialSecurityRateEach": 0.062,
+    "socialSecurityWageCap": 176100,
+    "medicareRateEach": 0.0145,
+    "additionalMedicareRate": 0.009,
+    "additionalMedicareThreshold": { "single": 200000, "married": 250000 }
+  },
+  "childTaxCredit": {
+    "perChild": 2200,
+    "refundablePerChild": 1700,
+    "refundEarnedIncomeFloor": 2500,
+    "refundRate": 0.15,
+    "phaseoutThreshold": { "single": 200000, "married": 400000 },
+    "phaseoutPerThousand": 50
+  },
+  "eitc": {
+    "0": { "phaseInRate": 0.0765, "maximum": 649, "phaseOutRate": 0.0765, "phaseOutStart": { "single": 10620, "married": 17730 } },
+    "1": { "phaseInRate": 0.34, "maximum": 4328, "phaseOutRate": 0.1598, "phaseOutStart": { "single": 23350, "married": 30470 } },
+    "2": { "phaseInRate": 0.40, "maximum": 7152, "phaseOutRate": 0.2106, "phaseOutStart": { "single": 23350, "married": 30470 } },
+    "3": { "phaseInRate": 0.45, "maximum": 8046, "phaseOutRate": 0.2106, "phaseOutStart": { "single": 23350, "married": 30470 } }
+  },
+  "sources": [
+    "https://www.irs.gov/filing/federal-income-tax-rates-and-brackets",
+    "https://www.irs.gov/newsroom/new-and-enhanced-deductions-for-individuals",
+    "https://www.irs.gov/credits-deductions/individuals/refundable-tax-credits",
+    "https://www.irs.gov/irb/2024-45_IRB",
+    "https://www.ssa.gov/news/en/cola/factsheets/2025.html"
+  ],
+  "limitations": [
+    "Wage-only illustration; no itemized deductions or nonwage income.",
+    "OBBBA deductions for tips, overtime, car-loan interest, and seniors require inputs outside this model and are not included."
+  ]
+}

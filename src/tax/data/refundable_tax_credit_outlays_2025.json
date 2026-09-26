@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "baselineLabel": "FY2025 refundable individual-income-tax credit outlays",
+  "fiscalYear": "FY2025 actual",
+  "policyTiming": "Payments recorded during FY2025, primarily for tax year 2024 returns",
+  "agency": "U.S. Department of the Treasury, Bureau of the Fiscal Service",
+  "sourceTitle": "Combined Statement of Receipts, Outlays, and Balances of the United States Government for Fiscal Year 2025, Department of the Treasury",
+  "sourceUrl": "https://fiscal.treasury.gov/system/files/files/reports-statements/combined-statement/cs2025/c40.pdf",
+  "items": [
+    {
+      "id": "eitcRefundableOutlay",
+      "label": "Earned Income Tax Credit — refundable excess",
+      "account": "020-0906",
+      "line": "Refundable earned income tax credit",
+      "actualOutlaysDollars": 66007446602.84,
+      "actualOutlaysBillions": 66.00744660284,
+      "budgetTreatment": "Mandatory outlay: payment exceeding the household's positive income-tax liability."
+    },
+    {
+      "id": "refundableChildTaxCreditOutlay",
+      "label": "Child Tax Credit — refundable excess (ACTC)",
+      "account": "020-0922",
+      "line": "Refundable child tax credit",
+      "actualOutlaysDollars": 26566761272.76,
+      "actualOutlaysBillions": 26.56676127276,
+      "budgetTreatment": "Mandatory outlay: payment exceeding the household's positive income-tax liability."
+    }
+  ],
+  "accountingNote": "The nonrefundable and liability-offset portions reduce individual income tax receipts and are already embedded in the simulator's FY2025 receipts target. Only the refundable excess recorded as an outlay is an additional automatic fiscal saving when individual income taxation is replaced."
+}

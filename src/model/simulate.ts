@@ -45,6 +45,17 @@ export interface InitialFiscalState {
   effectiveNominalInterestRate?: number
 }
 
+/** Optional independent benefit choices for the combined fiscal view. */
+export interface BenefitPolicySelection {
+  socialSecurityReform: boolean
+  medicareReform: boolean
+}
+
+export interface FiscalBridge {
+  /** Savings classified in other mandatory spending, as a share of GDP. */
+  otherMandatorySavingsGDP: number
+}
+
 export function primaryComponentSum(components: PrimaryComponents): number {
   return (
     components.legacySocialSecurity +
@@ -66,11 +77,18 @@ export function simulate(
   revenueSchedule: RevenueSchedule,
   initialState: InitialFiscalState = {},
   currentLawBaselineMode?: CurrentLawBaselineMode,
+  selection?: BenefitPolicySelection,
+  fiscalBridge?: FiscalBridge,
 ): SimulationResult {
+  if (selection && assumptions.fundingStrategy !== 'paygo') {
+    throw new Error('Independent benefit switches require PAYGO financing.')
+  }
   const years: SimulationYear[] = []
   const socialSecurityByYear = new Map()
   const medicareByYear = new Map()
-  const fundingPlan = currentLawBaselineMode
+  const fundingPlan = (selection
+    ? !selection.socialSecurityReform && !selection.medicareReform
+    : Boolean(currentLawBaselineMode))
     ? null
     : fundingPlanForAssumptions(assumptions)
   const gdpGrowth = nominalGDPGrowth(assumptions)
@@ -87,7 +105,7 @@ export function simulate(
     year <= assumptions.endYear;
     year += 1
   ) {
-    const socialSecurity = currentLawBaselineMode
+    const socialSecurity = (selection ? !selection.socialSecurityReform : Boolean(currentLawBaselineMode))
       ? socialSecurityForYear(year, assumptions, 'currentLaw')
       : socialSecurityForYear(
           year,
@@ -104,7 +122,7 @@ export function simulate(
             )
           },
         )
-    const medicare = currentLawBaselineMode
+    const medicare = (selection ? !selection.medicareReform : Boolean(currentLawBaselineMode))
       ? medicareForYear(year, assumptions, undefined, 'currentLaw')
       : medicareForYear(year, assumptions, (eligibilityYear) => {
           const fundingYear =
@@ -114,7 +132,7 @@ export function simulate(
           return fundingPlan?.get(fundingYear)?.medicarePrefundedShare ?? 0
         })
     let funding: AnnualFundingPlan
-    if (currentLawBaselineMode) {
+    if (!fundingPlan) {
       funding = {
         year,
         fullSocialSecurityPrefundingCost: 0,
@@ -155,7 +173,8 @@ export function simulate(
         year,
         assumptions,
       ),
-      otherMandatory: otherMandatoryBillions(year, assumptions),
+      otherMandatory: otherMandatoryBillions(year, assumptions) -
+        (fiscalBridge?.otherMandatorySavingsGDP ?? 0) * nominalGDP,
       defenseDiscretionary: defenseDiscretionaryBillions(year, assumptions),
       nonDefenseDiscretionary: nonDefenseDiscretionaryBillions(
         year,
