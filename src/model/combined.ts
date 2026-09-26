@@ -33,6 +33,7 @@ export const defaultCombinedPolicy: CombinedPolicy = {
     progressiveIntermediateRate: 0.30,
     progressiveTopBracketPerAdult: 150_000,
     adultCredit: 2_000,
+    adultCreditEarningsBase: 'compensation',
     adultCreditPhaseInRate: 0.10,
     adultCreditPhaseOutRate: 0,
     childCredit: 12_000,

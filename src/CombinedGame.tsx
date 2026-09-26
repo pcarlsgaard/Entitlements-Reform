@@ -42,9 +42,9 @@ function Toggle({ label, checked, onChange, note }: { label: string; checked: bo
 function Select({ label, value, options, onChange }: { label: string; value: string; options: { value: string; label: string }[]; onChange: (v: string) => void }) {
   return <label className="game-field"><span>{label}</span><select value={value} onChange={e => onChange(e.target.value)}>{options.map(o => <option value={o.value} key={o.value}>{o.label}</option>)}</select></label>
 }
-function Chart({ title, data, lines, stacked = false, note }: { title: string; data: Record<string, number>[]; lines: { key: string; color: string }[]; stacked?: boolean; note?: string }) {
+function Chart({ title, data, lines, stacked = false, note, unit = '% of GDP' }: { title: string; data: Record<string, number>[]; lines: { key: string; color: string }[]; stacked?: boolean; note?: string; unit?: string }) {
   const Graph = stacked ? ComposedChart : LineChart
-  return <section className="game-card game-chart"><div className="game-chart-heading"><div><h2>{title}</h2>{note && <p>{note}</p>}</div><span>% of GDP</span></div>
+  return <section className="game-card game-chart"><div className="game-chart-heading"><div><h2>{title}</h2>{note && <p>{note}</p>}</div><span>{unit}</span></div>
     <div className="game-chart-area"><ResponsiveContainer width="100%" height="100%"><Graph data={data} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}><CartesianGrid stroke="#e7ecf1" vertical={false} /><XAxis dataKey="year" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} width={60} tickFormatter={n => `${n}%`} /><Tooltip formatter={n => `${Number(n).toFixed(1)}%`} /><Legend />
       {lines.map(({ key, color }) => stacked ? <Area key={key} type="monotone" dataKey={key} stackId="total" fill={color} fillOpacity={.8} stroke={color} dot={false} /> : <Line key={key} type="monotone" dataKey={key} stroke={color} strokeWidth={key === 'Combined' ? 3 : 2} dot={false} />)}
     </Graph></ResponsiveContainer></div></section>
@@ -61,11 +61,11 @@ export default function CombinedGame() {
   const setBenefits = (patch: Partial<CombinedPolicy['benefits']>) => setPolicy(p => ({ ...p, benefits: { ...p.benefits, ...patch } }))
   const a = policy.assumptions, t = policy.tax, h = policy.health
   const numA = (key: keyof ModelAssumptions, label: string, multiplier = 1, min = 0, max?: number, step = 0.1, suffix?: string, note?: string) =>
-    <NumberField key={key} label={label} value={Number(a[key]) * multiplier} onChange={n => setA({ [key]: n / multiplier })} min={min} max={max} step={step} suffix={suffix} note={note} />
+    <NumberField key={key} label={label} value={Math.round(Number(a[key]) * multiplier * 1000) / 1000} onChange={n => setA({ [key]: n / multiplier })} min={min} max={max} step={step} suffix={suffix} note={note} />
   const numT = (key: keyof ReformSettings, label: string, multiplier = 1, min = 0, max?: number, step = 1, suffix?: string) =>
-    <NumberField key={key} label={label} value={Number(t[key] ?? 0) * multiplier} onChange={n => setTax({ [key]: n / multiplier })} min={min} max={max} step={step} suffix={suffix} />
+    <NumberField key={key} label={label} value={Math.round(Number(t[key] ?? 0) * multiplier * 1000) / 1000} onChange={n => setTax({ [key]: n / multiplier })} min={min} max={max} step={step} suffix={suffix} />
   const numH = (key: keyof HealthPolicySettings, label: string, multiplier = 1, min = 0, max?: number, step = 1, suffix?: string) =>
-    <NumberField key={key} label={label} value={Number(h[key]) * multiplier} onChange={n => setHealth({ [key]: n / multiplier })} min={min} max={max} step={step} suffix={suffix} />
+    <NumberField key={key} label={label} value={Math.round(Number(h[key]) * multiplier * 1000) / 1000} onChange={n => setHealth({ [key]: n / multiplier })} min={min} max={max} step={step} suffix={suffix} />
   const [decade, horizon] = score.periods as [typeof score.periods[number], typeof score.periods[number]]
   const sampled = score.combined.years.filter(row => row.year === 2026 || row.year % 5 === 0 || row.year === 2095)
   const graph = sampled.map(row => {
@@ -150,7 +150,7 @@ export default function CombinedGame() {
           <Chart title="Social Security: legacy and flat benefits" data={graph} lines={[{key:'Baseline SS',color:'#8292a6'},{key:'Legacy SS',color:'#4584ad'},{key:'Flat SS',color:'#168565'}]} />
           <Chart title="Medicare: legacy and premium support" data={graph} lines={[{key:'Baseline Medicare',color:'#8292a6'},{key:'Legacy Medicare',color:'#c58a3d'},{key:'Premium support',color:'#168565'}]} />
           <Chart title="Prefunding flows" note="Cohort deposits and avoided PAYGO, when selected." data={graph} lines={[{key:'SS deposits',color:'#4584ad'},{key:'Medicare deposits',color:'#168565'},{key:'Avoided SS PAYGO',color:'#c58a3d'}]} />
-          <Chart title="Interest rates" data={graph} lines={[{key:'Market rate',color:'#7089b5'},{key:'Effective rate',color:'#cf8c69'}]} />
+          <Chart title="Interest rates" unit="Annual percent" data={graph} lines={[{key:'Market rate',color:'#7089b5'},{key:'Effective rate',color:'#cf8c69'}]} />
         </div><section className="game-card"><h2>Budget ledger · selected years</h2><div className="game-table-wrap"><table className="game-table"><thead><tr><th>Year</th><th>Receipts</th><th>SS</th><th>Medicare</th><th>Other primary</th><th>Interest</th><th>Deficit</th><th>Debt / GDP</th></tr></thead><tbody>{score.combined.years.filter(row=>[2026,2035,2050,2075,2095].includes(row.year)).map(row=>{const d=row.nominalGDP;return <tr key={row.year}><th>{row.year}</th><td>{pct(row.revenue/d)}</td><td>{pct((row.legacySocialSecurity+row.flatSocialSecurityPaygo+row.otherOASDI)/d)}</td><td>{pct((row.legacySeniorMedicare+row.premiumSupportPaygo+row.under65Medicare)/d)}</td><td>{pct((row.totalPrimarySpending-row.legacySocialSecurity-row.flatSocialSecurityPaygo-row.otherOASDI-row.legacySeniorMedicare-row.premiumSupportPaygo-row.under65Medicare)/d)}</td><td>{pct(row.netInterest/d)}</td><td>{pct(row.overallDeficit/d)}</td><td>{ratio(row.endingDebtGDP)}</td></tr>})}</tbody></table></div></section><p className="game-caveat">Scores measure budget and debt, not net welfare. This model keeps the 2025 static tax estimate constant as a GDP share, uses a simplified old-age cohort model, and extends CBO spending shares beyond their published horizon. The debt plot clips paths beyond 1,000% of GDP; exact values remain in the ledger. Results depend strongly on growth and benefit assumptions.</p></div>}
     </main></div>
 }
