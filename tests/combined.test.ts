@@ -28,6 +28,10 @@ describe('combined fiscal bridge', () => {
       -result.tax.deficitReductionPercentGdp * year.nominalGDP, 6,
     )
     expect(result.additionalFiscalAdjustmentGDP).toBeGreaterThan(0)
+    const gdpYears = result.combined.years.reduce((sum, row) => sum + row.nominalGDP, 0)
+    expect(result.periods[1]!.fiscalImprovementGDP).toBeCloseTo(
+      result.periods[1]!.fiscalImprovementBillions / gdpYears, 10,
+    )
   })
 
   it('switches Social Security and Medicare independently while retaining the other baseline', () => {

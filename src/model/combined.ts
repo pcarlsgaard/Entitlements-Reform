@@ -48,6 +48,8 @@ export interface PeriodScore {
   cumulativeDeficitBillions: number
   cumulativeDeficitGDP: number
   fiscalImprovementBillions: number
+  /** Improvement divided by the sum of nominal GDP over the window. */
+  fiscalImprovementGDP: number
   terminalDebtGDP: number
   baselineTerminalDebtGDP: number
   peakDebtGDP: number
@@ -65,6 +67,7 @@ function period(sim: SimulationResult, baseline: SimulationResult, through: numb
     cumulativeDeficitBillions,
     cumulativeDeficitGDP: cumulativeDeficitBillions / gdpYears,
     fiscalImprovementBillions: baselineDeficit - cumulativeDeficitBillions,
+    fiscalImprovementGDP: (baselineDeficit - cumulativeDeficitBillions) / gdpYears,
     terminalDebtGDP: rows.at(-1)!.endingDebtGDP,
     baselineTerminalDebtGDP: comparator.at(-1)!.endingDebtGDP,
     peakDebtGDP: Math.max(...rows.map((row) => row.endingDebtGDP)),
