@@ -121,6 +121,16 @@ export const sources: readonly SourceRecord[] = [
     publicationDate: '2026-08-26',
     relevantTable: 'src/data/cboBaseline.ts and src/model/defaults.ts',
     url: 'https://github.com/pcarlsgaard/Entitlements-Reform',
-    notes: 'Eligibility populations apply SSA survival from birth. Through 2056 old-age SS and senior Medicare legacy spending is scaled by year to CBO totals net of separately displayed other-OASDI and under-65/offsetting-receipts components. After 2056 the 2056 calibration factor is held fixed; cohort sizes and explicit benefit growth drive legacy costs. Flat Social Security and gross premium support remain policy promises and are not rescaled.',
+    notes: 'Eligibility populations apply SSA survival from birth. Through 2056 old-age SS and senior Medicare legacy spending is scaled by year to CBO totals net of separately displayed other-OASDI and under-65/offsetting-receipts components. After 2056 the 2056 calibration factor is held fixed; cohort sizes and explicit benefit growth drive legacy costs. Flat Social Security and the full federal premium-support contribution remain policy promises and are not rescaled. CBO legacy allocation factors calibrate aggregate fiscal costs only; household Social Security uses the separate individual award primitive and inflation-only post-retirement COLAs.',
+  },
+  {
+    id: 'ssa-claiming-cola-convention',
+    kind: 'modeling assumption',
+    agency: 'Social Security Administration / model implementation',
+    datasetOrReport: 'Retirement age and cost-of-living adjustments',
+    publicationDate: 'accessed 2026-09-27',
+    relevantTable: 'Full retirement age and annual COLA rules',
+    url: 'https://www.ssa.gov/benefits/retirement/planner/agereduction.html',
+    notes: 'Current-law comparison uses a simplified common claiming age of 67, the FRA for births in 1960 onward; early claiming from 62 and actuarial adjustments are omitted. Existing modeled retirees are grandfathered when reform raises the age. Initial awards grow with the real new-award assumption; after retirement only inflation COLAs apply, consistent with https://www.ssa.gov/oact/cola/colaseries.html. The explicit 2026 individual benefit is independent of aggregate CBO calibration.',
   },
 ]

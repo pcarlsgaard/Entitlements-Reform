@@ -5,7 +5,7 @@ import {
   cboCalibrationOtherOASDIGDP,
   cboSocialSecurityGDP,
 } from '../data/cboBaseline'
-import { defaultAssumptions } from './defaults'
+import { currentLawRetirementAge, defaultAssumptions } from './defaults'
 import {
   fullyPrefundsSocialSecurity,
   usesSavingsFundedSequence,
@@ -42,6 +42,14 @@ export function flatBenefitReal(
     assumptions.flatBenefitFPLMultiple *
     (1 + assumptions.realFPLGrowth) ** (year - assumptions.reformYear)
   )
+}
+
+/** Real growth affects new awards only. Existing awards receive inflation COLAs. */
+export function legacySocialSecurityBenefitNominal(retirementYear: number, year: number,
+  assumptions: ModelAssumptions): number {
+  return assumptions.currentLawSSBenefit2026 *
+    (1 + assumptions.currentLawSSBenefitRealGrowth) ** Math.max(0, retirementYear - assumptions.reformYear) *
+    (1 + assumptions.inflation) ** (year - assumptions.reformYear)
 }
 
 export function firstPrefundedSSRetirementYear(
@@ -113,30 +121,29 @@ function rawSocialSecurityForYear(
     )
   }
   const cohorts: SSCohortAudit[] = []
-  const firstRetirementYear =
-    year - (assumptions.maxModeledAge - assumptions.fullRetirementAge)
   const inflationFactor =
     (1 + assumptions.inflation) ** (year - assumptions.reformYear)
-  const currentLawBenefit =
-    assumptions.currentLawSSBenefit2026 *
-    (1 + assumptions.currentLawSSBenefitRealGrowth) **
-      (year - assumptions.reformYear) *
-    inflationFactor
   const flatBenefit = flatBenefitReal(year, assumptions) * inflationFactor
 
   for (
-    let retirementYear = firstRetirementYear;
-    retirementYear <= year;
-    retirementYear += 1
+    let age = assumptions.maxModeledAge;
+    age >= Math.min(currentLawRetirementAge, assumptions.fullRetirementAge);
+    age -= 1
   ) {
-    const age = assumptions.fullRetirementAge + year - retirementYear
+    const birthYear = year - age
+    const alreadyRetired = assumptions.reformYear - birthYear >= currentLawRetirementAge
+    const retirementAge = entitlementDesign === 'currentLaw' || alreadyRetired
+      ? currentLawRetirementAge : assumptions.fullRetirementAge
+    if (age < retirementAge) continue
+    const retirementYear = birthYear + retirementAge
+    const currentLawBenefit = legacySocialSecurityBenefitNominal(retirementYear, year, assumptions)
     const survivalFraction = survivalProbability(
-      assumptions.fullRetirementAge,
+      retirementAge,
       age,
     )
     const initialCohortMillions = cohortSizeAtAgeMillions(
       retirementYear,
-      assumptions.fullRetirementAge,
+      retirementAge,
       assumptions,
     )
     const survivingBeneficiariesMillions =
@@ -163,6 +170,8 @@ function rawSocialSecurityForYear(
     const flatPaygoBillions = flatBenefitBillions * (1 - prefundedShare)
 
     cohorts.push({
+      birthYear,
+      legacyBenefitPerPerson: currentLawBenefit,
       retirementYear,
       initialCohortMillions,
       survivingBeneficiariesMillions,
@@ -199,8 +208,10 @@ function rawSocialSecurityForYear(
 /**
  * Calibrate the current-law-formula retirement slice to CBO's total Social
  * Security baseline less the separately shown other-OASDI component. The same
- * annual factor applies to every legacy cohort, preserving cohort shares and
- * mortality. The flat benefit remains the unscaled policy promise.
+ * annual factor applies to the aggregate legacy ledger, preserving cohort shares
+ * and mortality. It is not an individual benefit index: household checks use
+ * legacyBenefitPerPerson before this fiscal allocation factor. The flat benefit
+ * remains the unscaled policy promise.
  */
 export function socialSecurityForYear(
   year: number,

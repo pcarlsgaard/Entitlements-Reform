@@ -168,7 +168,9 @@ function rawMedicareForYear(
 /**
  * Calibrate the legacy senior slice so scheduled current law plus the explicit
  * under-65/offsetting-receipts component equals CBO's net Medicare baseline.
- * Premium support remains the unscaled gross policy promise.
+ * Premium support is the unscaled federal contribution. Beneficiary premiums
+ * paid directly to a plan are outside that grant, so it is already a net
+ * federal cost; no additional premium offset is subtracted from the grant.
  */
 export function medicareForYear(
   year: number,

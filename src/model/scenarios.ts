@@ -1,3 +1,4 @@
+import { currentLawRetirementAge } from './defaults'
 import { withAssumptions } from './defaults'
 import {
   fundingStrategies,
@@ -130,6 +131,8 @@ function calculateCurrentLawBaseline(
   const baselineAssumptions = withAssumptions({
     ...assumptions,
     fundingStrategy: 'paygo',
+    fullRetirementAge: currentLawRetirementAge,
+    socialSecurityBenefitCap2026: null,
   })
   const permanent = solvePermanentRevenueRateWithSimulator(
     baselineAssumptions,

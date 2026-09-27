@@ -6,7 +6,7 @@ import type { HealthPolicySettings } from '../tax/model/health'
 import { calculateFederalProgramSavings, defaultTransferReplacementSettings } from '../tax/model/transfers'
 import type { TransferReplacementSettings } from '../tax/model/types'
 import type { HouseholdInput, ReformSettings } from '../tax/model/types'
-import { defaultAssumptions } from './defaults'
+import { currentLawRetirementAge, defaultAssumptions } from './defaults'
 import { simulate } from './simulate'
 import type { BenefitPolicySelection } from './simulate'
 import type { CurrentLawBaselineMode, ModelAssumptions, SimulationResult } from './types'
@@ -131,7 +131,7 @@ export function scoreCombined(policy: CombinedPolicy) {
   const assumptions: ModelAssumptions = {
     ...policy.assumptions,
     fullRetirementAge: policy.benefits.socialSecurityReform
-      ? policy.assumptions.fullRetirementAge : defaultAssumptions.fullRetirementAge,
+      ? policy.assumptions.fullRetirementAge : currentLawRetirementAge,
     medicareEligibilityAge: policy.benefits.medicareReform
       ? policy.assumptions.medicareEligibilityAge : defaultAssumptions.medicareEligibilityAge,
     socialSecurityBenefitCap2026: policy.benefits.socialSecurityReform
@@ -143,7 +143,7 @@ export function scoreCombined(policy: CombinedPolicy) {
   }
   const comparatorAssumptions = {
     ...assumptions, fundingStrategy: 'paygo' as const,
-    fullRetirementAge: defaultAssumptions.fullRetirementAge,
+    fullRetirementAge: currentLawRetirementAge,
     medicareEligibilityAge: defaultAssumptions.medicareEligibilityAge,
     socialSecurityBenefitCap2026: null,
   }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { defaultCombinedPolicy, scoreCombined } from '../src/model/combined'
-import { exampleHouseholds, scoreExampleHousehold } from '../src/model/householdScenario'
+import { exampleHouseholds, lastHouseholdYear, scoreExampleHousehold } from '../src/model/householdScenario'
 
 const example = (id: string) => exampleHouseholds.find(row => row.id === id)!
 
@@ -43,11 +43,43 @@ describe('cohort-linked household snapshots', () => {
     const score = scoreCombined(policy)
     const near = scoreExampleHousehold(example('near-retiree'), 2030, policy, score.baseline, score.combined)!
     expect(near.ages).toEqual([68])
-    expect(near.baselineSocialSecurity).toBe(0)
+    expect(near.baselineSocialSecurity).toBeGreaterThan(0)
     expect(near.reformSocialSecurity).toBeGreaterThan(0)
     expect(near.reformSocialSecurity).toBeLessThanOrEqual(18_000 * 1.02 ** 4 + 1e-8)
+    const earlier = scoreExampleHousehold(example('near-retiree'), 2029, policy, score.baseline, score.combined)!
+    expect(earlier.baselineSocialSecurity).toBeGreaterThan(0)
+    expect(earlier.reformSocialSecurity).toBe(0)
     const old = scoreExampleHousehold(example('retired-couple'), 2095, policy, score.baseline, score.combined)
     expect(old).toBeNull()
+  })
+
+  it('keeps existing retirees and future retirement cohorts at constant real checks after retirement', () => {
+    const policy = { ...defaultCombinedPolicy, taxEnabled: false,
+      benefits: { socialSecurityReform: true, medicareReform: false } }
+    const score = scoreCombined(policy)
+    expect(score.baseline.assumptions.fullRetirementAge).toBe(67)
+    const real = (profile: typeof exampleHouseholds[number], year: number) => {
+      const r = scoreExampleHousehold(profile, year, policy, score.baseline, score.combined)!
+      return [r.baselineSocialSecurity, r.reformSocialSecurity].map(x => x / 1.02 ** (year - 2026))
+    }
+    const retired = example('retired-couple')
+    expect(real(retired, 2026)).toEqual([49000, 49000])
+    real(retired, 2055).forEach((value, index) => expect(value).toBeCloseTo(real(retired, 2026)[index]!, 7))
+    const young = example('younger-worker')
+    real(young, 2080).forEach((value, index) => expect(value).toBeCloseTo(real(young, 2070)[index]!, 7))
+    const grandfathered = { ...example('near-retiree'), primaryAge2026: 68 }
+    expect(real(grandfathered, 2026)).toEqual([24500, 24500])
+    expect(lastHouseholdYear(example('near-retiree'), policy)).toBe(2072)
+  })
+
+  it('shows the complete federal Medicare grant without treating it as household cash', () => {
+    const policy = { ...defaultCombinedPolicy, taxEnabled: false,
+      benefits: { socialSecurityReform: false, medicareReform: true } }
+    const score = scoreCombined(policy)
+    const r = scoreExampleHousehold(example('retired-couple'), 2035, policy, score.baseline, score.combined)!
+    expect(r.reformMedicarePayment).toBeCloseTo(2 * policy.assumptions.premiumSupport2026 *
+      (1 + policy.assumptions.premiumSupportRealGrowth) ** 9 * 1.02 ** 9, 7)
+    expect(r.cashChange).toBe(0)
   })
 
   it('counts gross prefunded Medicare support even when PAYGO spending is zero', () => {

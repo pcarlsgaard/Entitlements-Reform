@@ -30,6 +30,7 @@ export interface ModelAssumptions {
   prefundingStartAge: FundingStartAge
   realEndowmentYield: number
   medicareEligibilityAge: number
+  /** Federal contribution, not total insurance premium; beneficiary financing is outside this grant. */
   premiumSupport2026: number
   premiumSupportRealGrowth: number
   legacyMedicareCost2026: number
@@ -63,6 +64,9 @@ export interface BenefitShares {
 }
 
 export interface SSCohortAudit extends BenefitShares {
+  birthYear: number
+  /** Nominal individual legacy benefit before blend, cap, and aggregate CBO calibration. */
+  legacyBenefitPerPerson: number
   retirementYear: number
   initialCohortMillions: number
   survivingBeneficiariesMillions: number
