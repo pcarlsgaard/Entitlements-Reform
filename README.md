@@ -1,6 +1,6 @@
 # Entitlements Reform Simulator
 
-The five-tab game combines economic assumptions, the full consumption-tax and health/transfer controls, Social Security and Medicare policy, editable annual household examples, and detailed results. A fiscal score remains visible across tabs. Optional fast labor-response scoring compares an illustrative GDP and revenue feedback with the original static path. It compares current law, tax-only, benefit-only, and combined debt paths over 10 and 70 years, with an explicit federal budget bridge and illustrative household tax changes. See [`COMBINED_MODEL.md`](COMBINED_MODEL.md) for the accounting, pinned tax source, and limits of the welfare indicators.
+The five-tab game combines economic assumptions, the full consumption-tax and health/transfer controls, Social Security and Medicare policy, editable annual household examples, and detailed results. A fiscal score remains visible across tabs. Optional fast labor and capital response scoring compares an illustrative GDP and revenue feedback with the original static path. It compares current law, tax-only, benefit-only, and combined debt paths over 10 and 70 years, with an explicit federal budget bridge and illustrative household tax changes. See [`COMBINED_MODEL.md`](COMBINED_MODEL.md) for the accounting, pinned tax source, and limits of the welfare indicators.
 
 A cohort-based simulator for a proposed U.S. Social Security and Medicare entitlement reform.
 
@@ -65,7 +65,7 @@ The primary score uses a 70-year policy horizon through 2095, with companion 30-
 
 The 2026 scheduled-current-law calibration reconciles category by category to CBO: 5.222% of GDP for total Social Security, 3.332% for net Medicare, 2.64997% for Medicaid/CHIP/marketplace subsidies, 2.994% for other mandatory spending, 2.773% for defense discretionary, and 3.121% for nondefense discretionary. Those components sum to 20.092% primary spending; adding 3.257% net interest produces 23.348% total spending. CBO's 17.541% revenue and 100.605% debt/GDP are also loaded exactly, although the UI rounds headline labels. Social Security and Medicare policy slices remain separate, with explicit subtotals that match CBO. Reform prefunding deposits appear on top of the baseline.
 
-The CBO category paths run through 2056. The simulator holds the final published shares after 2056 as an actuarial stress test, not a CBO forecast. The macro engine remains stylized: it uses the selected constant real GDP growth and inflation assumptions rather than importing CBO's year-specific macro forecast.
+The CBO category paths run through 2056. After 2056 the simulator holds the old-age Social Security and senior Medicare per-beneficiary calibration factors fixed, then projects benefits using the selected real benefit growth, inflation and cohort survival. Other category shares remain at their last published GDP ratios. The household comparison defaults to 2026 dollars, with nominal display optional; post-2056 projections are modeled stress tests, not CBO forecasts. The macro engine remains stylized: it uses the selected constant real GDP growth and inflation assumptions rather than importing CBO's year-specific macro forecast.
 
 ## Core modeling principle
 

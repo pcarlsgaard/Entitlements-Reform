@@ -1,5 +1,6 @@
 import { survivalProbability } from './mortality'
 import {
+  cboBaselineEndYear,
   cboCalibrationNominalGDPBillions,
   cboCalibrationOtherOASDIGDP,
   cboSocialSecurityGDP,
@@ -218,14 +219,19 @@ export function socialSecurityForYear(
     defaultAssumptions,
     'currentLaw',
   )
+  const calibrationYear = Math.min(year, cboBaselineEndYear)
   const targetLegacyBillions =
     Math.max(
       0,
-      cboSocialSecurityGDP(year) - cboCalibrationOtherOASDIGDP,
-    ) * cboCalibrationNominalGDPBillions(year)
+      cboSocialSecurityGDP(calibrationYear) - cboCalibrationOtherOASDIGDP,
+    ) * cboCalibrationNominalGDPBillions(calibrationYear)
+  // Beyond CBO's published window, retain its last formula calibration and
+  // let modeled cohort counts and the stated real benefit growth govern costs.
+  const calibrationCurrentLaw = calibrationYear === year ? centralCurrentLaw :
+    rawSocialSecurityForYear(calibrationYear, defaultAssumptions, 'currentLaw')
   const legacyScale =
-    centralCurrentLaw.legacyBillions > 0
-      ? targetLegacyBillions / centralCurrentLaw.legacyBillions
+    calibrationCurrentLaw.legacyBillions > 0
+      ? targetLegacyBillions / calibrationCurrentLaw.legacyBillions
       : 1
 
   const cohorts = result.cohorts.map((cohort) => {

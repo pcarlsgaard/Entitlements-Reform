@@ -27,6 +27,11 @@ export interface CombinedPolicy {
     laborShareGDP: number
     /** Years from enactment until the new GDP level is reached. */
     phaseInYears: number
+    /** Long-run GDP level from cash-flow treatment at the 21% reference rate. */
+    capitalGDPLevelAtReference: number
+    /** Fractional response of capital effect to proportional rate changes. */
+    capitalRateSensitivity: number
+    capitalPhaseInYears: number
   }
 }
 
@@ -55,7 +60,8 @@ export const defaultCombinedPolicy: CombinedPolicy = {
   // the entitlement solver's separate default still uses its 2 bp sensitivity.
   assumptions: { ...defaultAssumptions, fundingStrategy: 'paygo', endYear: 2095, debtSensitivity: 0 },
   baselineMode: 'scheduled',
-  dynamic: { enabled: false, laborElasticity: 0.15, laborShareGDP: 0.60, phaseInYears: 10 },
+  dynamic: { enabled: false, laborElasticity: 0.15, laborShareGDP: 0.60, phaseInYears: 10,
+    capitalGDPLevelAtReference: 0.014, capitalRateSensitivity: 0.15, capitalPhaseInYears: 15 },
 }
 
 /** Eight illustrative wage/filing scenarios, weighted by compensation, not a national microdata estimate. */
@@ -161,9 +167,22 @@ export function scoreCombined(policy: CombinedPolicy) {
     ? illustrativeNetWageResponse(policy) : 0
   const steadyGDPLevelChange = Math.max(-0.05, Math.min(0.05,
     netWageLogChange * policy.dynamic.laborElasticity * policy.dynamic.laborShareGDP))
+  // The Tax Foundation's 21% DBCFT estimate replaces both corporate and
+  // pass-through business taxation. These two switches jointly proxy that
+  // change in tax base; the X-tax rate changes its capital response only mildly.
+  const capitalBaseReplaced = policy.taxEnabled && policy.dynamic.enabled &&
+    policy.tax.replacedTaxes.corporateIncome && policy.tax.replacedTaxes.individualIncome
+  const capitalRateFactor = Math.max(0, Math.min(2,
+    1 + policy.dynamic.capitalRateSensitivity * (policy.tax.rate / 0.21 - 1)))
+  const steadyCapitalGDPLevelChange = capitalBaseReplaced ?
+    Math.max(-0.03, Math.min(0.03, policy.dynamic.capitalGDPLevelAtReference * capitalRateFactor)) : 0
+  const steadyCapitalStockChange = steadyCapitalGDPLevelChange * (0.026 / 0.014)
+  const steadyCapitalWageChange = steadyCapitalGDPLevelChange * (0.013 / 0.014)
   const dynamicGDP = policy.taxEnabled && policy.dynamic.enabled ? (year: number) =>
     1 + steadyGDPLevelChange * Math.min(1,
-      Math.max(0, (year - assumptions.reformYear) / policy.dynamic.phaseInYears)) : undefined
+      Math.max(0, (year - assumptions.reformYear) / Math.max(1, policy.dynamic.phaseInYears))) +
+      steadyCapitalGDPLevelChange * Math.min(1,
+        Math.max(0, (year - assumptions.reformYear) / Math.max(1, policy.dynamic.capitalPhaseInYears))) : undefined
   const baseline = simulate(comparatorAssumptions, () => cbo2026RevenueGDP, {}, policy.baselineMode)
   const taxOnly = simulate(
     comparatorAssumptions,
@@ -214,6 +233,9 @@ export function scoreCombined(policy: CombinedPolicy) {
     staticCombined,
     netWageLogChange,
     steadyGDPLevelChange,
+    steadyCapitalGDPLevelChange,
+    steadyCapitalStockChange,
+    steadyCapitalWageChange,
     periods: [period(combined, baseline, assumptions.reformYear + 9),
       period(combined, baseline, assumptions.reformYear + 69)],
     netTaxRevenueChangeGDP,

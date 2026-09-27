@@ -17,6 +17,13 @@ export interface SourceRecord {
 
 export const sources: readonly SourceRecord[] = [
   {
+    id: 'dynamic-capital-dbcft-reference', kind: 'modeling assumption', agency: 'Tax Foundation',
+    datasetOrReport: 'Options for Reforming America’s Tax Code: Replace the Corporate Income Tax with a Destination-Based Cash Flow Tax',
+    publicationDate: '2026', relevantTable: 'Topline Estimates, Option 71',
+    url: 'https://taxfoundation.org/tax-reform-guide/option/replace-the-corporate-income-tax-with-a-destination-based/',
+    notes: 'The distinct 21% DBCFT option replaces corporate and pass-through business income tax and reports long-run GDP +1.4%, capital stock +2.6%, wage rate +1.3%. Our optional X-tax sensitivity uses these as editable reference levels only when corporate and individual income taxes are both replaced; 15% proportional rate sensitivity, 15-year phase-in, additive GDP response, and no double-counted labor response are model choices, not Tax Foundation scores of this X-tax.',
+  },
+  {
     id: 'dynamic-labor-elasticity-cbo-2026',
     kind: 'modeling assumption',
     agency: 'Congressional Budget Office',
@@ -54,7 +61,7 @@ export const sources: readonly SourceRecord[] = [
     publicationDate: '2026-02-11',
     relevantTable: 'February 2026 10-year and long-term machine-readable budget data',
     url: 'https://www.cbo.gov/publication/62105',
-    notes: 'Imports exact fiscal-year GDP shares for Social Security, net Medicare, Medicaid/CHIP/marketplace subsidies, other mandatory spending, and total discretionary spending through 2056. The defense/NDD split is published through 2036 and held at its 2036 proportion thereafter. Exact 2026 anchors are $31.902T GDP; 17.541% revenue; 20.092% primary spending; 3.257% net interest; 23.348% total outlays; and 100.605% debt held by the public. Published 2056 shares are held after CBO\'s data horizon as an explicitly labeled stress-test extension.',
+    notes: 'Imports fiscal-year GDP shares through 2056. The defense/NDD split is published through 2036 and held at its 2036 proportion thereafter. Exact 2026 anchors are $31.902T GDP; 17.541% revenue; 20.092% primary spending; 3.257% net interest; 23.348% total outlays; and 100.605% debt held by the public. After 2056, SS and Medicare legacy per-beneficiary calibration is fixed at its 2056 value and costs follow modeled cohort sizes and explicit real benefit growth; other category shares remain stress-test extensions.',
   },
   {
     id: 'hhs-fpl-2026',
@@ -114,6 +121,6 @@ export const sources: readonly SourceRecord[] = [
     publicationDate: '2026-08-26',
     relevantTable: 'src/data/cboBaseline.ts and src/model/defaults.ts',
     url: 'https://github.com/pcarlsgaard/Entitlements-Reform',
-    notes: 'Eligibility populations apply SSA survival from birth. Current-law-formula old-age Social Security is scaled by year so it plus the separately displayed 1.0%-of-GDP other-Social-Security component equals CBO total Social Security. Legacy senior Medicare is scaled so it plus the separately displayed 0.6%-of-GDP under-65/offsetting-receipts component equals CBO net Medicare. Flat Social Security and gross premium support remain policy promises and are not rescaled. No unexplained other-primary residual remains.',
+    notes: 'Eligibility populations apply SSA survival from birth. Through 2056 old-age SS and senior Medicare legacy spending is scaled by year to CBO totals net of separately displayed other-OASDI and under-65/offsetting-receipts components. After 2056 the 2056 calibration factor is held fixed; cohort sizes and explicit benefit growth drive legacy costs. Flat Social Security and gross premium support remain policy promises and are not rescaled.',
   },
 ]
