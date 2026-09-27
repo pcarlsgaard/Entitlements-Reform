@@ -1,6 +1,6 @@
 import { cbo2026RevenueGDP } from '../data/cboBaseline'
 import { calculateMacro, defaultSettings } from '../tax/model/macro'
-import { calculateHousehold } from '../tax/model/household'
+import { calculateHousehold, OECD_US_AVERAGE_WAGE_2025, taxWedgeScenarios } from '../tax/model/household'
 import { calculateHealthAnalysis, defaultHealthPolicySettings } from '../tax/model/health'
 import type { HealthPolicySettings } from '../tax/model/health'
 import { calculateFederalProgramSavings, defaultTransferReplacementSettings } from '../tax/model/transfers'
@@ -19,6 +19,15 @@ export interface CombinedPolicy {
   benefits: BenefitPolicySelection
   assumptions: ModelAssumptions
   baselineMode: CurrentLawBaselineMode
+  dynamic: {
+    enabled: boolean
+    /** Hours supplied per percentage change in the after-tax marginal wage. */
+    laborElasticity: number
+    /** Illustrative fraction of GDP exposed to the labor-hours response. */
+    laborShareGDP: number
+    /** Years from enactment until the new GDP level is reached. */
+    phaseInYears: number
+  }
 }
 
 export const defaultCombinedPolicy: CombinedPolicy = {
@@ -46,6 +55,26 @@ export const defaultCombinedPolicy: CombinedPolicy = {
   // the entitlement solver's separate default still uses its 2 bp sensitivity.
   assumptions: { ...defaultAssumptions, fundingStrategy: 'paygo', endYear: 2095, debtSensitivity: 0 },
   baselineMode: 'scheduled',
+  dynamic: { enabled: false, laborElasticity: 0.15, laborShareGDP: 0.60, phaseInYears: 10 },
+}
+
+/** Eight illustrative wage/filing scenarios, weighted by compensation, not a national microdata estimate. */
+export function illustrativeNetWageResponse(policy: CombinedPolicy): number {
+  let weightedLogChange = 0
+  let totalWeight = 0
+  for (const scenario of taxWedgeScenarios) {
+    const result = calculateHousehold({
+      filingStatus: scenario.filingStatus, children: scenario.children,
+      cashWage: OECD_US_AVERAGE_WAGE_2025 * scenario.primaryWageShare,
+      secondaryCashWage: OECD_US_AVERAGE_WAGE_2025 * scenario.secondaryWageShare,
+    }, policy.tax, policy.health.employerFicaPassThroughRate)
+    const current = Math.max(-0.5, Math.min(0.8, result.currentMarginalRate))
+    const reform = Math.max(-0.5, Math.min(0.8, result.reformMarginalRate))
+    const weight = result.employerCompensation
+    weightedLogChange += weight * Math.log((1 - reform) / (1 - current))
+    totalWeight += weight
+  }
+  return totalWeight > 0 ? weightedLogChange / totalWeight : 0
 }
 
 export interface PeriodScore {
@@ -128,24 +157,36 @@ export function scoreCombined(policy: CombinedPolicy) {
     otherMandatorySavingsGDP: policy.taxEnabled ? (tax.refundableTaxCreditOutlaySavings + programSavingsBillions) / tax.gdp : 0,
     medicaidMarketplaceSavingsGDP: policy.taxEnabled ? health.estimatedExistingAptcSavingsBillions / tax.gdp : 0,
   }
+  const netWageLogChange = policy.taxEnabled && policy.dynamic.enabled
+    ? illustrativeNetWageResponse(policy) : 0
+  const steadyGDPLevelChange = Math.max(-0.05, Math.min(0.05,
+    netWageLogChange * policy.dynamic.laborElasticity * policy.dynamic.laborShareGDP))
+  const dynamicGDP = policy.taxEnabled && policy.dynamic.enabled ? (year: number) =>
+    1 + steadyGDPLevelChange * Math.min(1,
+      Math.max(0, (year - assumptions.reformYear) / policy.dynamic.phaseInYears)) : undefined
   const baseline = simulate(comparatorAssumptions, () => cbo2026RevenueGDP, {}, policy.baselineMode)
   const taxOnly = simulate(
     comparatorAssumptions,
     () => cbo2026RevenueGDP + netTaxRevenueChangeGDP,
     {}, policy.baselineMode, undefined,
-    fiscalBridge,
+    fiscalBridge, dynamicGDP,
   )
   const benefitsOnly = simulate(assumptions, () => cbo2026RevenueGDP, {}, policy.baselineMode, policy.benefits)
-  const combined = simulate(
+  const staticCombined = simulate(
     assumptions,
     () => cbo2026RevenueGDP + netTaxRevenueChangeGDP,
     {}, policy.baselineMode, policy.benefits,
     fiscalBridge,
   )
+  const combined = dynamicGDP ? simulate(
+    assumptions,
+    () => cbo2026RevenueGDP + netTaxRevenueChangeGDP,
+    {}, policy.baselineMode, policy.benefits, fiscalBridge, dynamicGDP,
+  ) : staticCombined
   const goal = (extraRevenueGDP: number) => simulate(
     assumptions,
     () => cbo2026RevenueGDP + netTaxRevenueChangeGDP + extraRevenueGDP,
-    {}, policy.baselineMode, policy.benefits, fiscalBridge,
+    {}, policy.baselineMode, policy.benefits, fiscalBridge, dynamicGDP,
   )
   // Minimum permanent fiscal adjustment that satisfies both debt constraints.
   // This is an equivalent revenue rate; spending cuts could supply the same amount.
@@ -170,6 +211,9 @@ export function scoreCombined(policy: CombinedPolicy) {
     taxOnly,
     benefitsOnly,
     combined,
+    staticCombined,
+    netWageLogChange,
+    steadyGDPLevelChange,
     periods: [period(combined, baseline, assumptions.reformYear + 9),
       period(combined, baseline, assumptions.reformYear + 69)],
     netTaxRevenueChangeGDP,

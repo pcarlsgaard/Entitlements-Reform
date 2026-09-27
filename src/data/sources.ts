@@ -17,6 +17,16 @@ export interface SourceRecord {
 
 export const sources: readonly SourceRecord[] = [
   {
+    id: 'dynamic-labor-elasticity-cbo-2026',
+    kind: 'modeling assumption',
+    agency: 'Congressional Budget Office',
+    datasetOrReport: 'How CBO Estimated the Effects of the 2025 Reconciliation Act on the Labor Supply',
+    publicationDate: '2026-06-18',
+    relevantTable: 'Table 1: substitution and income elasticities',
+    url: 'https://www.cbo.gov/publication/62267',
+    notes: 'CBO lists a lower estimate of 0.15 for primary-earner substitution elasticity and a central estimate of 0.25. The combined game uses 0.15 as an optional illustrative sensitivity; its eight tax-wedge examples, 60% labor GDP exposure, ten-year phase-in, and 5% GDP cap are separate model choices and do not reproduce CBO or JCT dynamic scoring.',
+  },
+  {
     id: 'combined-tax-health-transfers-2025',
     kind: 'empirical input',
     agency: 'Consumption Tax Lab (derived from Census ASEC, MEPS, BEA, CMS and federal program estimates)',
