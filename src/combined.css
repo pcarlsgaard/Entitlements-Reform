@@ -67,3 +67,27 @@
 .game-table-wrap { overflow:auto; } .game-table { border-collapse:collapse; width:100%; font-size:.84rem; white-space:nowrap; } .game-table th,.game-table td { text-align:right; padding:10px; border-bottom:1px solid #e8eff2; } .game-table th:first-child { text-align:left; } .game-table thead { color:#718195; }
 @media(max-width:850px) { .game-sticky { padding:10px 20px; align-items:flex-start; } .game-header-score { gap:8px 20px; } .game-header-score div:last-child { display:none; } .game-two-col,.game-plots { grid-template-columns:1fr; } }
 @media(max-width:620px) { .game-sticky { display:block; } .game-header-score { justify-content:space-between; margin-top:8px; } .game-tabs { grid-template-columns:repeat(2,1fr); } .game-tabs button { padding:10px 5px; font-size:.8rem; } .game-main { width:calc(100% - 24px); margin-top:16px; } .game-title { gap:10px; } .game-title h1 { font-size:1.6rem; } .game-reset { align-self:flex-start; } .game-presets span { width:100%; } }
+.game-tabs { grid-template-columns:repeat(5,1fr); }
+.households-tab { display:grid; gap:18px; }
+.household-heading { display:flex; justify-content:space-between; gap:16px; align-items:center; }
+.household-heading h2 { margin:0 0 8px; } .household-heading p { margin:0 0 15px; }
+.household-presets { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; margin:12px 0 17px; }
+.household-presets button { text-align:left; padding:12px; border:1px solid #d5e2de; background:#f9fbfa; border-radius:10px; color:#2c4d43; }
+.household-presets button.active { border-color:#55a887; background:#eaf7f0; box-shadow:inset 0 0 0 1px #55a887; }
+.household-presets strong,.household-presets small { display:block; } .household-presets small { color:#718293; margin-top:4px; line-height:1.35; }
+.household-year { display:flex; align-items:center; gap:18px; } .household-year > input { flex:1; accent-color:#168565; } .household-year .game-field { border:0; min-width:180px; padding:0; }
+.household-year .game-number { flex-basis:90px; } .household-years { display:flex; gap:7px; flex-wrap:wrap; justify-content:center; margin-top:5px; }
+.household-years button { border:1px solid #d1ddd8; background:white; color:#346651; padding:5px 12px; border-radius:99px; }
+.household-years button.active { background:#168565; border-color:#168565; color:white; }
+.household-content { align-items:start; } .household-content .game-column { display:grid; gap:18px; }
+.household-headline { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+.household-headline article > span,.household-headline article > strong,.household-headline article > small { display:block; }
+.household-headline strong { font-size:clamp(1.55rem,2.4vw,2.2rem); margin:8px 0; letter-spacing:-.04em; }
+.household-headline small { color:#75869a; } .household-separator { color:#627584; font-size:.8rem; font-weight:800; margin:16px 0 4px; }
+.household-children { margin-top:10px; border-top:1px solid #edf1f4; padding-top:10px; }
+.household-children .household-heading button,.household-child button { border:1px solid #c8d9d0; border-radius:7px; background:white; color:#24705a; font-size:.8rem; padding:5px 8px; }
+.household-children .household-heading button:disabled { opacity:.4; } .household-child { display:flex; align-items:center; gap:10px; }
+.household-child .game-field { flex:1; } .household-program .game-toggle { margin-top:3px; }
+.household-program .game-field { padding-left:15px; } .households-tab .game-table th:first-child { min-width:130px; }
+@media(max-width:1000px) { .household-presets { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+@media(max-width:620px) { .game-tabs { grid-template-columns:repeat(3,1fr); } .household-presets { grid-template-columns:repeat(2,minmax(0,1fr)); } .household-heading { align-items:flex-start; } .household-heading .game-badge { display:none; } .household-headline { grid-template-columns:1fr; } .household-year { flex-wrap:wrap; } .household-year > input { min-width:100%; order:2; } }

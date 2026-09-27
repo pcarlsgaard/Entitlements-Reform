@@ -106,4 +106,12 @@ describe('combined fiscal bridge', () => {
     )
     expect(Number.isFinite(ss.periods[1]!.terminalDebtGDP)).toBe(true)
   })
+
+  it('ignores stored age and cap settings when their benefit switches are off', () => {
+    const disabled = scoreCombined({ ...defaultCombinedPolicy, taxEnabled: false,
+      assumptions: { ...defaultCombinedPolicy.assumptions,
+        fullRetirementAge: 75, medicareEligibilityAge: 70, socialSecurityBenefitCap2026: 14_000 } })
+    expect(disabled.combined.years[30]!.endingDebtGDP).toBeCloseTo(
+      disabled.baseline.years[30]!.endingDebtGDP, 10)
+  })
 })

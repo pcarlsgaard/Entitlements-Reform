@@ -95,6 +95,12 @@ const householdExamples: { label: string; input: HouseholdInput }[] = [
 export function scoreCombined(policy: CombinedPolicy) {
   const assumptions: ModelAssumptions = {
     ...policy.assumptions,
+    fullRetirementAge: policy.benefits.socialSecurityReform
+      ? policy.assumptions.fullRetirementAge : defaultAssumptions.fullRetirementAge,
+    medicareEligibilityAge: policy.benefits.medicareReform
+      ? policy.assumptions.medicareEligibilityAge : defaultAssumptions.medicareEligibilityAge,
+    socialSecurityBenefitCap2026: policy.benefits.socialSecurityReform
+      ? policy.assumptions.socialSecurityBenefitCap2026 : null,
     fundingStrategy: policy.benefits.socialSecurityReform && policy.benefits.medicareReform &&
       policy.assumptions.socialSecurityBenefitCap2026 === null
       ? policy.assumptions.fundingStrategy : 'paygo',

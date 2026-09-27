@@ -1,6 +1,9 @@
 import { useDeferredValue, useMemo, useState } from 'react'
 import { Area, CartesianGrid, ComposedChart, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { defaultCombinedPolicy, scoreCombined } from './model/combined'
+import HouseholdsTab from './HouseholdsTab'
+import { exampleHouseholds } from './model/householdScenario'
+import type { ExampleHousehold } from './model/householdScenario'
 import type { CombinedPolicy } from './model/combined'
 import { defaultAssumptions } from './model/defaults'
 import { transferPrograms } from './tax/model/transfers'
@@ -9,10 +12,11 @@ import type { HealthPolicySettings } from './tax/model/health'
 import type { ModelAssumptions } from './model/types'
 import './combined.css'
 
-type Tab = 'economic' | 'tax' | 'entitlements' | 'results'
+type Tab = 'economic' | 'tax' | 'entitlements' | 'households' | 'results'
 const tabs: { id: Tab; label: string }[] = [
   { id: 'economic', label: 'Economic assumptions' }, { id: 'tax', label: 'Tax reform' },
-  { id: 'entitlements', label: 'Entitlement reform' }, { id: 'results', label: 'Detailed results' },
+  { id: 'entitlements', label: 'Entitlement reform' }, { id: 'households', label: 'Households' },
+  { id: 'results', label: 'Detailed results' },
 ]
 const pct = (n: number, digits = 1) => Number.isFinite(n) && Math.abs(n) < 100 ? `${(n * 100).toFixed(digits)}%` : '>10,000%'
 const pp = (n: number) => !Number.isFinite(n) ? 'unstable' : `${n >= 0 ? '+' : '−'}${Math.abs(n * 100).toFixed(2)} pp`
@@ -52,6 +56,12 @@ function Chart({ title, data, lines, stacked = false, note, unit = '% of GDP' }:
 
 export default function CombinedGame() {
   const [tab, setTab] = useState<Tab>('economic')
+  const [householdYear, setHouseholdYear] = useState(2035)
+  const [householdSelectedId, setHouseholdSelectedId] = useState(exampleHouseholds[0]!.id)
+  const [householdProfiles, setHouseholdProfiles] = useState<ExampleHousehold[]>(() => exampleHouseholds.map(item => ({
+    ...item, childAges2026: [...item.childAges2026], receives: { ...item.receives },
+    manualAnnualBenefits2026: { ...item.manualAnnualBenefits2026 },
+  })))
   const [policy, setPolicy] = useState<CombinedPolicy>(defaultCombinedPolicy)
   const deferred = useDeferredValue(policy)
   const score = useMemo(() => scoreCombined(deferred), [deferred])
@@ -141,7 +151,9 @@ export default function CombinedGame() {
         <div className="game-column"><section className="game-card"><h2>Financing and comparator</h2><Select label="Current-law benefit comparator" value={policy.baselineMode} options={[{value:'scheduled',label:'Scheduled benefits'},{value:'payable',label:'Trust-fund payable'}]} onChange={v=>setPolicy(p=>({...p,baselineMode:v as CombinedPolicy['baselineMode']}))} />
           <fieldset disabled={!fundingAllowed}><Select label="Benefit financing" value={fundingAllowed?a.fundingStrategy:'paygo'} options={[{value:'paygo',label:'PAYGO'},{value:'socialSecurityOnly',label:'Prefund Social Security'},{value:'medicareOnly',label:'Prefund Medicare'},{value:'both',label:'Prefund both'},{value:'socialSecurityFirst',label:'Social Security first'},{value:'savingsFundedSequential',label:'Savings-funded sequence'}]} onChange={v=>setA({fundingStrategy:v as ModelAssumptions['fundingStrategy']})} />
           <Select label="Prefunding starts at age" value={String(a.prefundingStartAge)} options={[{value:'0',label:'Birth'},{value:'18',label:'18'}]} onChange={v=>setA({prefundingStartAge:Number(v) as 0|18})} />{numA('realEndowmentYield','Real endowment yield',100,0,12,.1,'%')}</fieldset><small>Financing strategies activate when both benefit reforms are enabled and the benefit cap is off. Otherwise PAYGO is used in the calculation.</small></section>
-        <section className="game-card"><h2>People · illustrative</h2><dl className="game-ledger">{score.household.map(item=><div key={item.label}><dt>{item.label} annual tax change</dt><dd>{item.difference<0?'−':'+'}${Math.abs(item.difference).toLocaleString('en-US',{maximumFractionDigits:0})}</dd></div>)}<div><dt>Fully reformed SS floor (2026 dollars)</dt><dd>${(a.flatBenefitFPLMultiple*a.individualFPL2026).toLocaleString()}</dd></div><div><dt>Medicare support / senior (2026 dollars)</dt><dd>${a.premiumSupport2026.toLocaleString()}</dd></div></dl><small>Payment amounts and illustrative tax changes are not a welfare measure. Insurance value, household lifetime incidence, and behavioral effects are not estimated.</small></section></div></div>}
+        <section className="game-card"><h2>Who is affected?</h2><p>Compare working families and retirees in a selected year. Edit wages, ages, children, benefit levels, and program participation to see how the current policy changes their annual resources.</p><button className="game-reset" onClick={() => setTab('households')}>Open household examples</button></section></div></div>}
+      {tab === 'households' && <HouseholdsTab policy={deferred} score={score} year={householdYear} setYear={setHouseholdYear}
+        profiles={householdProfiles} setProfiles={setHouseholdProfiles} selectedId={householdSelectedId} setSelectedId={setHouseholdSelectedId} />}
       {tab === 'results' && <div className="game-results"><div className="game-score-grid"><article className="game-card game-score"><span>2026–2035 budget improvement</span><strong className={decade.fiscalImprovementBillions>=0?'good':'bad'}>{dollars(decade.fiscalImprovementBillions)}</strong><small>Nominal sum versus current law</small></article><article className="game-card game-score"><span>2035 debt / GDP</span><strong>{ratio(decade.terminalDebtGDP)}</strong><small>Current law {ratio(decade.baselineTerminalDebtGDP)}</small></article><article className="game-card game-score"><span>2095 debt / GDP</span><strong>{ratio(horizon.terminalDebtGDP)}</strong><small>Current law {ratio(horizon.baselineTerminalDebtGDP)}</small></article><article className="game-card game-score"><span>70-year budget improvement</span><strong>{pp(horizon.fiscalImprovementGDP)}</strong><small>GDP-weighted annual average, includes interest</small></article></div>
         <section className="game-card game-goal"><div><span>Debt challenge · {pct(a.policyHorizonDebtTargetGDP,0)} in 2095 and peak under {pct(a.peakDebtCeilingGDP,0)}</span><strong>{!Number.isFinite(score.additionalFiscalAdjustmentGDP) ? 'Debt goal outside the modeled adjustment range' : score.additionalFiscalAdjustmentGDP>0.00001?`${pp(score.additionalFiscalAdjustmentGDP)} GDP more annual fiscal adjustment needed`:`Goal met · ${pp(-score.additionalFiscalAdjustmentGDP)} GDP headroom`}</strong></div><small>Equivalent permanent revenue or spending adjustment from 2026.</small></section>
         <div className="game-plots"><Chart title="Debt held by the public" note="Four policy combinations against a common economic path." data={graph} lines={[{key:'Current law',color:'#8292a6'},{key:'Tax only',color:'#477fb8'},{key:'Benefits only',color:'#c58a3d'},{key:'Combined',color:'#168565'}]} />
