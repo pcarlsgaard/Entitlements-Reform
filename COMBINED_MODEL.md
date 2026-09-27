@@ -2,7 +2,7 @@
 
 The five-tab simulator uses the entitlement cohort engine and a pinned copy of the tax simulator's 2025 scoring code, health ESI/nongroup snapshots, and federal transfer definitions under `src/tax/`. The tax source is `pcarlsgaard/tax_reform` at commit `c828fdb` (September 2026). This is a deliberate snapshot, not a live dependency. The entitlement model starts with the February 2026 CBO calibration.
 
-Named configurations are kept in browser local storage under a versioned key. Exported JSON uses format `entitlements-reform-configuration`, version 1, and contains the full selected policy, five editable household profiles, selected example and year. Loading and importing validate the schema and constrained core settings before replacing the current scenario. Files are portable across browsers; no fiscal results are serialized, so scores are recalculated by the current model on load.
+Named configurations can be kept in browser local storage or committed as individual JSON files in `configurations/` on `main`. Exported and repository JSON uses format `entitlements-reform-configuration`, version 1, and contains the full selected policy, five editable household profiles, selected example and year. Loading and importing validate the schema and constrained core settings before replacing the current scenario. Files are portable across browsers; no fiscal results are serialized, so scores are recalculated by the current model on load. Repository file names derive from scenario names and updating an existing file requires its current GitHub blob SHA. Commits that only change `configurations/` skip the Pages deployment workflow; the live site reads files through the GitHub Contents API.
 
 ## Fiscal bridge
 
