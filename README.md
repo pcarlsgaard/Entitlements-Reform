@@ -2,6 +2,8 @@
 
 The five-tab game combines economic assumptions, the full consumption-tax and health/transfer controls, Social Security and Medicare policy, editable annual household examples, and detailed results. A fiscal score remains visible across tabs. Optional fast labor and capital response scoring compares an illustrative GDP and revenue feedback with the original static path. It compares current law, tax-only, benefit-only, and combined debt paths over 10 and 70 years, with an explicit federal budget bridge and illustrative household tax changes. See [`COMBINED_MODEL.md`](COMBINED_MODEL.md) for the accounting, pinned tax source, and limits of the welfare indicators.
 
+Open **Save or load a configuration** above the tabs to save named scenarios in this browser, load them later, or export and import versioned JSON files. A configuration includes tax, health, entitlement, economic and dynamic settings plus edited household examples and the selected household year. Browser saves stay on that device; export a file to move a scenario elsewhere.
+
 A cohort-based simulator for a proposed U.S. Social Security and Medicare entitlement reform.
 
 The project is designed to answer a central fiscal question:

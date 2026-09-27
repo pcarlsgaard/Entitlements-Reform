@@ -2,6 +2,8 @@ import { useDeferredValue, useMemo, useState } from 'react'
 import { Area, CartesianGrid, ComposedChart, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { defaultCombinedPolicy, scoreCombined } from './model/combined'
 import HouseholdsTab from './HouseholdsTab'
+import SavedConfigurationsPanel from './SavedConfigurationsPanel'
+import type { ScenarioState } from './model/savedConfigurations'
 import { exampleHouseholds } from './model/householdScenario'
 import type { ExampleHousehold } from './model/householdScenario'
 import type { CombinedPolicy } from './model/combined'
@@ -70,6 +72,12 @@ export default function CombinedGame() {
   const setA = (patch: Partial<ModelAssumptions>) => setPolicy(p => ({ ...p, assumptions: { ...p.assumptions, ...patch } }))
   const setDynamic = (patch: Partial<CombinedPolicy['dynamic']>) => setPolicy(p => ({ ...p, dynamic: { ...p.dynamic, ...patch } }))
   const setBenefits = (patch: Partial<CombinedPolicy['benefits']>) => setPolicy(p => ({ ...p, benefits: { ...p.benefits, ...patch } }))
+  const loadScenario = (scenario: ScenarioState) => {
+    setPolicy(scenario.policy)
+    setHouseholdProfiles(scenario.householdProfiles)
+    setHouseholdYear(scenario.householdYear)
+    setHouseholdSelectedId(scenario.householdSelectedId)
+  }
   const a = policy.assumptions, t = policy.tax, h = policy.health
   const numA = (key: keyof ModelAssumptions, label: string, multiplier = 1, min = 0, max?: number, step = 0.1, suffix?: string, note?: string) =>
     <NumberField key={key} label={label} value={Math.round(Number(a[key]) * multiplier * 1000) / 1000} onChange={n => setA({ [key]: n / multiplier })} min={min} max={max} step={step} suffix={suffix} note={note} />
@@ -113,6 +121,7 @@ export default function CombinedGame() {
     <header className="game-sticky"><div className="game-brand"><span className="eyebrow">Federal policy sandbox · 2026–2095</span><strong>Build a fiscal future{policy.dynamic.enabled && policy.taxEnabled ? ' · dynamic' : ''}</strong></div>
       <div className="game-header-score" aria-live="polite"><div><small>10-year fiscal improvement</small><strong className={decade.fiscalImprovementBillions >= 0 ? 'good' : 'bad'}>{dollars(decade.fiscalImprovementBillions)}</strong></div><div><small>2095 debt / GDP</small><strong>{ratio(horizon.terminalDebtGDP)}</strong></div><div><small>70-year fiscal improvement</small><strong>{pp(horizon.fiscalImprovementGDP)}</strong></div></div></header>
     <main className="game-main"><div className="game-title"><div><h1>Design a fiscal scenario</h1><p>Set assumptions and policy, then compare the decade and the 70-year path against the same current-law economy.</p></div><button className="game-reset" onClick={() => setPolicy(defaultCombinedPolicy)}>Reset scenario</button></div>
+      <SavedConfigurationsPanel scenario={{ policy, householdProfiles, householdYear, householdSelectedId }} onLoad={loadScenario} />
       <nav className="game-tabs" aria-label="Simulator tabs">{tabs.map(item => <button key={item.id} className={tab === item.id ? 'active' : ''} aria-current={tab === item.id ? 'page' : undefined} onClick={() => setTab(item.id)}>{item.label}</button>)}</nav>
       <div className="game-presets" aria-label="Scenario presets"><span>Quick scenarios</span>{(['baseline','tax','benefits','both'] as const).map((choice, i) => <button key={choice} onClick={() => baselinePreset(choice)}>{['Current law', 'Tax only', 'Benefits only', 'Both reforms'][i]}</button>)}</div>
       {tab === 'economic' && <div className="game-two-col">
