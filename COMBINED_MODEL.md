@@ -2,6 +2,8 @@
 
 The five-tab simulator uses the entitlement cohort engine and a pinned copy of the tax simulator's 2025 scoring code, health ESI/nongroup snapshots, and federal transfer definitions under `src/tax/`. The tax source is `pcarlsgaard/tax_reform` at commit `c828fdb` (September 2026). This is a deliberate snapshot, not a live dependency. The entitlement model starts with the February 2026 CBO calibration.
 
+Named configurations are kept in browser local storage under a versioned key. Exported JSON uses format `entitlements-reform-configuration`, version 1, and contains the full selected policy, five editable household profiles, selected example and year. Loading and importing validate the schema and constrained core settings before replacing the current scenario. Files are portable across browsers; no fiscal results are serialized, so scores are recalculated by the current model on load.
+
 ## Fiscal bridge
 
 The 2025 X-tax score, expressed as a share of 2025 GDP, stays at that share of each year's GDP from 2026 through 2095. Receipts change by gross consumption tax less adult, child, and modeled health credits and the receipts from selected replaced taxes. The old refundable EITC/CTC outlay portion and selected federal transfer spending reduce `otherMandatory`. If the policy replaces ACA premium tax credits, estimated existing APTC spending reduces `medicaidChipMarketplace`. The new health purchase credit is counted once against tax receipts. These channels sum to the tax model's direct deficit improvement. A negative tax score can increase the modeled deficit. Tax incidence and health-credit estimates use the copied tax app's methods; the stock/flow bridge does not include dynamic feedback.
