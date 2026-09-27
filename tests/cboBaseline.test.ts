@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  cboCalibrationNominalGDPBillions,
+  cboCalibrationOtherOASDIGDP,
+  cboCalibrationUnder65MedicareGDP,
   cboDefenseDiscretionaryGDP,
   cboDiscretionaryGDP,
   cboMedicaidChipMarketplaceGDP,
@@ -10,6 +13,8 @@ import {
   cboSocialSecurityGDP,
 } from '../src/data/cboBaseline'
 import { defaultAssumptions } from '../src/model/defaults'
+import { medicareForYear } from '../src/model/medicare'
+import { socialSecurityForYear } from '../src/model/socialSecurity'
 import { simulateCurrentLawConstantRevenue } from '../src/model/simulate'
 
 describe('CBO February 2026 baseline calibration', () => {
@@ -104,5 +109,22 @@ describe('CBO February 2026 baseline calibration', () => {
       cboMedicareNetGDP(2036),
       10,
     )
+  })
+
+  it('ends CBO calibration in 2056 and follows explicit per-person growth afterward', () => {
+    const ss56 = socialSecurityForYear(2056, defaultAssumptions, 'currentLaw')
+    const ss57 = socialSecurityForYear(2057, defaultAssumptions, 'currentLaw')
+    const med56 = medicareForYear(2056, defaultAssumptions, undefined, 'currentLaw')
+    const med57 = medicareForYear(2057, defaultAssumptions, undefined, 'currentLaw')
+    expect(ss56.legacyBillions).toBeCloseTo(
+      (cboSocialSecurityGDP(2056) - cboCalibrationOtherOASDIGDP) * cboCalibrationNominalGDPBillions(2056), 6)
+    expect(med56.legacyBillions).toBeCloseTo(
+      (cboMedicareNetGDP(2056) - cboCalibrationUnder65MedicareGDP) * cboCalibrationNominalGDPBillions(2056), 6)
+    const average = (result: typeof ss56 | typeof med56) => result.legacyBillions * 1000 /
+      result.cohorts.reduce((sum, cohort) => sum + cohort.survivingBeneficiariesMillions, 0)
+    expect(average(ss57) / average(ss56)).toBeCloseTo(
+      (1 + defaultAssumptions.currentLawSSBenefitRealGrowth) * (1 + defaultAssumptions.inflation), 8)
+    expect(average(med57) / average(med56)).toBeCloseTo(
+      (1 + defaultAssumptions.legacyMedicareRealGrowth) * (1 + defaultAssumptions.inflation), 8)
   })
 })

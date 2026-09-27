@@ -1,5 +1,6 @@
 import { survivalProbability } from './mortality'
 import {
+  cboBaselineEndYear,
   cboCalibrationNominalGDPBillions,
   cboCalibrationUnder65MedicareGDP,
   cboMedicareNetGDP,
@@ -187,14 +188,17 @@ export function medicareForYear(
     undefined,
     'currentLaw',
   )
+  const calibrationYear = Math.min(year, cboBaselineEndYear)
   const targetLegacyBillions =
     Math.max(
       0,
-      cboMedicareNetGDP(year) - cboCalibrationUnder65MedicareGDP,
-    ) * cboCalibrationNominalGDPBillions(year)
+      cboMedicareNetGDP(calibrationYear) - cboCalibrationUnder65MedicareGDP,
+    ) * cboCalibrationNominalGDPBillions(calibrationYear)
+  const calibrationCurrentLaw = calibrationYear === year ? centralCurrentLaw :
+    rawMedicareForYear(calibrationYear, defaultAssumptions, undefined, 'currentLaw')
   const legacyScale =
-    centralCurrentLaw.legacyBillions > 0
-      ? targetLegacyBillions / centralCurrentLaw.legacyBillions
+    calibrationCurrentLaw.legacyBillions > 0
+      ? targetLegacyBillions / calibrationCurrentLaw.legacyBillions
       : 1
   const cohorts = result.cohorts.map((cohort) => ({
     ...cohort,

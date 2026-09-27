@@ -2,9 +2,9 @@
  * CBO, The Budget and Economic Outlook: 2026 to 2036 and the February 2026
  * Long-Term Budget Projections. Values are fiscal-year shares of GDP.
  *
- * The published long-term file runs through 2056. The simulator holds the
- * final published share after 2056; those later years are explicitly shown as
- * an actuarial stress-test extension rather than a CBO forecast.
+ * The published long-term file runs through 2056. Non-entitlement categories
+ * hold the final published GDP share thereafter; SS and Medicare cohort
+ * benefits retain their 2056 CBO calibration and follow explicit cost growth.
  */
 
 export const cboBaselineStartYear = 2026
