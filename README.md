@@ -1,6 +1,6 @@
 # Entitlements Reform Simulator
 
-The four-tab game combines economic assumptions, the full consumption-tax and health/transfer controls, Social Security and Medicare policy, and detailed results. A fiscal score remains visible across tabs. It compares current law, tax-only, benefit-only, and combined debt paths over 10 and 70 years, with an explicit federal budget bridge and illustrative household tax changes. See [`COMBINED_MODEL.md`](COMBINED_MODEL.md) for the accounting, pinned tax source, and limits of the welfare indicators.
+The five-tab game combines economic assumptions, the full consumption-tax and health/transfer controls, Social Security and Medicare policy, editable annual household examples, and detailed results. A fiscal score remains visible across tabs. It compares current law, tax-only, benefit-only, and combined debt paths over 10 and 70 years, with an explicit federal budget bridge and illustrative household tax changes. See [`COMBINED_MODEL.md`](COMBINED_MODEL.md) for the accounting, pinned tax source, and limits of the welfare indicators.
 
 A cohort-based simulator for a proposed U.S. Social Security and Medicare entitlement reform.
 
