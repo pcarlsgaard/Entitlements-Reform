@@ -68,6 +68,7 @@ export default function CombinedGame() {
   const setTax = (patch: Partial<ReformSettings>) => setPolicy(p => ({ ...p, tax: { ...p.tax, ...patch } }))
   const setHealth = (patch: Partial<HealthPolicySettings>) => setPolicy(p => ({ ...p, health: { ...p.health, ...patch } }))
   const setA = (patch: Partial<ModelAssumptions>) => setPolicy(p => ({ ...p, assumptions: { ...p.assumptions, ...patch } }))
+  const setDynamic = (patch: Partial<CombinedPolicy['dynamic']>) => setPolicy(p => ({ ...p, dynamic: { ...p.dynamic, ...patch } }))
   const setBenefits = (patch: Partial<CombinedPolicy['benefits']>) => setPolicy(p => ({ ...p, benefits: { ...p.benefits, ...patch } }))
   const a = policy.assumptions, t = policy.tax, h = policy.health
   const numA = (key: keyof ModelAssumptions, label: string, multiplier = 1, min = 0, max?: number, step = 0.1, suffix?: string, note?: string) =>
@@ -77,6 +78,9 @@ export default function CombinedGame() {
   const numH = (key: keyof HealthPolicySettings, label: string, multiplier = 1, min = 0, max?: number, step = 1, suffix?: string) =>
     <NumberField key={key} label={label} value={Math.round(Number(h[key]) * multiplier * 1000) / 1000} onChange={n => setHealth({ [key]: n / multiplier })} min={min} max={max} step={step} suffix={suffix} />
   const [decade, horizon] = score.periods as [typeof score.periods[number], typeof score.periods[number]]
+  const dynamicReady = deferred.dynamic.enabled && deferred.taxEnabled
+  const staticDecadeDeficit = score.staticCombined.years.slice(0, 10).reduce((sum, row) => sum + row.overallDeficit, 0)
+  const dynamicDecadeDeficit = score.combined.years.slice(0, 10).reduce((sum, row) => sum + row.overallDeficit, 0)
   const sampled = score.combined.years.filter(row => row.year === 2026 || row.year % 5 === 0 || row.year === 2095)
   const graph = sampled.map(row => {
     const index = row.year - a.reformYear, b = score.baseline.years[index]!, tx = score.taxOnly.years[index]!, en = score.benefitsOnly.years[index]!
@@ -93,6 +97,10 @@ export default function CombinedGame() {
       'Effective rate': row.effectiveNominalInterestRate * 100, 'Market rate': row.nominalTargetInterestRate * 100,
       'SS deposits': row.socialSecurityPrefunding / gdp * 100, 'Medicare deposits': row.medicarePrefunding / gdp * 100, 'Avoided SS PAYGO': row.avoidedSocialSecurityPaygo / gdp * 100,
       'Baseline SS': b.legacySocialSecurity / gdp * 100, 'Baseline Medicare': b.legacySeniorMedicare / gdp * 100,
+      'Static combined': safe(score.staticCombined.years[index]!.endingDebtGDP),
+      'GDP level effect': (gdp / score.staticCombined.years[index]!.nominalGDP - 1) * 100,
+      'Static deficit': score.staticCombined.years[index]!.overallDeficit / score.staticCombined.years[index]!.nominalGDP * 100,
+      'Scored deficit': row.overallDeficit / gdp * 100,
     }
   })
   const baselinePreset = (choice: 'baseline'|'tax'|'benefits'|'both') => setPolicy(p => ({ ...p,
@@ -102,7 +110,7 @@ export default function CombinedGame() {
   const fundingAllowed = policy.benefits.socialSecurityReform && policy.benefits.medicareReform && a.socialSecurityBenefitCap2026 === null
 
   return <div className="game app-shell">
-    <header className="game-sticky"><div className="game-brand"><span className="eyebrow">Federal policy sandbox · 2026–2095</span><strong>Build a fiscal future</strong></div>
+    <header className="game-sticky"><div className="game-brand"><span className="eyebrow">Federal policy sandbox · 2026–2095</span><strong>Build a fiscal future{policy.dynamic.enabled && policy.taxEnabled ? ' · dynamic' : ''}</strong></div>
       <div className="game-header-score" aria-live="polite"><div><small>10-year fiscal improvement</small><strong className={decade.fiscalImprovementBillions >= 0 ? 'good' : 'bad'}>{dollars(decade.fiscalImprovementBillions)}</strong></div><div><small>2095 debt / GDP</small><strong>{ratio(horizon.terminalDebtGDP)}</strong></div><div><small>70-year fiscal improvement</small><strong>{pp(horizon.fiscalImprovementGDP)}</strong></div></div></header>
     <main className="game-main"><div className="game-title"><div><h1>Design a fiscal scenario</h1><p>Set assumptions and policy, then compare the decade and the 70-year path against the same current-law economy.</p></div><button className="game-reset" onClick={() => setPolicy(defaultCombinedPolicy)}>Reset scenario</button></div>
       <nav className="game-tabs" aria-label="Simulator tabs">{tabs.map(item => <button key={item.id} className={tab === item.id ? 'active' : ''} aria-current={tab === item.id ? 'page' : undefined} onClick={() => setTab(item.id)}>{item.label}</button>)}</nav>
@@ -115,7 +123,13 @@ export default function CombinedGame() {
         <div className="game-column"><section className="game-card"><h2>Interest and debt</h2>
           {numA('baselineRealMarketRate','Real market interest rate',100,0,10,.1,'%')}{numA('debtSensitivity','Debt premium sensitivity',100,0,2,.1,'%')}{numA('debtRatePassThrough','Debt refinancing pass-through',100,0,100,1,'%')}
           {numA('policyHorizonDebtTargetGDP','2095 debt target',100,0,300,1,'% GDP')}{numA('peakDebtCeilingGDP','Peak debt ceiling',100,20,500,1,'% GDP')}</section>
-          <section className="game-card"><h2>Source and interpretation</h2><p>Federal budget anchors and published category projections use the <a href="https://www.cbo.gov/publication/62105" target="_blank" rel="noreferrer">CBO Budget and Economic Outlook (2026–2036)</a>. The Medicare enrollee anchor uses the Medicare Trustees report. The editable 1.8% real GDP growth and 1.5% real Medicare cost growth are stylized continuation assumptions, not quoted CBO forecasts.</p><p>CBO category shares are extended beyond their published window. A static 2025 tax score is carried forward as a share of GDP. Long-run results are conditional scenarios.</p></section></div>
+          <section className="game-card"><h2>Illustrative dynamic scoring</h2><Toggle label="Allow labor and GDP response" checked={policy.dynamic.enabled} onChange={enabled => setDynamic({enabled})} note="Responds to the X-tax's change in marginal after-tax wages. Starts at the same 2026 GDP." />
+            <fieldset disabled={!policy.dynamic.enabled || !policy.taxEnabled}><NumberField label="Labor supply elasticity" value={policy.dynamic.laborElasticity} min={0} max={0.6} step={0.05} onChange={laborElasticity => setDynamic({laborElasticity})} />
+              <NumberField label="Labor share of GDP" value={Math.round(policy.dynamic.laborShareGDP*100)} min={0} max={100} step={5} suffix="%" onChange={n => setDynamic({laborShareGDP:n/100})} />
+              <NumberField label="GDP level phase-in" value={policy.dynamic.phaseInYears} min={1} max={30} step={1} suffix="years" onChange={phaseInYears => setDynamic({phaseInYears})} /></fieldset>
+            {dynamicReady && <dl className="game-ledger"><div><dt>Illustrative net-of-tax wage change (log)</dt><dd>{pct(score.netWageLogChange,2)}</dd></div><div><dt>Full GDP level effect by {2026+policy.dynamic.phaseInYears}</dt><dd>{pct(score.steadyGDPLevelChange,2)}</dd></div><div className="game-total"><dt>10-year deficit feedback versus static</dt><dd>{dollars(staticDecadeDeficit-dynamicDecadeDeficit)}</dd></div></dl>}
+            <small>Low CBO primary-earner substitution elasticity is 0.15; the wage basket and 60% labor share are illustrative. The GDP level response is capped at ±5%. Capital, transfers, health coverage, and retirement-work feedback are not modeled.</small></section>
+          <section className="game-card"><h2>Source and interpretation</h2><p>Federal budget anchors and published category projections use the <a href="https://www.cbo.gov/publication/62105" target="_blank" rel="noreferrer">CBO Budget and Economic Outlook (2026–2036)</a>. The Medicare enrollee anchor uses the Medicare Trustees report. The editable 1.8% real GDP growth and 1.5% real Medicare cost growth are stylized continuation assumptions, not quoted CBO forecasts.</p><p>CBO's <a href="https://www.cbo.gov/publication/62267" target="_blank" rel="noreferrer">2026 labor-supply methods</a> motivate the optional elasticity sensitivity, but this eight-household approximation is not CBO's model or a dynamic revenue estimate from CBO. Published spending categories are extended beyond their source window.</p></section></div>
       </div>}
       {tab === 'tax' && <div className="game-two-col">
         <div className="game-column"><section className="game-card"><h2>Consumption tax and wage schedule</h2><Toggle label="Apply X tax" checked={policy.taxEnabled} onChange={v => setPolicy(p => ({ ...p, taxEnabled: v }))} />
@@ -156,7 +170,10 @@ export default function CombinedGame() {
         profiles={householdProfiles} setProfiles={setHouseholdProfiles} selectedId={householdSelectedId} setSelectedId={setHouseholdSelectedId} />}
       {tab === 'results' && <div className="game-results"><div className="game-score-grid"><article className="game-card game-score"><span>2026–2035 budget improvement</span><strong className={decade.fiscalImprovementBillions>=0?'good':'bad'}>{dollars(decade.fiscalImprovementBillions)}</strong><small>Nominal sum versus current law</small></article><article className="game-card game-score"><span>2035 debt / GDP</span><strong>{ratio(decade.terminalDebtGDP)}</strong><small>Current law {ratio(decade.baselineTerminalDebtGDP)}</small></article><article className="game-card game-score"><span>2095 debt / GDP</span><strong>{ratio(horizon.terminalDebtGDP)}</strong><small>Current law {ratio(horizon.baselineTerminalDebtGDP)}</small></article><article className="game-card game-score"><span>70-year budget improvement</span><strong>{pp(horizon.fiscalImprovementGDP)}</strong><small>GDP-weighted annual average, includes interest</small></article></div>
         <section className="game-card game-goal"><div><span>Debt challenge · {pct(a.policyHorizonDebtTargetGDP,0)} in 2095 and peak under {pct(a.peakDebtCeilingGDP,0)}</span><strong>{!Number.isFinite(score.additionalFiscalAdjustmentGDP) ? 'Debt goal outside the modeled adjustment range' : score.additionalFiscalAdjustmentGDP>0.00001?`${pp(score.additionalFiscalAdjustmentGDP)} GDP more annual fiscal adjustment needed`:`Goal met · ${pp(-score.additionalFiscalAdjustmentGDP)} GDP headroom`}</strong></div><small>Equivalent permanent revenue or spending adjustment from 2026.</small></section>
-        <div className="game-plots"><Chart title="Debt held by the public" note="Four policy combinations against a common economic path." data={graph} lines={[{key:'Current law',color:'#8292a6'},{key:'Tax only',color:'#477fb8'},{key:'Benefits only',color:'#c58a3d'},{key:'Combined',color:'#168565'}]} />
+        {dynamicReady && <section className="game-card game-goal"><div><span>Dynamic feedback · illustrative labor response</span><strong>GDP level {pct(score.steadyGDPLevelChange,2)} · 10-year deficit feedback {dollars(staticDecadeDeficit-dynamicDecadeDeficit)}</strong></div><small>Compared with the same policy scored statically. Program spending stays on its baseline dollar path; receipts follow the changed GDP.</small></section>}
+        <div className="game-plots"><Chart title="Debt held by the public" note={dynamicReady ? 'Static combined is shown for comparison with the scored dynamic path.' : 'Four policy combinations against a common economic path.'} data={graph} lines={[{key:'Current law',color:'#8292a6'},{key:'Tax only',color:'#477fb8'},{key:'Benefits only',color:'#c58a3d'},...(dynamicReady ? [{key:'Static combined',color:'#96a7a0'}] : []),{key:'Combined',color:'#168565'}]} />
+          {dynamicReady && <Chart title="GDP level effect" unit="Difference from static GDP" data={graph} lines={[{key:'GDP level effect',color:'#168565'}]} />}
+          {dynamicReady && <Chart title="Deficit path" data={graph} lines={[{key:'Static deficit',color:'#96a7a0'},{key:'Scored deficit',color:'#168565'}]} />}
           <Chart title="Receipts and spending" data={graph} lines={[{key:'Receipts',color:'#168565'},{key:'Primary spending',color:'#c58a3d'},{key:'Interest',color:'#6678aa'}]} />
           <Chart title="What the federal government spends" data={graph} stacked lines={[{key:'Social Security',color:'#4890a2'},{key:'Medicare',color:'#8ac4ad'},{key:'Other mandatory',color:'#a7add3'},{key:'Discretionary',color:'#d9bb78'},{key:'Prefunding',color:'#63a27b'},{key:'Interest',color:'#d58375'}]} />
           <Chart title="Social Security: legacy and flat benefits" data={graph} lines={[{key:'Baseline SS',color:'#8292a6'},{key:'Legacy SS',color:'#4584ad'},{key:'Flat SS',color:'#168565'}]} />

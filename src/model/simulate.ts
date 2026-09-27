@@ -80,6 +80,8 @@ export function simulate(
   currentLawBaselineMode?: CurrentLawBaselineMode,
   selection?: BenefitPolicySelection,
   fiscalBridge?: FiscalBridge,
+  /** Optional policy-induced GDP level path, relative to the baseline economy. */
+  gdpLevelFactorForYear?: (year: number) => number,
 ): SimulationResult {
   if (selection && assumptions.fundingStrategy !== 'paygo' &&
     (!selection.socialSecurityReform || !selection.medicareReform)) {
@@ -98,10 +100,10 @@ export function simulate(
     ? null
     : fundingPlanForAssumptions(assumptions)
   const gdpGrowth = nominalGDPGrowth(assumptions)
-  let nominalGDP = assumptions.startingNominalGDPBillions
+  let baselineNominalGDP = assumptions.startingNominalGDPBillions
   let beginningDebt =
     initialState.beginningDebtBillions ??
-    assumptions.startingDebtGDP * nominalGDP
+    assumptions.startingDebtGDP * baselineNominalGDP
   let previousEffectiveRate =
     initialState.effectiveNominalInterestRate ??
     assumptions.startingEffectiveNominalRate
@@ -111,6 +113,11 @@ export function simulate(
     year <= assumptions.endYear;
     year += 1
   ) {
+    const gdpLevelFactor = gdpLevelFactorForYear?.(year) ?? 1
+    if (!Number.isFinite(gdpLevelFactor) || gdpLevelFactor <= 0) {
+      throw new Error('Policy GDP factor must be finite and positive.')
+    }
+    const nominalGDP = baselineNominalGDP * gdpLevelFactor
     const socialSecurity = (selection ? !selection.socialSecurityReform : Boolean(currentLawBaselineMode))
       ? socialSecurityForYear(year, assumptions, 'currentLaw')
       : socialSecurityForYear(
@@ -170,17 +177,17 @@ export function simulate(
       legacySocialSecurity:
         socialSecurity.legacyBillions * deliveryShares.socialSecurity,
       flatSocialSecurityPaygo: socialSecurity.flatPaygoBillions,
-      otherOASDI: assumptions.otherOASDIGDP * nominalGDP,
+      otherOASDI: assumptions.otherOASDIGDP * baselineNominalGDP,
       legacySeniorMedicare:
         medicare.legacyBillions * deliveryShares.seniorMedicare,
       premiumSupportPaygo: medicare.premiumSupportPaygoBillions,
-      under65Medicare: assumptions.under65MedicareGDP * nominalGDP,
+      under65Medicare: assumptions.under65MedicareGDP * baselineNominalGDP,
       medicaidChipMarketplace: medicaidChipMarketplaceBillions(
         year,
         assumptions,
-      ) - (fiscalBridge?.medicaidMarketplaceSavingsGDP ?? 0) * nominalGDP,
+      ) - (fiscalBridge?.medicaidMarketplaceSavingsGDP ?? 0) * baselineNominalGDP,
       otherMandatory: otherMandatoryBillions(year, assumptions) -
-        (fiscalBridge?.otherMandatorySavingsGDP ?? 0) * nominalGDP,
+        (fiscalBridge?.otherMandatorySavingsGDP ?? 0) * baselineNominalGDP,
       defenseDiscretionary: defenseDiscretionaryBillions(year, assumptions),
       nonDefenseDiscretionary: nonDefenseDiscretionaryBillions(
         year,
@@ -260,7 +267,7 @@ export function simulate(
 
     beginningDebt = endingDebt
     previousEffectiveRate = effectiveNominalInterestRate
-    nominalGDP *= 1 + gdpGrowth
+    baselineNominalGDP *= 1 + gdpGrowth
   }
 
   return {
