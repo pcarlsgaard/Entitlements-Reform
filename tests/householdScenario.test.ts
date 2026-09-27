@@ -62,6 +62,17 @@ describe('cohort-linked household snapshots', () => {
     expect(snapshot.reformMedicarePayment).toBeGreaterThan(0)
   })
 
+  it('keeps Medicare payment changes out of household cash when only Medicare changes', () => {
+    const policy = { ...defaultCombinedPolicy, taxEnabled: false,
+      benefits: { socialSecurityReform: false, medicareReform: true } }
+    const score = scoreCombined(policy)
+    const household = scoreExampleHousehold(example('retired-couple'), 2035, policy,
+      score.baseline, score.combined)!
+    expect(household.medicarePaymentChange).not.toBe(0)
+    expect(household.cashChange).toBeCloseTo(0, 8)
+    expect(household.socialSecurityChange).toBeCloseTo(0, 8)
+  })
+
   it('ages children out of credits and transfer rules and ignores repeal while tax is off', () => {
     const policy = { ...defaultCombinedPolicy, taxEnabled: false, transfers: {
       replacedPrograms: { ...defaultCombinedPolicy.transfers.replacedPrograms, snap: true, schoolMeals: true },
