@@ -1,4 +1,7 @@
 import type { ModelAssumptions } from './types'
+// Simplified common claiming age for the current-law comparator. Early
+// claiming and actuarial adjustments remain outside this model.
+export const currentLawRetirementAge = 67
 import {
   cboCalibrationOtherOASDIGDP,
   cboCalibrationUnder65MedicareGDP,

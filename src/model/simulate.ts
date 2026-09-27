@@ -2,6 +2,7 @@ import {
   calculateEndowmentPerPerson,
   fundingPlanForAssumptions,
 } from './endowment'
+import { currentLawRetirementAge } from './defaults'
 import {
   defenseDiscretionaryBillions,
   medicaidChipMarketplaceBillions,
@@ -83,6 +84,9 @@ export function simulate(
   /** Optional policy-induced GDP level path, relative to the baseline economy. */
   gdpLevelFactorForYear?: (year: number) => number,
 ): SimulationResult {
+  if (selection ? !selection.socialSecurityReform : Boolean(currentLawBaselineMode)) {
+    assumptions = { ...assumptions, fullRetirementAge: currentLawRetirementAge, socialSecurityBenefitCap2026: null }
+  }
   if (selection && assumptions.fundingStrategy !== 'paygo' &&
     (!selection.socialSecurityReform || !selection.medicareReform)) {
     throw new Error('Independent benefit switches require PAYGO financing.')

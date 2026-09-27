@@ -122,8 +122,13 @@ describe('CBO February 2026 baseline calibration', () => {
       (cboMedicareNetGDP(2056) - cboCalibrationUnder65MedicareGDP) * cboCalibrationNominalGDPBillions(2056), 6)
     const average = (result: typeof ss56 | typeof med56) => result.legacyBillions * 1000 /
       result.cohorts.reduce((sum, cohort) => sum + cohort.survivingBeneficiariesMillions, 0)
-    expect(average(ss57) / average(ss56)).toBeCloseTo(
-      (1 + defaultAssumptions.currentLawSSBenefitRealGrowth) * (1 + defaultAssumptions.inflation), 8)
+    // Fixed calibration after 2056; individual existing awards receive COLAs,
+    // while real growth applies to the starting award of each new cohort.
+    const cohort56 = ss56.cohorts.find(c => c.retirementYear === 2056)!
+    const same57 = ss57.cohorts.find(c => c.retirementYear === 2056)!
+    const entrant57 = ss57.cohorts.find(c => c.retirementYear === 2057)!
+    expect(same57.legacyBenefitPerPerson / cohort56.legacyBenefitPerPerson).toBeCloseTo(1.02, 10)
+    expect(entrant57.legacyBenefitPerPerson / cohort56.legacyBenefitPerPerson).toBeCloseTo(1.005 * 1.02, 10)
     expect(average(med57) / average(med56)).toBeCloseTo(
       (1 + defaultAssumptions.legacyMedicareRealGrowth) * (1 + defaultAssumptions.inflation), 8)
   })

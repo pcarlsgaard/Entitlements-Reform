@@ -4,10 +4,10 @@ import { defaultCombinedPolicy, scoreCombined } from './model/combined'
 import HouseholdsTab from './HouseholdsTab'
 import SavedConfigurationsPanel from './SavedConfigurationsPanel'
 import type { ScenarioState } from './model/savedConfigurations'
-import { exampleHouseholds } from './model/householdScenario'
+import { exampleHouseholds, lastHouseholdYear } from './model/householdScenario'
 import type { ExampleHousehold } from './model/householdScenario'
 import type { CombinedPolicy } from './model/combined'
-import { defaultAssumptions } from './model/defaults'
+import { currentLawRetirementAge } from './model/defaults'
 import { transferPrograms } from './tax/model/transfers'
 import type { ReformSettings } from './tax/model/types'
 import type { HealthPolicySettings } from './tax/model/health'
@@ -75,7 +75,8 @@ export default function CombinedGame() {
   const loadScenario = (scenario: ScenarioState) => {
     setPolicy(scenario.policy)
     setHouseholdProfiles(scenario.householdProfiles)
-    setHouseholdYear(scenario.householdYear)
+    const selected = scenario.householdProfiles.find(item => item.id === scenario.householdSelectedId)!
+    setHouseholdYear(Math.min(scenario.householdYear, lastHouseholdYear(selected, scenario.policy)))
     setHouseholdSelectedId(scenario.householdSelectedId)
   }
   const a = policy.assumptions, t = policy.tax, h = policy.health
@@ -127,7 +128,7 @@ export default function CombinedGame() {
       {tab === 'economic' && <div className="game-two-col">
         <section className="game-card"><h2>Growth and demographics</h2><p>Economic paths apply to both the scenario and its current-law comparator. Move a lever to see its full fiscal effect.</p>
           {numA('realGDPGrowth','Real GDP growth',100,-2,6,.1,'%')}{numA('inflation','Inflation',100,0,8,.1,'%')}{numA('cohortSizeGrowth','Cohort growth',100,-2,4,.1,'%')}
-          {numA('currentLawSSBenefitRealGrowth','Legacy Social Security benefit growth',100,-1,5,.1,'%')}{numA('legacyMedicareRealGrowth','Real Medicare benefit growth',100,-2,8,.1,'%', 'Per enrollee, above inflation. A key long-run cost driver.')}
+          {numA('currentLawSSBenefitRealGrowth','Real growth of new SS awards',100,-1,5,.1,'%')}{numA('legacyMedicareRealGrowth','Real Medicare benefit growth',100,-2,8,.1,'%', 'Per enrollee, above inflation. A key long-run cost driver.')}
           {numA('nonDefenseDiscretionaryRealGrowth','Real nondefense discretionary growth',100,-2,8,.1,'%')}</section>
         <div className="game-column"><section className="game-card"><h2>Interest and debt</h2>
           {numA('baselineRealMarketRate','Real market interest rate',100,0,10,.1,'%')}{numA('debtSensitivity','Debt premium sensitivity',100,0,2,.1,'%')}{numA('debtRatePassThrough','Debt refinancing pass-through',100,0,100,1,'%')}
@@ -168,11 +169,11 @@ export default function CombinedGame() {
           <section className="game-card"><h2>Opening tax ledger · 2025 basis</h2><dl className="game-ledger"><div><dt>Gross X tax receipts</dt><dd>${score.tax.grossRevenue.toFixed(0)}B</dd></div><div><dt>Adult and child tax credits</dt><dd>−${(score.tax.adultCreditCost+score.tax.childCreditCost).toFixed(0)}B</dd></div><div><dt>Health credits</dt><dd>−${score.health.totalHealthCreditCostBillions.toFixed(0)}B</dd></div><div><dt>Replaced receipts</dt><dd>−${score.tax.targetRevenue.toFixed(0)}B</dd></div><div><dt>Transfers and ACA credit savings</dt><dd>+${score.tax.federalTransferSavings.toFixed(0)}B</dd></div><div><dt>Refundable tax credit outlay savings</dt><dd>+${score.tax.refundableTaxCreditOutlaySavings.toFixed(0)}B</dd></div><div className="game-total"><dt>Net fiscal improvement if enabled</dt><dd>{dollars(score.tax.deficitReduction)}</dd></div></dl><small>Tax receipts and outlay savings occupy separate federal budget lines. The tax score is held fixed as a GDP share.</small></section>
         </div></div>}
       {tab === 'entitlements' && <div className="game-two-col"><div className="game-column"><section className="game-card"><h2>Social Security</h2><Toggle label="Reform Social Security" checked={policy.benefits.socialSecurityReform} onChange={v=>setBenefits({socialSecurityReform:v})} /><fieldset disabled={!policy.benefits.socialSecurityReform}>
-        {numA('flatBenefitFPLMultiple','Flat benefit floor',100,0,400,5,'% FPL')}{numA('benefitPhaseInYears','Cohort transition',1,1,70,1,'years')}{numA('fullRetirementAge','Retirement age',1,62,80,1,'years',`Current-law comparator uses age ${defaultAssumptions.fullRetirementAge} in this model.`)}
+        {numA('flatBenefitFPLMultiple','Flat benefit floor',100,0,400,5,'% FPL')}{numA('benefitPhaseInYears','Cohort transition',1,1,70,1,'years')}{numA('fullRetirementAge','Retirement age',1,62,80,1,'years',`Baseline claiming age: ${currentLawRetirementAge}. New age applies to people under 67 in 2026; existing retirees are protected. The cohort transition below changes benefit amounts, not the claiming age.`)}
         <Toggle label="Cap annual retired-worker benefits" checked={a.socialSecurityBenefitCap2026 !== null} onChange={v=>setA({socialSecurityBenefitCap2026:v?36000:null,fundingStrategy:'paygo'})} />{a.socialSecurityBenefitCap2026 !== null && <NumberField label="Annual cap (2026 dollars)" value={a.socialSecurityBenefitCap2026} min={1000} max={200000} step={1000} suffix="$" onChange={n=>setA({socialSecurityBenefitCap2026:n})} />}
         {numA('realFPLGrowth','Real flat benefit growth',100,-2,6,.1,'%')}</fieldset><small>The cap applies to each reformed cohort’s total retired-worker benefit after legacy calibration. It rises with inflation; prefunding is unavailable with a cap.</small></section>
         <section className="game-card"><h2>Medicare</h2><Toggle label="Reform Medicare" checked={policy.benefits.medicareReform} onChange={v=>setBenefits({medicareReform:v})} /><fieldset disabled={!policy.benefits.medicareReform}>
-          {numA('premiumSupport2026','Premium support / senior',1,0,60000,500,'$')}{numA('premiumSupportRealGrowth','Real support growth',100,-2,8,.1,'%')}{numA('medicareEligibilityAge','Medicare eligibility age',1,60,80,1,'years')}
+          {numA('premiumSupport2026','Federal support / senior',1,0,60000,500,'$', 'Federal contribution after any beneficiary financing. Additional premiums paid directly to plans are outside this budget.')}{numA('premiumSupportRealGrowth','Real support growth',100,-2,8,.1,'%')}{numA('medicareEligibilityAge','Medicare eligibility age',1,60,80,1,'years')}
           <NumberField label="New entrants convert in" value={a.medicareYearA} min={2026} max={2095} step={1} onChange={n=>setA({medicareYearA:n,medicareYearB:Math.max(n,a.medicareYearB)})} />{numA('medicareYearB','All seniors convert by',1,a.medicareYearA,2095,1)}</fieldset></section></div>
         <div className="game-column"><section className="game-card"><h2>Financing and comparator</h2><Select label="Current-law benefit comparator" value={policy.baselineMode} options={[{value:'scheduled',label:'Scheduled benefits'},{value:'payable',label:'Trust-fund payable'}]} onChange={v=>setPolicy(p=>({...p,baselineMode:v as CombinedPolicy['baselineMode']}))} />
           <fieldset disabled={!fundingAllowed}><Select label="Benefit financing" value={fundingAllowed?a.fundingStrategy:'paygo'} options={[{value:'paygo',label:'PAYGO'},{value:'socialSecurityOnly',label:'Prefund Social Security'},{value:'medicareOnly',label:'Prefund Medicare'},{value:'both',label:'Prefund both'},{value:'socialSecurityFirst',label:'Social Security first'},{value:'savingsFundedSequential',label:'Savings-funded sequence'}]} onChange={v=>setA({fundingStrategy:v as ModelAssumptions['fundingStrategy']})} />

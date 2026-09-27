@@ -1,5 +1,6 @@
 import { currentLawDeliveryShares } from './currentLaw'
 import { defaultAssumptions } from './defaults'
+import { flatBenefitReal } from './socialSecurity'
 import { calculateTransferAnalysis } from '../tax/model/transfers'
 import type { TransferHouseholdInput, TransferProgramId, TransferProgramResult } from '../tax/model/types'
 import type { CombinedPolicy } from './combined'
@@ -62,13 +63,16 @@ export const exampleHouseholds: ExampleHousehold[] = [
 function annualSocialSecurity(simulation: SimulationResult, year: number, age: number, factor: number,
   mode: CombinedPolicy['baselineMode']): number {
   const assumptions = simulation.assumptions
-  if (age < assumptions.fullRetirementAge || age > assumptions.maxModeledAge) return 0
+  if (age > assumptions.maxModeledAge) return 0
   const cohort = simulation.socialSecurityByYear.get(year)?.cohorts.find(row =>
-    row.retirementYear === year - (age - assumptions.fullRetirementAge))
+    row.birthYear === year - age)
   if (!cohort || cohort.survivingBeneficiariesMillions <= 0) return 0
   const delivery = currentLawDeliveryShares(year, assumptions, mode).socialSecurity
-  const legacy = cohort.legacyPaygoBillions * 1000 / cohort.survivingBeneficiariesMillions * factor * delivery
-  const flat = cohort.flatBenefitBillions * 1000 / cohort.survivingBeneficiariesMillions
+  // CBO's aggregate calibration is a fiscal allocation factor, not an
+  // individual's award or COLA. Never infer a check by dividing that ledger.
+  const legacy = cohort.legacyBenefitPerPerson * cohort.legacyShare * factor * delivery
+  const flat = flatBenefitReal(year, assumptions) * cohort.flatShare *
+    (1 + assumptions.inflation) ** (year - assumptions.reformYear)
   const nominalCap = assumptions.socialSecurityBenefitCap2026 === null ? Infinity :
     assumptions.socialSecurityBenefitCap2026 * (1 + assumptions.inflation) ** (year - assumptions.reformYear)
   return Math.min(legacy + flat, nominalCap)
@@ -112,6 +116,13 @@ export interface HouseholdYearScore {
   medicarePaymentChange: number
   programs: TransferProgramResult[]
   adults: { age: number; baselineSS: number; reformSS: number; baselineMedicare: number; reformMedicare: number }[]
+}
+
+export function lastHouseholdYear(profile: ExampleHousehold, policy: CombinedPolicy): number {
+  const oldestAge = Math.max(profile.primaryAge2026,
+    profile.filingStatus === 'married' ? profile.spouseAge2026 : profile.primaryAge2026)
+  return Math.min(policy.assumptions.reformYear + 69,
+    policy.assumptions.reformYear + policy.assumptions.maxModeledAge - oldestAge)
 }
 
 /** Annual illustration; tax and transfer parameters are held in 2026-dollar units. */
