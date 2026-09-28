@@ -51,8 +51,8 @@ export interface ModelAssumptions {
   cohortSizeGrowth: number
   startingNominalGDPBillions: number
   realGDPGrowth: number
-  /** Real growth in the wage distribution used for progressive tax schedules. */
-  realWageGrowth: number
+  /** Annual percentage-point deviation from the 2026 Trustees real covered-wage path. */
+  realWageGrowthDeviation: number
   inflation: number
   startingDebtGDP: number
   baselineRealMarketRate: number
