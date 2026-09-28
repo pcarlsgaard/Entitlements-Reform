@@ -5,6 +5,7 @@ import type { CombinedPolicy } from './combined'
 import { exampleHouseholds } from './householdScenario'
 import type { ExampleHousehold } from './householdScenario'
 import { transferProgramIds } from '../tax/model/transfers'
+import { SSA_TRUSTEES_LONG_RUN_REAL_COVERED_WAGE_GROWTH } from '../data/trustees2026'
 
 export const configurationStorageKey = 'entitlements-reform.configurations.v1'
 
@@ -69,13 +70,19 @@ export function parseConfiguration(json: string): SavedConfiguration {
   // matches the saved 2026 per-person grant. The original JSON remains untouched.
   if (record(scenario.policy) && record(scenario.policy.assumptions)) {
     const a = scenario.policy.assumptions
-    const lackedRealWageGrowth = a.realWageGrowth === undefined
+    const lackedAnyWageControl = a.realWageGrowth === undefined && a.realWageGrowthDeviation === undefined
+    if (a.realWageGrowthDeviation === undefined) {
+      a.realWageGrowthDeviation = typeof a.realWageGrowth === 'number'
+        ? a.realWageGrowth - SSA_TRUSTEES_LONG_RUN_REAL_COVERED_WAGE_GROWTH
+        : defaultAssumptions.realWageGrowthDeviation
+    }
+    delete a.realWageGrowth
     const additions = ['qualifyingEarnings2026', 'averageWorkingYears', 'averageAnnualEarnings2026',
-      'actuarialDiscountRate', 'medicareFundingMode', 'realWageGrowth'] as const
+      'actuarialDiscountRate', 'medicareFundingMode', 'realWageGrowthDeviation'] as const
     for (const key of additions) if (a[key] === undefined) a[key] = defaultAssumptions[key]
     // Pre-split configurations carried the old 0.5% stylized SS award-growth default.
     // Move that untouched legacy default to the 2026 Trustees wage-growth central value.
-    if (lackedRealWageGrowth && a.currentLawSSBenefitRealGrowth === 0.005)
+    if (lackedAnyWageControl && a.currentLawSSBenefitRealGrowth === 0.005)
       a.currentLawSSBenefitRealGrowth = defaultAssumptions.currentLawSSBenefitRealGrowth
     if (a.nonDefenseDiscretionaryMode === undefined) a.nonDefenseDiscretionaryMode =
       a.nonDefenseDiscretionaryGDP2026 === defaultAssumptions.nonDefenseDiscretionaryGDP2026 &&
