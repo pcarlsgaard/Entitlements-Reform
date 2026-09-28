@@ -212,6 +212,10 @@ export function simulate(
     }
     const totalPrimarySpending = primaryComponentSum(components)
     const beginningDebtGDP = beginningDebt / nominalGDP
+    if (!debtTargetReached &&
+      beginningDebtGDP <= assumptions.debtPaydownTargetGDP + 1e-12) {
+      debtTargetReached = true
+    }
     const realTargetInterestRate = realMarketRateTarget(
       beginningDebtGDP,
       assumptions,
