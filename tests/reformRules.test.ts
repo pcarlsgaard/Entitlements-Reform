@@ -63,12 +63,21 @@ describe('selected policy rules and robustness', () => {
     expect(nonDefenseDiscretionaryBillions(2095, {...defaults, nonDefenseDiscretionaryRealGrowth: 0.01800001})).toBe(
       nonDefenseDiscretionaryBillions(2095, defaults))
   })
-  it('keeps CPI-indexed tax revenue shares invariant to inflation, but responsive to real growth', () => {
+  it('separates progressive wage drift from the GDP-linked flat X-tax base', () => {
     const a = {...defaults, endYear: 2095}
-    const low = taxRevenueChangePath(defaultCombinedPolicy.tax, {...a, inflation: 0}, 100)
-    const high = taxRevenueChangePath(defaultCombinedPolicy.tax, {...a, inflation: 0.08}, 100)
-    expect([...low]).toEqual([...high])
-    expect(low.get(2095)).not.toBeCloseTo(low.get(2026)!, 4)
+    const lowInflation = taxRevenueChangePath(defaultCombinedPolicy.tax, {...a, inflation: 0}, 100)
+    const highInflation = taxRevenueChangePath(defaultCombinedPolicy.tax, {...a, inflation: 0.08}, 100)
+    expect([...lowInflation]).toEqual([...highInflation])
+
+    const noCredits = {...defaultCombinedPolicy.tax, adultCredit: 0, childCredit: 0, under6ChildCredit: 0}
+    const flat = {...noCredits, wageTaxMode: 'flat' as const}
+    const flatLow = taxRevenueChangePath(flat, {...a, realWageGrowth: 0}, 0)
+    const flatHigh = taxRevenueChangePath(flat, {...a, realWageGrowth: 0.02}, 0)
+    expect(flatHigh.get(2095)).toBeCloseTo(flatLow.get(2095)!, 10)
+
+    const progressiveLow = taxRevenueChangePath(noCredits, {...a, realWageGrowth: 0}, 0)
+    const progressiveHigh = taxRevenueChangePath(noCredits, {...a, realWageGrowth: 0.02}, 0)
+    expect(progressiveHigh.get(2095)!).toBeGreaterThan(progressiveLow.get(2095)!)
   })
   it('uses detailed child data and actually scores the earnings phase-in', () => {
     expect(hasDetailedChildCreditMicrodata()).toBe(true)
