@@ -41,6 +41,27 @@ describe('annual federal accounting', () => {
     })
   }
 
+  it('never accumulates negative federal debt and returns excess revenue after payoff', () => {
+    const simulation = simulateConstantRevenue(
+      withAssumptions({ fundingStrategy: 'paygo', endYear: 2095 }),
+      0.50,
+    )
+    const payoffIndex = simulation.years.findIndex(row => row.endingDebt === 0)
+    expect(payoffIndex).toBeGreaterThanOrEqual(0)
+    const payoff = simulation.years[payoffIndex]!
+    expect(payoff.endingDebt).toBe(0)
+    expect(simulation.years.every(row => row.beginningDebt >= 0 && row.endingDebt >= 0)).toBe(true)
+
+    for (const row of simulation.years.slice(payoffIndex + 1)) {
+      expect(row.beginningDebt).toBe(0)
+      expect(row.netInterest).toBe(0)
+      expect(row.endingDebt).toBe(0)
+      expect(row.revenue).toBeCloseTo(row.totalFederalSpending, 10)
+      expect(row.primaryDeficit).toBeCloseTo(0, 10)
+      expect(row.overallDeficit).toBeCloseTo(0, 10)
+    }
+  })
+
   it('primary components reconcile exactly to total primary spending', () => {
     const row = simulateConstantRevenue(defaultAssumptions, 0.22).years[0]
     expect(row).toBeDefined()
