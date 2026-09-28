@@ -1,6 +1,7 @@
 import { calculateMacro } from '../tax/model/macro'
 import type { ReformSettings } from '../tax/model/types'
 import { eligiblePopulationMillions } from './demographics'
+import { ssaRealCoveredWageGrowth } from '../data/trustees2026'
 import type { ModelAssumptions } from './types'
 
 /**
@@ -22,7 +23,13 @@ export function indexedTaxSettings(tax: ReformSettings, realWageFactor: number):
 }
 
 export function realWageGrowthFactor(year: number, a: ModelAssumptions): number {
-  return (1 + a.realWageGrowth) ** (year - 2026)
+  if (year <= 2026) return 1
+  let factor = 1
+  for (let y = 2027; y <= year; y += 1) {
+    const annualGrowth = ssaRealCoveredWageGrowth(y) + a.realWageGrowthDeviation
+    factor *= 1 + annualGrowth
+  }
+  return factor
 }
 
 export function realGDPPerCapitaGrowthFactor(year: number, a: ModelAssumptions): number {
