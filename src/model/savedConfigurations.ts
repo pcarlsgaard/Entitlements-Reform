@@ -78,7 +78,8 @@ export function parseConfiguration(json: string): SavedConfiguration {
     }
     delete a.realWageGrowth
     const additions = ['qualifyingEarnings2026', 'averageWorkingYears', 'averageAnnualEarnings2026',
-      'actuarialDiscountRate', 'medicareFundingMode', 'realWageGrowthDeviation', 'debtPaydownTargetGDP'] as const
+      'actuarialDiscountRate', 'medicareFundingMode', 'realWageGrowthDeviation', 'debtPaydownTargetGDP',
+      'debtPaydownSurplusCapGDP'] as const
     for (const key of additions) if (a[key] === undefined) a[key] = defaultAssumptions[key]
     // Pre-split configurations carried the old 0.5% stylized SS award-growth default.
     // Move that untouched legacy default to the 2026 Trustees wage-growth central value.
