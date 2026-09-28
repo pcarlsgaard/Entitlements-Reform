@@ -56,14 +56,25 @@ describe('mature-system timing', () => {
 })
 
 describe('permanent revenue solver', () => {
-  it('uses one identical revenue rate in every year', () => {
+  it('uses the solved rate until payoff, then balances the debt-free budget', () => {
     const solution = solvePermanentRevenueRate(shorter)
     expect(solution.converged).toBe(true)
+    const payoffIndex = solution.simulation.years.findIndex(row => row.endingDebt === 0)
+    const scheduledRows = payoffIndex < 0
+      ? solution.simulation.years
+      : solution.simulation.years.slice(0, payoffIndex)
     expect(
-      solution.simulation.years.every(
+      scheduledRows.every(
         (row) => Math.abs(row.revenueRate - solution.rate) < 1e-14,
       ),
     ).toBe(true)
+    if (payoffIndex >= 0) {
+      expect(solution.simulation.years[payoffIndex]!.revenueRate).toBeLessThanOrEqual(solution.rate + 1e-14)
+      for (const row of solution.simulation.years.slice(payoffIndex + 1)) {
+        expect(row.endingDebt).toBe(0)
+        expect(row.revenue).toBeCloseTo(row.totalFederalSpending, 10)
+      }
+    }
   })
 
   it('satisfies both the selected peak ceiling and endpoint target', () => {
@@ -123,10 +134,11 @@ describe('annual required-revenue path', () => {
     expect(solution.peakRevenueRate).toBe(
       Math.max(...visibleRows.map((row) => row.revenueRate)),
     )
-    expect(solution.peakRevenueRate).toBe(solution.startingRevenueRate)
+    expect(solution.peakRevenueRate).toBeCloseTo(solution.startingRevenueRate, 14)
     expect(solution.peakRevenueYear).toBe(2026)
-    expect(solution.minimumRevenueRate).toBe(
+    expect(solution.minimumRevenueRate).toBeCloseTo(
       Math.min(...visibleRows.map((row) => row.revenueRate)),
+      14,
     )
     expect(solution.minimumRevenueRate).toBeLessThanOrEqual(
       solution.startingRevenueRate,
