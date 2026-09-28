@@ -106,9 +106,11 @@ export function simulate(
     : fundingPlanForAssumptions(assumptions, gdpLevelFactorForYear)
   const gdpGrowth = nominalGDPGrowth(assumptions)
   let baselineNominalGDP = assumptions.startingNominalGDPBillions
-  let beginningDebt =
+  let beginningDebt = Math.max(
+    0,
     initialState.beginningDebtBillions ??
-    assumptions.startingDebtGDP * baselineNominalGDP
+      assumptions.startingDebtGDP * baselineNominalGDP,
+  )
   let previousEffectiveRate =
     initialState.effectiveNominalInterestRate ??
     assumptions.startingEffectiveNominalRate
@@ -226,7 +228,7 @@ export function simulate(
           )
     const netInterest = effectiveNominalInterestRate * beginningDebt
     const totalFederalSpending = totalPrimarySpending + netInterest
-    const revenueRate = revenueSchedule(year, {
+    const scheduledRevenueRate = revenueSchedule(year, {
       nominalGDP,
       totalPrimarySpending,
       beginningDebt,
@@ -234,11 +236,18 @@ export function simulate(
       netInterest,
       totalFederalSpending,
     })
-    const revenue = revenueRate * nominalGDP
+    const scheduledRevenue = scheduledRevenueRate * nominalGDP
+    // Federal debt is floored at zero. If scheduled receipts would create net
+    // financial assets, return the excess through lower taxes instead. In the
+    // payoff year receipts may exceed outlays by the amount needed to retire
+    // the remaining debt; thereafter, with debt at zero, receipts equal outlays.
+    const maximumRevenueWithoutNetAssets = beginningDebt + totalFederalSpending
+    const revenue = Math.min(scheduledRevenue, maximumRevenueWithoutNetAssets)
+    const revenueRate = revenue / nominalGDP
     const primaryBalance = revenue - totalPrimarySpending
     const primaryDeficit = -primaryBalance
     const overallDeficit = primaryDeficit + netInterest
-    const endingDebt = beginningDebt + overallDeficit
+    const endingDebt = Math.max(0, beginningDebt + overallDeficit)
     const endingDebtGDP = endingDebt / nominalGDP
 
     years.push({
