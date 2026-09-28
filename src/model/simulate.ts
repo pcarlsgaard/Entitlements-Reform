@@ -114,6 +114,7 @@ export function simulate(
   let previousEffectiveRate =
     initialState.effectiveNominalInterestRate ??
     assumptions.startingEffectiveNominalRate
+  let debtPaidOff = beginningDebt === 0
 
   for (
     let year = assumptions.reformYear;
@@ -242,7 +243,9 @@ export function simulate(
     // payoff year receipts may exceed outlays by the amount needed to retire
     // the remaining debt; thereafter, with debt at zero, receipts equal outlays.
     const maximumRevenueWithoutNetAssets = beginningDebt + totalFederalSpending
-    const revenue = Math.min(scheduledRevenue, maximumRevenueWithoutNetAssets)
+    const revenue = debtPaidOff
+      ? totalFederalSpending
+      : Math.min(scheduledRevenue, maximumRevenueWithoutNetAssets)
     const revenueRate = revenue / nominalGDP
     const primaryBalance = revenue - totalPrimarySpending
     const primaryDeficit = -primaryBalance
@@ -285,6 +288,7 @@ export function simulate(
       debtGDP: beginningDebtGDP,
     })
 
+    if (endingDebt === 0) debtPaidOff = true
     beginningDebt = endingDebt
     previousEffectiveRate = effectiveNominalInterestRate
     baselineNominalGDP *= 1 + gdpGrowth
