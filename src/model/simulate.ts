@@ -243,10 +243,11 @@ export function simulate(
     // payoff year receipts may exceed outlays by the amount needed to retire
     // the remaining debt; thereafter, with debt at zero, receipts equal outlays.
     const maximumRevenueWithoutNetAssets = beginningDebt + totalFederalSpending
+    const revenueAdjusted = debtPaidOff || scheduledRevenue > maximumRevenueWithoutNetAssets
     const revenue = debtPaidOff
       ? totalFederalSpending
       : Math.min(scheduledRevenue, maximumRevenueWithoutNetAssets)
-    const revenueRate = revenue / nominalGDP
+    const revenueRate = revenueAdjusted ? revenue / nominalGDP : scheduledRevenueRate
     const primaryBalance = revenue - totalPrimarySpending
     const primaryDeficit = -primaryBalance
     const overallDeficit = primaryDeficit + netInterest
