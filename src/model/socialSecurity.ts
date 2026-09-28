@@ -112,6 +112,7 @@ function rawSocialSecurityForYear(
   const inflationFactor =
     (1 + assumptions.inflation) ** (year - assumptions.reformYear)
   const flatBenefit = flatBenefitReal(year, assumptions) * inflationFactor
+  const beneficiaryGrowthAdjustment = retiredWorkerGrowthAdjustment(year)
 
   for (
     let age = assumptions.maxModeledAge;
@@ -131,7 +132,7 @@ function rawSocialSecurityForYear(
       currentLawClaimFactor(retirementAge)
     const survivalFraction = projectedSurvival(retirementAge, age, birthYear)
     const survivingBeneficiariesMillions =
-      populationMillions(year, age, assumptions) * ssParticipation * retiredWorkerGrowthAdjustment(year)
+      populationMillions(year, age, assumptions) * ssParticipation * beneficiaryGrowthAdjustment
     const initialCohortMillions = survivalFraction > 0 ? survivingBeneficiariesMillions / survivalFraction : 0
     const individualFlatBenefit = flatBenefit * actuarialClaimFactor(birthYear, retirementAge, assumptions) *
       workCreditFraction(representativeWorkCredits(assumptions), assumptions)
@@ -210,8 +211,23 @@ function retiredWorkerGrowthAdjustment(year: number): number {
 
 function scheduledSocialSecurityGDP(year: number): number {
   if (year <= cboBaselineEndYear) return cboSocialSecurityGDP(year)
-  return cboSocialSecurityGDP(cboBaselineEndYear) *
-    ssaOasdiCostGDP(year) / ssaOasdiCostGDP(cboBaselineEndYear)
+  // CBO and SSA use different economic baselines. Bridge smoothly from CBO's
+  // final published year to the Trustees level, then use Trustees directly.
+  if (year < 2060) {
+    const t = (year - cboBaselineEndYear) / (2060 - cboBaselineEndYear)
+    return cboSocialSecurityGDP(cboBaselineEndYear) +
+      t * (ssaOasdiCostGDP(2060) - cboSocialSecurityGDP(cboBaselineEndYear))
+  }
+  return ssaOasdiCostGDP(year)
+}
+
+const centralCurrentLawLegacyCache = new Map<number, number>()
+function centralCurrentLawLegacyBillions(year: number): number {
+  const cached = centralCurrentLawLegacyCache.get(year)
+  if (cached !== undefined) return cached
+  const value = rawSocialSecurityForYear(year, defaultAssumptions, 'currentLaw').legacyBillions
+  centralCurrentLawLegacyCache.set(year, value)
+  return value
 }
 
 export function socialSecurityForYear(
@@ -226,17 +242,13 @@ export function socialSecurityForYear(
     entitlementDesign,
     resolvePrefundedShare,
   )
-  const centralCurrentLaw = rawSocialSecurityForYear(
-    year,
-    defaultAssumptions,
-    'currentLaw',
-  )
+  const centralLegacyBillions = centralCurrentLawLegacyBillions(year)
   const targetLegacyBillions = Math.max(
     0,
     scheduledSocialSecurityGDP(year) - cboCalibrationOtherOASDIGDP,
   ) * cboCalibrationNominalGDPBillions(year)
-  const legacyScale = centralCurrentLaw.legacyBillions > 0
-    ? targetLegacyBillions / centralCurrentLaw.legacyBillions
+  const legacyScale = centralLegacyBillions > 0
+    ? targetLegacyBillions / centralLegacyBillions
     : 1
 
   const cohorts = result.cohorts.map((cohort) => {
