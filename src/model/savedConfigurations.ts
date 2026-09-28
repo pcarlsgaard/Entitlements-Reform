@@ -69,9 +69,14 @@ export function parseConfiguration(json: string): SavedConfiguration {
   // matches the saved 2026 per-person grant. The original JSON remains untouched.
   if (record(scenario.policy) && record(scenario.policy.assumptions)) {
     const a = scenario.policy.assumptions
+    const lackedRealWageGrowth = a.realWageGrowth === undefined
     const additions = ['qualifyingEarnings2026', 'averageWorkingYears', 'averageAnnualEarnings2026',
-      'actuarialDiscountRate', 'medicareFundingMode'] as const
+      'actuarialDiscountRate', 'medicareFundingMode', 'realWageGrowth'] as const
     for (const key of additions) if (a[key] === undefined) a[key] = defaultAssumptions[key]
+    // Pre-split configurations carried the old 0.5% stylized SS award-growth default.
+    // Move that untouched legacy default to the 2026 Trustees wage-growth central value.
+    if (lackedRealWageGrowth && a.currentLawSSBenefitRealGrowth === 0.005)
+      a.currentLawSSBenefitRealGrowth = defaultAssumptions.currentLawSSBenefitRealGrowth
     if (a.nonDefenseDiscretionaryMode === undefined) a.nonDefenseDiscretionaryMode =
       a.nonDefenseDiscretionaryGDP2026 === defaultAssumptions.nonDefenseDiscretionaryGDP2026 &&
       a.nonDefenseDiscretionaryRealGrowth === defaultAssumptions.nonDefenseDiscretionaryRealGrowth ? 'cbo' : 'growth'

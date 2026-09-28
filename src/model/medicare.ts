@@ -1,6 +1,7 @@
 import { populationMillions, eligiblePopulationMillions, projectedSurvival } from './demographics'
 import { nominalGDPBillionsForYear } from './budget'
-import { cboCalibrationNominalGDPBillions, cboCalibrationUnder65MedicareGDP, cboMedicareNetGDP } from '../data/cboBaseline'
+import { cboBaselineEndYear, cboCalibrationNominalGDPBillions, cboCalibrationUnder65MedicareGDP, cboMedicareNetGDP } from '../data/cboBaseline'
+import { cmsMedicareEnrollmentMillions, cmsMedicareGrossGDP } from '../data/trustees2026'
 import { defaultAssumptions } from './defaults'
 import {
   fullyPrefundsMedicare,
@@ -16,6 +17,24 @@ import type {
 export type MedicarePrefundedShareResolver = (
   eligibilityYear: number,
 ) => number
+
+function medicareEnrollmentGrowthAdjustment(year: number): number {
+  const trusteesIndex = cmsMedicareEnrollmentMillions(year) / cmsMedicareEnrollmentMillions(2026)
+  const seniorPopulationIndex = eligiblePopulationMillions(year, 65, defaultAssumptions) /
+    eligiblePopulationMillions(2026, 65, defaultAssumptions)
+  return trusteesIndex / seniorPopulationIndex
+}
+
+export function medicareEligiblePopulationMillions(
+  year: number,
+  assumptions: ModelAssumptions,
+): number {
+  let total = 0
+  const adjustment = medicareEnrollmentGrowthAdjustment(year)
+  for (let age = assumptions.medicareEligibilityAge; age <= assumptions.maxModeledAge; age += 1)
+    total += populationMillions(year, age, assumptions) * adjustment
+  return total
+}
 
 export function firstPrefundedMedicareEligibilityYear(
   assumptions: ModelAssumptions,
@@ -102,7 +121,8 @@ function rawMedicareForYear(
     const age = assumptions.medicareEligibilityAge + year - eligibilityYear
     const survivalFraction = projectedSurvival(assumptions.medicareEligibilityAge, age,
       eligibilityYear - assumptions.medicareEligibilityAge)
-    const survivingBeneficiariesMillions = populationMillions(year, age, assumptions)
+    const survivingBeneficiariesMillions =
+      populationMillions(year, age, assumptions) * medicareEnrollmentGrowthAdjustment(year)
     const initialCohortMillions = survivalFraction > 0 ? survivingBeneficiariesMillions / survivalFraction : 0
     const premiumSupportShare =
       entitlementDesign === 'currentLaw'
@@ -151,12 +171,17 @@ function rawMedicareForYear(
 }
 
 /**
- * Calibrate the opening legacy senior slice once, so 2026 current law plus the explicit
- * under-65/offsetting-receipts component equals CBO's net Medicare baseline.
- * Premium support is the unscaled federal contribution. Beneficiary premiums
- * paid directly to a plan are outside that grant, so it is already a net
- * federal cost; no additional premium offset is subtracted from the grant.
+ * Current-law Medicare is calibrated to CBO's net program share through 2056.
+ * After CBO's horizon, the net share follows the growth of the 2026 Medicare
+ * Trustees' total-expenditure share. The gross Trustees level is used only as
+ * a growth index so beneficiary premiums/offsetting receipts are not double counted.
  */
+function scheduledMedicareNetGDP(year: number): number {
+  if (year <= cboBaselineEndYear) return cboMedicareNetGDP(year)
+  return cboMedicareNetGDP(cboBaselineEndYear) *
+    cmsMedicareGrossGDP(year) / cmsMedicareGrossGDP(cboBaselineEndYear)
+}
+
 export function medicareForYear(
   year: number,
   assumptions: ModelAssumptions,
@@ -169,9 +194,19 @@ export function medicareForYear(
     resolvePrefundedShare,
     entitlementDesign,
   )
-  const legacyScale = ((cboMedicareNetGDP(2026) - cboCalibrationUnder65MedicareGDP) *
-    cboCalibrationNominalGDPBillions(2026)) /
-    (eligiblePopulationMillions(2026, 65, defaultAssumptions) * defaultAssumptions.legacyMedicareCost2026 / 1000)
+  const centralCurrentLaw = rawMedicareForYear(
+    year,
+    defaultAssumptions,
+    undefined,
+    'currentLaw',
+  )
+  const targetLegacyBillions = Math.max(
+    0,
+    scheduledMedicareNetGDP(year) - cboCalibrationUnder65MedicareGDP,
+  ) * cboCalibrationNominalGDPBillions(year)
+  const legacyScale = centralCurrentLaw.legacyBillions > 0
+    ? targetLegacyBillions / centralCurrentLaw.legacyBillions
+    : 1
   const cohorts = result.cohorts.map((cohort) => ({
     ...cohort,
     legacyBillions: cohort.legacyBillions * legacyScale,
@@ -179,16 +214,16 @@ export function medicareForYear(
 
   return {
     ...result,
-    legacyBillions: result.legacyBillions * legacyScale,
+    legacyBillions: cohorts.reduce((sum, cohort) => sum + cohort.legacyBillions, 0),
     cohorts,
   }
 }
 
-/** Total senior federal grant is a fixed share of GDP, divided by all eligibles. */
+/** Total senior federal grant is a fixed share of GDP, divided by modeled enrollees. */
 export function premiumSupportPerPersonNominal(year: number, a: ModelAssumptions, gdpFactor = 1): number {
   if (a.medicareFundingMode === 'gdpShare') {
     return a.medicareSupportGDPShare * nominalGDPBillionsForYear(year, a) * gdpFactor * 1000 /
-      eligiblePopulationMillions(year, a.medicareEligibilityAge, a)
+      medicareEligiblePopulationMillions(year, a)
   }
   return a.premiumSupport2026 * (1 + a.premiumSupportRealGrowth) ** (year - a.reformYear) *
     (1 + a.inflation) ** (year - a.reformYear)

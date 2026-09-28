@@ -1,5 +1,5 @@
 import { currentLawRevenueGDP, replacedRevenueDriftGDP } from './revenueBaseline'
-import { taxRevenueChangePath, realIncomeGrowthFactor } from './taxProjection'
+import { taxRevenueChangePath, realGDPPerCapitaGrowthFactor } from './taxProjection'
 import { cbo2026RevenueGDP } from '../data/cboBaseline'
 import { calculateMacro, defaultSettings } from '../tax/model/macro'
 import { calculateHousehold, OECD_US_AVERAGE_WAGE_2025, taxWedgeScenarios } from '../tax/model/household'
@@ -166,7 +166,7 @@ export function scoreCombined(policy: CombinedPolicy) {
   const outlaySavingsGDP = policy.taxEnabled
     ? tax.totalFederalSavings / tax.gdp : 0
   const fiscalBridge = {
-    savingsScaleForYear: (year: number) => 1 / realIncomeGrowthFactor(year, assumptions),
+    savingsScaleForYear: (year: number) => 1 / realGDPPerCapitaGrowthFactor(year, assumptions),
     otherMandatorySavingsGDP: policy.taxEnabled ? (tax.refundableTaxCreditOutlaySavings + programSavingsBillions) / tax.gdp : 0,
     medicaidMarketplaceSavingsGDP: policy.taxEnabled ? health.estimatedExistingAptcSavingsBillions / tax.gdp : 0,
   }

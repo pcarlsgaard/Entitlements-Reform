@@ -12,6 +12,9 @@ describe('combined fiscal bridge', () => {
       expect(result.combined.years[i]!.endingDebtGDP).toBeCloseTo(result.baseline.years[i]!.endingDebtGDP, 10)
     }
     expect(result.periods[0]!.fiscalImprovementBillions).toBeCloseTo(0, 6)
+    const debt2056 = result.baseline.years.find(row => row.year === 2056)!.endingDebtGDP
+    const debt2095 = result.baseline.years.find(row => row.year === 2095)!.endingDebtGDP
+    expect(debt2095).toBeGreaterThan(debt2056)
   })
 
   it('books tax replacement, transfer savings, and ACA credits in their respective budget lines', () => {

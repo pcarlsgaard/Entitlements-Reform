@@ -53,3 +53,14 @@ Households compare cash and near-cash items (taxes, cash transfers and Social Se
 Version-1 saved configurations receive additive migration when loaded: new work-credit and discount defaults, a claiming age equal to their prior retirement age, and GDP-pool generosity that preserves their old opening per-person grant. Existing NDD path behavior is preserved once during migration; the mode is explicit thereafter. The source JSON is never overwritten by loading. Scores always use the current engine; exporting again captures all newly explicit assumptions. Config-only commits continue to skip deployment.
 
 Automated invariants cover equal-benefit aggregate parity, cohort-share lock, prefunding dates, actuarial neutrality of the uncapped flat benefit, partial credits, population-scaled Medicare pools, CPI invariance, detailed child-credit phase-in, NDD continuity, disabled-policy equality, budget decomposition and debt solvers. Adverse scenarios are stress tests; higher debt under adverse inputs is not itself a failure.
+
+
+## Long-run baseline fidelity revision — September 2026
+
+The long-run tax and entitlement projections deliberately separate aggregate macro growth from household wage growth.
+
+- The flat X-tax gross base remains linked to the aggregate consumption and compensation base. An explicit real-wage assumption moves the fixed household distribution through progressive wage-tax brackets; it does not manufacture a larger aggregate wage base.
+- CPI-indexed dollar credits are tested against the wage path for eligibility and phase-ins, while their aggregate cost relative to GDP follows population relative to real GDP.
+- The central current-law Social Security and net Medicare comparator matches CBO program shares through 2056. Beyond CBO's published horizon, Social Security follows the growth of the 2026 OASDI Trustees intermediate OASDI-cost path and Medicare follows the growth of the 2026 Medicare Trustees total-expenditure path through 2100.
+- SSA age-specific population and mortality remain the cohort engine. Retired-worker beneficiary growth and Medicare enrollment growth are separately benchmarked to the 2026 Trustees series.
+- Policy benefits are not forced to current-law aggregate totals. User-selected flat Social Security benefits, premium support, claiming ages, eligibility ages, caps, and funding rules remain explicit policy promises.

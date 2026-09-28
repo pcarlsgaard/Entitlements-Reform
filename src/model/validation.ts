@@ -33,6 +33,7 @@ const numericKeys = [
   'cohortSizeGrowth',
   'startingNominalGDPBillions',
   'realGDPGrowth',
+  'realWageGrowth',
   'inflation',
   'startingDebtGDP',
   'baselineRealMarketRate',
@@ -115,6 +116,9 @@ export function validateModelAssumptions(
   }
   if (assumptions.realGDPGrowth <= -1) {
     add('realGDPGrowth', 'Real GDP growth must be greater than -100%.')
+  }
+  if (assumptions.realWageGrowth <= -1) {
+    add('realWageGrowth', 'Real wage growth must be greater than -100%.')
   }
   if (assumptions.inflation <= -1) {
     add('inflation', 'Inflation must be greater than -100%.')
