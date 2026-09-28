@@ -1,6 +1,7 @@
 import { populationMillions, eligiblePopulationMillions, projectedSurvival } from './demographics'
 import { actuarialClaimFactor, currentLawClaimFactor, representativeWorkCredits, workCreditFraction } from './claiming'
-import { cboCalibrationNominalGDPBillions, cboCalibrationOtherOASDIGDP, cboSocialSecurityGDP } from '../data/cboBaseline'
+import { cboBaselineEndYear, cboCalibrationNominalGDPBillions, cboCalibrationOtherOASDIGDP, cboSocialSecurityGDP } from '../data/cboBaseline'
+import { ssaOasdiCostGDP, ssaRetiredWorkerMillions } from '../data/trustees2026'
 import { currentLawRetirementAge, defaultAssumptions } from './defaults'
 import {
   fullyPrefundsSocialSecurity,
@@ -129,7 +130,8 @@ function rawSocialSecurityForYear(
     const currentLawBenefit = legacySocialSecurityBenefitNominal(birthYear + 67, year, assumptions) *
       currentLawClaimFactor(retirementAge)
     const survivalFraction = projectedSurvival(retirementAge, age, birthYear)
-    const survivingBeneficiariesMillions = populationMillions(year, age, assumptions) * ssParticipation
+    const survivingBeneficiariesMillions =
+      populationMillions(year, age, assumptions) * ssParticipation * retiredWorkerGrowthAdjustment(year)
     const initialCohortMillions = survivalFraction > 0 ? survivingBeneficiariesMillions / survivalFraction : 0
     const individualFlatBenefit = flatBenefit * actuarialClaimFactor(birthYear, retirementAge, assumptions) *
       workCreditFraction(representativeWorkCredits(assumptions), assumptions)
@@ -199,6 +201,19 @@ export const ssParticipation = ((cboSocialSecurityGDP(2026) - cboCalibrationOthe
   cboCalibrationNominalGDPBillions(2026)) /
   (eligiblePopulationMillions(2026, 67, defaultAssumptions) * defaultAssumptions.currentLawSSBenefit2026 / 1000)
 
+function retiredWorkerGrowthAdjustment(year: number): number {
+  const trusteesIndex = ssaRetiredWorkerMillions(year) / ssaRetiredWorkerMillions(2026)
+  const populationIndex = eligiblePopulationMillions(year, 67, defaultAssumptions) /
+    eligiblePopulationMillions(2026, 67, defaultAssumptions)
+  return trusteesIndex / populationIndex
+}
+
+function scheduledSocialSecurityGDP(year: number): number {
+  if (year <= cboBaselineEndYear) return cboSocialSecurityGDP(year)
+  return cboSocialSecurityGDP(cboBaselineEndYear) *
+    ssaOasdiCostGDP(year) / ssaOasdiCostGDP(cboBaselineEndYear)
+}
+
 export function socialSecurityForYear(
   year: number,
   assumptions: ModelAssumptions,
@@ -211,8 +226,21 @@ export function socialSecurityForYear(
     entitlementDesign,
     resolvePrefundedShare,
   )
+  const centralCurrentLaw = rawSocialSecurityForYear(
+    year,
+    defaultAssumptions,
+    'currentLaw',
+  )
+  const targetLegacyBillions = Math.max(
+    0,
+    scheduledSocialSecurityGDP(year) - cboCalibrationOtherOASDIGDP,
+  ) * cboCalibrationNominalGDPBillions(year)
+  const legacyScale = centralCurrentLaw.legacyBillions > 0
+    ? targetLegacyBillions / centralCurrentLaw.legacyBillions
+    : 1
+
   const cohorts = result.cohorts.map((cohort) => {
-    const uncappedLegacy = cohort.legacyPaygoBillions
+    const uncappedLegacy = cohort.legacyPaygoBillions * legacyScale
     const uncappedTotal = uncappedLegacy + cohort.flatBenefitBillions
     const capBillions = entitlementDesign === 'reform' && assumptions.socialSecurityBenefitCap2026 !== null
       ? assumptions.socialSecurityBenefitCap2026 *
