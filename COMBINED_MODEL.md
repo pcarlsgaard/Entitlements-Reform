@@ -44,7 +44,9 @@ The official February 2026 CBO debt path is available as a separate reference th
 
 Optional labor response uses eight illustrative households, a default 0.15 substitution elasticity and 60% GDP exposure. Optional capital response uses the Tax Foundation 21% DBCFT reference (+1.4% GDP, +2.6% capital, +1.3% wages), with a mild editable rate sensitivity. These are level changes phased in over 10 and 15 years, not permanent increases in growth. They are sensitivities, not external scores of this reform.
 
-Receipts follow the changed GDP level; the GDP-linked Medicare pool follows it by design. Flat Social Security and other primary spending retain their dollar promises. The household examples do not allocate national dynamic GDP gains to individual families. No additional labor, poverty or investment response is invented. Investment returns remain deterministic assumptions; no return-risk distribution or fiscal guarantee has been selected. Negative net debt earns the same modeled effective rate; this remains an explicit simplification requiring later examination.
+Receipts follow the changed GDP level; the GDP-linked Medicare pool follows it by design. Flat Social Security and other primary spending retain their dollar promises. The household examples do not allocate national dynamic GDP gains to individual families. No additional labor, poverty or investment response is invented. Investment returns remain deterministic assumptions; no return-risk distribution or fiscal guarantee has been selected.
+
+Federal debt is constrained to be nonnegative. If scheduled receipts would drive debt below zero, actual receipts are reduced to the level needed to retire the remaining debt exactly. In the payoff year, receipts may exceed current outlays by the amount of debt retired. In every subsequent debt-free year, net interest is zero and receipts are reduced to equal total federal outlays, representing an automatic tax reduction rather than accumulation of federal net financial assets.
 
 ## Household comparisons, configurations and limits
 
