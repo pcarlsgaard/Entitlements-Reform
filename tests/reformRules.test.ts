@@ -7,7 +7,8 @@ import { socialSecurityForYear } from '../src/model/socialSecurity'
 import { medicareForYear, premiumSupportPerPersonNominal } from '../src/model/medicare'
 import { nonDefenseDiscretionaryBillions, nominalGDPBillionsForYear } from '../src/model/budget'
 import { projectedSurvival } from '../src/model/demographics'
-import { taxRevenueChangePath } from '../src/model/taxProjection'
+import { realWageGrowthFactor, taxRevenueChangePath } from '../src/model/taxProjection'
+import { ssaRealCoveredWageGrowth } from '../src/data/trustees2026'
 import { defaultCombinedPolicy, scoreCombined } from '../src/model/combined'
 import { calculateAggregateChildCreditCost, hasDetailedChildCreditMicrodata, childCreditPopulationSummary } from '../src/tax/model/childCredits'
 import { parseConfiguration } from '../src/model/savedConfigurations'
@@ -74,13 +75,17 @@ describe('selected policy rules and robustness', () => {
 
     const noCredits = {...defaultCombinedPolicy.tax, adultCredit: 0, childCredit: 0, under6ChildCredit: 0}
     const flat = {...noCredits, wageTaxMode: 'flat' as const}
-    const flatLow = taxRevenueChangePath(flat, {...a, realWageGrowth: 0}, 0)
-    const flatHigh = taxRevenueChangePath(flat, {...a, realWageGrowth: 0.02}, 0)
+    const flatLow = taxRevenueChangePath(flat, {...a, realWageGrowthDeviation: -0.005}, 0)
+    const flatHigh = taxRevenueChangePath(flat, {...a, realWageGrowthDeviation: 0.005}, 0)
     expect(flatHigh.get(2095)).toBeCloseTo(flatLow.get(2095)!, 10)
 
-    const progressiveLow = taxRevenueChangePath(noCredits, {...a, realWageGrowth: 0}, 0)
-    const progressiveHigh = taxRevenueChangePath(noCredits, {...a, realWageGrowth: 0.02}, 0)
+    const progressiveLow = taxRevenueChangePath(noCredits, {...a, realWageGrowthDeviation: -0.005}, 0)
+    const progressiveHigh = taxRevenueChangePath(noCredits, {...a, realWageGrowthDeviation: 0.005}, 0)
     expect(progressiveHigh.get(2095)!).toBeGreaterThan(progressiveLow.get(2095)!)
+    expect(ssaRealCoveredWageGrowth(2026)).toBeCloseTo(0.0182, 10)
+    expect(ssaRealCoveredWageGrowth(2035)).toBeCloseTo(0.0138, 10)
+    expect(ssaRealCoveredWageGrowth(2095)).toBeCloseTo(0.0114, 10)
+    expect(realWageGrowthFactor(2027, defaults)).toBeCloseTo(1.0154, 10)
   })
   it('uses detailed child data and actually scores the earnings phase-in', () => {
     expect(hasDetailedChildCreditMicrodata()).toBe(true)
