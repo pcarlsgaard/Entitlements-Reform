@@ -1,3 +1,5 @@
+import { currentLawRevenueGDP, replacedRevenueDriftGDP } from './revenueBaseline'
+import { taxRevenueChangePath, realIncomeGrowthFactor } from './taxProjection'
 import { cbo2026RevenueGDP } from '../data/cboBaseline'
 import { calculateMacro, defaultSettings } from '../tax/model/macro'
 import { calculateHousehold, OECD_US_AVERAGE_WAGE_2025, taxWedgeScenarios } from '../tax/model/household'
@@ -153,13 +155,18 @@ export function scoreCombined(policy: CombinedPolicy) {
     insuranceCreditCost: health.totalHealthCreditCostBillions,
     federalTransferSavings: programSavingsBillions + health.estimatedExistingAptcSavingsBillions,
   })
-  // The 2025 static tax estimate is carried forward as a fixed GDP share.
+  // CPI-indexed dollar rules are rescored annually as real incomes change.
   // Receipts and refundable credit outlay savings remain separate in the ledger.
   const netTaxRevenueChangeGDP = policy.taxEnabled
     ? (tax.netRevenue - tax.targetRevenue) / tax.gdp : 0
+  const annualTaxDelta = policy.taxEnabled
+    ? taxRevenueChangePath(policy.tax, assumptions, health.totalHealthCreditCostBillions) : new Map<number, number>()
+  const revenueDelta = (year: number) => policy.taxEnabled ?
+    (annualTaxDelta.get(year) ?? 0) - replacedRevenueDriftGDP(year, policy.tax) : 0
   const outlaySavingsGDP = policy.taxEnabled
     ? tax.totalFederalSavings / tax.gdp : 0
   const fiscalBridge = {
+    savingsScaleForYear: (year: number) => 1 / realIncomeGrowthFactor(year, assumptions),
     otherMandatorySavingsGDP: policy.taxEnabled ? (tax.refundableTaxCreditOutlaySavings + programSavingsBillions) / tax.gdp : 0,
     medicaidMarketplaceSavingsGDP: policy.taxEnabled ? health.estimatedExistingAptcSavingsBillions / tax.gdp : 0,
   }
@@ -183,28 +190,28 @@ export function scoreCombined(policy: CombinedPolicy) {
       Math.max(0, (year - assumptions.reformYear) / Math.max(1, policy.dynamic.phaseInYears))) +
       steadyCapitalGDPLevelChange * Math.min(1,
         Math.max(0, (year - assumptions.reformYear) / Math.max(1, policy.dynamic.capitalPhaseInYears))) : undefined
-  const baseline = simulate(comparatorAssumptions, () => cbo2026RevenueGDP, {}, policy.baselineMode)
+  const baseline = simulate(comparatorAssumptions, (year) => currentLawRevenueGDP(year), {}, policy.baselineMode)
   const taxOnly = simulate(
     comparatorAssumptions,
-    () => cbo2026RevenueGDP + netTaxRevenueChangeGDP,
+    (year) => currentLawRevenueGDP(year) + revenueDelta(year),
     {}, policy.baselineMode, undefined,
     fiscalBridge, dynamicGDP,
   )
-  const benefitsOnly = simulate(assumptions, () => cbo2026RevenueGDP, {}, policy.baselineMode, policy.benefits)
+  const benefitsOnly = simulate(assumptions, (year) => currentLawRevenueGDP(year), {}, policy.baselineMode, policy.benefits)
   const staticCombined = simulate(
     assumptions,
-    () => cbo2026RevenueGDP + netTaxRevenueChangeGDP,
+    (year) => currentLawRevenueGDP(year) + revenueDelta(year),
     {}, policy.baselineMode, policy.benefits,
     fiscalBridge,
   )
   const combined = dynamicGDP ? simulate(
     assumptions,
-    () => cbo2026RevenueGDP + netTaxRevenueChangeGDP,
+    (year) => currentLawRevenueGDP(year) + revenueDelta(year),
     {}, policy.baselineMode, policy.benefits, fiscalBridge, dynamicGDP,
   ) : staticCombined
   const goal = (extraRevenueGDP: number) => simulate(
     assumptions,
-    () => cbo2026RevenueGDP + netTaxRevenueChangeGDP + extraRevenueGDP,
+    (year) => currentLawRevenueGDP(year) + revenueDelta(year) + extraRevenueGDP,
     {}, policy.baselineMode, policy.benefits, fiscalBridge, dynamicGDP,
   )
   // Minimum permanent fiscal adjustment that satisfies both debt constraints.
@@ -239,6 +246,7 @@ export function scoreCombined(policy: CombinedPolicy) {
     periods: [period(combined, baseline, assumptions.reformYear + 9),
       period(combined, baseline, assumptions.reformYear + 69)],
     netTaxRevenueChangeGDP,
+    annualTaxDelta,
     outlaySavingsGDP,
     household,
     combinedOpeningRevenueGDP: cbo2026RevenueGDP + netTaxRevenueChangeGDP,

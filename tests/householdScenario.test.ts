@@ -1,3 +1,4 @@
+import { premiumSupportPerPersonNominal } from '../src/model/medicare'
 import { describe, expect, it } from 'vitest'
 import { defaultCombinedPolicy, scoreCombined } from '../src/model/combined'
 import { exampleHouseholds, lastHouseholdYear, scoreExampleHousehold } from '../src/model/householdScenario'
@@ -38,7 +39,7 @@ describe('cohort-linked household snapshots', () => {
   it('shows retirement-age timing and a CPI-indexed per-person cap', () => {
     const policy = { ...defaultCombinedPolicy, taxEnabled: false,
       benefits: { socialSecurityReform: true, medicareReform: false },
-      assumptions: { ...defaultCombinedPolicy.assumptions, fullRetirementAge: 68,
+      assumptions: { ...defaultCombinedPolicy.assumptions, fullRetirementAge: 68, socialSecurityClaimAge: 68,
         socialSecurityBenefitCap2026: 18_000 } }
     const score = scoreCombined(policy)
     const near = scoreExampleHousehold(example('near-retiree'), 2030, policy, score.baseline, score.combined)!
@@ -77,8 +78,7 @@ describe('cohort-linked household snapshots', () => {
       benefits: { socialSecurityReform: false, medicareReform: true } }
     const score = scoreCombined(policy)
     const r = scoreExampleHousehold(example('retired-couple'), 2035, policy, score.baseline, score.combined)!
-    expect(r.reformMedicarePayment).toBeCloseTo(2 * policy.assumptions.premiumSupport2026 *
-      (1 + policy.assumptions.premiumSupportRealGrowth) ** 9 * 1.02 ** 9, 7)
+    expect(r.reformMedicarePayment).toBeCloseTo(2 * premiumSupportPerPersonNominal(2035, policy.assumptions), 7)
     expect(r.cashChange).toBe(0)
   })
 

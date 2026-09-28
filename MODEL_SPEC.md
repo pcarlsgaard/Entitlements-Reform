@@ -1,5 +1,9 @@
 # Entitlements Reform — Authoritative Model Specification
 
+## September 28, 2026 policy amendment
+
+The user-approved rules in [COMBINED_MODEL.md](COMBINED_MODEL.md) supersede the earlier implementation where inconsistent: projected SSA age/calendar mortality and population; common one-time opening SS beneficiary weights; reference-age cohort transitions with independently adjusted claiming ages; partial earnings-year credits; CPI-indexed tax thresholds and credits; GDP-linked senior Medicare pools; and an official CBO reference limited to 2056. The earlier sections below document the original entitlement-only design. The combined specification is authoritative for those amended rules.
+
 ## Purpose
 
 This document defines the intended economics and accounting of the simulator. The implementation may evolve, but code should not diverge from this specification without an explicit policy decision.

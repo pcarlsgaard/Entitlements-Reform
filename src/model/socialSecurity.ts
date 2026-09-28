@@ -1,10 +1,6 @@
-import { survivalProbability } from './mortality'
-import {
-  cboBaselineEndYear,
-  cboCalibrationNominalGDPBillions,
-  cboCalibrationOtherOASDIGDP,
-  cboSocialSecurityGDP,
-} from '../data/cboBaseline'
+import { populationMillions, eligiblePopulationMillions, projectedSurvival } from './demographics'
+import { actuarialClaimFactor, currentLawClaimFactor, representativeWorkCredits, workCreditFraction } from './claiming'
+import { cboCalibrationNominalGDPBillions, cboCalibrationOtherOASDIGDP, cboSocialSecurityGDP } from '../data/cboBaseline'
 import { currentLawRetirementAge, defaultAssumptions } from './defaults'
 import {
   fullyPrefundsSocialSecurity,
@@ -87,22 +83,13 @@ export function cohortSizeMillions(
   )
 }
 
-/**
- * The cohort-size primitive is a birth-cohort calibration. Convert it to the
- * population reaching a later age with the same life table used everywhere
- * else in the model. The year index remains the year the cohort reaches the
- * modeled age, which keeps the first-pass cohort-growth assumption explicit
- * without pretending to have a historical birth series.
- */
+/** SSA population reaching the selected age in this year, with explicit scenario scaling. */
 export function cohortSizeAtAgeMillions(
   cohortEntryYear: number,
   age: number,
   assumptions: ModelAssumptions,
 ): number {
-  return (
-    cohortSizeMillions(cohortEntryYear, assumptions) *
-    survivalProbability(0, age)
-  )
+  return populationMillions(cohortEntryYear, age, assumptions)
 }
 
 function rawSocialSecurityForYear(
@@ -127,27 +114,25 @@ function rawSocialSecurityForYear(
 
   for (
     let age = assumptions.maxModeledAge;
-    age >= Math.min(currentLawRetirementAge, assumptions.fullRetirementAge);
+    age >= 62;
     age -= 1
   ) {
     const birthYear = year - age
     const alreadyRetired = assumptions.reformYear - birthYear >= currentLawRetirementAge
     const retirementAge = entitlementDesign === 'currentLaw' || alreadyRetired
-      ? currentLawRetirementAge : assumptions.fullRetirementAge
+      ? currentLawRetirementAge : assumptions.socialSecurityClaimAge
     if (age < retirementAge) continue
-    const retirementYear = birthYear + retirementAge
-    const currentLawBenefit = legacySocialSecurityBenefitNominal(retirementYear, year, assumptions)
-    const survivalFraction = survivalProbability(
-      retirementAge,
-      age,
-    )
-    const initialCohortMillions = cohortSizeAtAgeMillions(
-      retirementYear,
-      retirementAge,
-      assumptions,
-    )
-    const survivingBeneficiariesMillions =
-      initialCohortMillions * survivalFraction
+    // Reference cohort date locks the transition blend independently of claiming.
+    const retirementYear = birthYear + (entitlementDesign === 'currentLaw' || alreadyRetired
+      ? currentLawRetirementAge : assumptions.fullRetirementAge)
+    const claimYear = birthYear + retirementAge
+    const currentLawBenefit = legacySocialSecurityBenefitNominal(birthYear + 67, year, assumptions) *
+      currentLawClaimFactor(retirementAge)
+    const survivalFraction = projectedSurvival(retirementAge, age, birthYear)
+    const survivingBeneficiariesMillions = populationMillions(year, age, assumptions) * ssParticipation
+    const initialCohortMillions = survivalFraction > 0 ? survivingBeneficiariesMillions / survivalFraction : 0
+    const individualFlatBenefit = flatBenefit * actuarialClaimFactor(birthYear, retirementAge, assumptions) *
+      workCreditFraction(representativeWorkCredits(assumptions), assumptions)
     const { legacyShare, flatShare } =
       entitlementDesign === 'currentLaw'
         ? { legacyShare: 1, flatShare: 0 }
@@ -166,12 +151,15 @@ function rawSocialSecurityForYear(
       (survivingBeneficiariesMillions * legacyShare * currentLawBenefit) /
       1_000
     const flatBenefitBillions =
-      (survivingBeneficiariesMillions * flatShare * flatBenefit) / 1_000
+      (survivingBeneficiariesMillions * flatShare * individualFlatBenefit) / 1_000
     const flatPaygoBillions = flatBenefitBillions * (1 - prefundedShare)
 
     cohorts.push({
       birthYear,
       legacyBenefitPerPerson: currentLawBenefit,
+      flatBenefitPerPerson: individualFlatBenefit,
+      claimAge: retirementAge,
+      claimYear,
       retirementYear,
       initialCohortMillions,
       survivingBeneficiariesMillions,
@@ -205,14 +193,12 @@ function rawSocialSecurityForYear(
   }
 }
 
-/**
- * Calibrate the current-law-formula retirement slice to CBO's total Social
- * Security baseline less the separately shown other-OASDI component. The same
- * annual factor applies to the aggregate legacy ledger, preserving cohort shares
- * and mortality. It is not an individual benefit index: household checks use
- * legacyBenefitPerPerson before this fiscal allocation factor. The flat benefit
- * remains the unscaled policy promise.
- */
+// One opening beneficiary calibration, shared by legacy and flat benefits. Never
+// recalibrate one benefit formula to future CBO totals independently of the other.
+export const ssParticipation = ((cboSocialSecurityGDP(2026) - cboCalibrationOtherOASDIGDP) *
+  cboCalibrationNominalGDPBillions(2026)) /
+  (eligiblePopulationMillions(2026, 67, defaultAssumptions) * defaultAssumptions.currentLawSSBenefit2026 / 1000)
+
 export function socialSecurityForYear(
   year: number,
   assumptions: ModelAssumptions,
@@ -225,28 +211,8 @@ export function socialSecurityForYear(
     entitlementDesign,
     resolvePrefundedShare,
   )
-  const centralCurrentLaw = rawSocialSecurityForYear(
-    year,
-    defaultAssumptions,
-    'currentLaw',
-  )
-  const calibrationYear = Math.min(year, cboBaselineEndYear)
-  const targetLegacyBillions =
-    Math.max(
-      0,
-      cboSocialSecurityGDP(calibrationYear) - cboCalibrationOtherOASDIGDP,
-    ) * cboCalibrationNominalGDPBillions(calibrationYear)
-  // Beyond CBO's published window, retain its last formula calibration and
-  // let modeled cohort counts and the stated real benefit growth govern costs.
-  const calibrationCurrentLaw = calibrationYear === year ? centralCurrentLaw :
-    rawSocialSecurityForYear(calibrationYear, defaultAssumptions, 'currentLaw')
-  const legacyScale =
-    calibrationCurrentLaw.legacyBillions > 0
-      ? targetLegacyBillions / calibrationCurrentLaw.legacyBillions
-      : 1
-
   const cohorts = result.cohorts.map((cohort) => {
-    const uncappedLegacy = cohort.legacyPaygoBillions * legacyScale
+    const uncappedLegacy = cohort.legacyPaygoBillions
     const uncappedTotal = uncappedLegacy + cohort.flatBenefitBillions
     const capBillions = entitlementDesign === 'reform' && assumptions.socialSecurityBenefitCap2026 !== null
       ? assumptions.socialSecurityBenefitCap2026 *

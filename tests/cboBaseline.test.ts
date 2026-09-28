@@ -1,8 +1,6 @@
+import cboOfficial from '../src/data/cboOfficial.json'
 import { describe, expect, it } from 'vitest'
 import {
-  cboCalibrationNominalGDPBillions,
-  cboCalibrationOtherOASDIGDP,
-  cboCalibrationUnder65MedicareGDP,
   cboDefenseDiscretionaryGDP,
   cboDiscretionaryGDP,
   cboMedicaidChipMarketplaceGDP,
@@ -86,40 +84,17 @@ describe('CBO February 2026 baseline calibration', () => {
     )
   })
 
-  it('matches the published 2036 entitlement path under current law', () => {
-    const row = simulateCurrentLawConstantRevenue(
-      defaultAssumptions,
-      'scheduled',
-      0.22,
-    ).years.find((item) => item.year === 2036)!
-    const socialSecuritySubtotal =
-      row.legacySocialSecurity +
-      row.flatSocialSecurityPaygo +
-      row.otherOASDI
-    const medicareSubtotal =
-      row.legacySeniorMedicare +
-      row.premiumSupportPaygo +
-      row.under65Medicare
-
-    expect(socialSecuritySubtotal / row.nominalGDP).toBeCloseTo(
-      cboSocialSecurityGDP(2036),
-      10,
-    )
-    expect(medicareSubtotal / row.nominalGDP).toBeCloseTo(
-      cboMedicareNetGDP(2036),
-      10,
-    )
+  it('keeps official CBO projections separate from the custom entitlement forecast', () => {
+    expect(cboOfficial.rows.find(r => r.year === 2036)!.lt_mand_social_security_gdp_share / 100).toBeCloseTo(cboSocialSecurityGDP(2036), 10)
+    expect(cboOfficial.rows.find(r => r.year === 2056)!.lt_debt_held_by_public_gdp_share).toBeGreaterThan(100)
+    expect(Math.max(...cboOfficial.rows.map(r => r.year))).toBe(2056)
   })
 
-  it('ends CBO calibration in 2056 and follows explicit per-person growth afterward', () => {
+  it('uses explicit per-person growth without future CBO recalibration', () => {
     const ss56 = socialSecurityForYear(2056, defaultAssumptions, 'currentLaw')
     const ss57 = socialSecurityForYear(2057, defaultAssumptions, 'currentLaw')
     const med56 = medicareForYear(2056, defaultAssumptions, undefined, 'currentLaw')
     const med57 = medicareForYear(2057, defaultAssumptions, undefined, 'currentLaw')
-    expect(ss56.legacyBillions).toBeCloseTo(
-      (cboSocialSecurityGDP(2056) - cboCalibrationOtherOASDIGDP) * cboCalibrationNominalGDPBillions(2056), 6)
-    expect(med56.legacyBillions).toBeCloseTo(
-      (cboMedicareNetGDP(2056) - cboCalibrationUnder65MedicareGDP) * cboCalibrationNominalGDPBillions(2056), 6)
     const average = (result: typeof ss56 | typeof med56) => result.legacyBillions * 1000 /
       result.cohorts.reduce((sum, cohort) => sum + cohort.survivingBeneficiariesMillions, 0)
     // Fixed calibration after 2056; individual existing awards receive COLAs,

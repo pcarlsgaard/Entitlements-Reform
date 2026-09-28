@@ -118,7 +118,7 @@ export default function SavedConfigurationsPanel({ scenario, onLoad }: {
   }
 
   return <details className="game-card game-save-panel"><summary>Save or load a configuration</summary>
-    <p>Save named scenarios in this browser or in the public GitHub repository. Loading restores the policy, assumptions, edited households, and selected household year.</p>
+    <p>Save named scenarios in this browser or in the public GitHub repository. Loading restores policy and household inputs and recalculates scores with the current model. Older files gain projected longevity, work-credit controls, and a GDP-linked Medicare pool matching their opening per-person grant; the original file is not changed.</p>
     <div className="game-save-actions"><label htmlFor="scenario-name">Configuration name</label>
       <input id="scenario-name" type="text" maxLength={80} value={name} onChange={event => setName(event.target.value)} placeholder="e.g. 35% X tax + Medicare support" onKeyDown={event => { if (event.key === 'Enter') save() }} />
       <button type="button" onClick={save}>Save in browser</button>

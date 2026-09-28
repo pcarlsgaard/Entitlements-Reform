@@ -54,6 +54,7 @@ export interface BenefitPolicySelection {
 
 export interface FiscalBridge {
   /** Savings classified in other mandatory spending, as a share of GDP. */
+  savingsScaleForYear?: (year: number) => number
   otherMandatorySavingsGDP: number
   medicaidMarketplaceSavingsGDP?: number
 }
@@ -85,7 +86,7 @@ export function simulate(
   gdpLevelFactorForYear?: (year: number) => number,
 ): SimulationResult {
   if (selection ? !selection.socialSecurityReform : Boolean(currentLawBaselineMode)) {
-    assumptions = { ...assumptions, fullRetirementAge: currentLawRetirementAge, socialSecurityBenefitCap2026: null }
+    assumptions = { ...assumptions, fullRetirementAge: currentLawRetirementAge, socialSecurityClaimAge: currentLawRetirementAge, socialSecurityBenefitCap2026: null }
   }
   if (selection && assumptions.fundingStrategy !== 'paygo' &&
     (!selection.socialSecurityReform || !selection.medicareReform)) {
@@ -102,7 +103,7 @@ export function simulate(
     ? !selection.socialSecurityReform && !selection.medicareReform
     : Boolean(currentLawBaselineMode))
     ? null
-    : fundingPlanForAssumptions(assumptions)
+    : fundingPlanForAssumptions(assumptions, gdpLevelFactorForYear)
   const gdpGrowth = nominalGDPGrowth(assumptions)
   let baselineNominalGDP = assumptions.startingNominalGDPBillions
   let beginningDebt =
@@ -148,6 +149,12 @@ export function simulate(
               assumptions.prefundingStartAge)
           return fundingPlan?.get(fundingYear)?.medicarePrefundedShare ?? 0
         })
+    // GDP-linked support shares the policy-induced GDP change; other benefits do not.
+    if (assumptions.medicareFundingMode === 'gdpShare' && gdpLevelFactor !== 1) {
+      medicare.premiumSupportPaygoBillions *= gdpLevelFactor
+      medicare.cohorts = medicare.cohorts.map(c => ({ ...c,
+        premiumSupportPaygoBillions: c.premiumSupportPaygoBillions * gdpLevelFactor }))
+    }
     let funding: AnnualFundingPlan
     if (!fundingPlan) {
       funding = {
@@ -189,9 +196,9 @@ export function simulate(
       medicaidChipMarketplace: medicaidChipMarketplaceBillions(
         year,
         assumptions,
-      ) - (fiscalBridge?.medicaidMarketplaceSavingsGDP ?? 0) * baselineNominalGDP,
+      ) - (fiscalBridge?.medicaidMarketplaceSavingsGDP ?? 0) * baselineNominalGDP * (fiscalBridge?.savingsScaleForYear?.(year) ?? 1),
       otherMandatory: otherMandatoryBillions(year, assumptions) -
-        (fiscalBridge?.otherMandatorySavingsGDP ?? 0) * baselineNominalGDP,
+        (fiscalBridge?.otherMandatorySavingsGDP ?? 0) * baselineNominalGDP * (fiscalBridge?.savingsScaleForYear?.(year) ?? 1),
       defenseDiscretionary: defenseDiscretionaryBillions(year, assumptions),
       nonDefenseDiscretionary: nonDefenseDiscretionaryBillions(
         year,
@@ -279,7 +286,7 @@ export function simulate(
     years,
     socialSecurityByYear,
     medicareByYear,
-    endowment2026: calculateEndowmentPerPerson(assumptions),
+    endowment2026: calculateEndowmentPerPerson(assumptions, assumptions.reformYear, gdpLevelFactorForYear),
     cumulativePrefundingBillions: years.reduce(
       (sum, row) => sum + row.newCohortPrefunding,
       0,

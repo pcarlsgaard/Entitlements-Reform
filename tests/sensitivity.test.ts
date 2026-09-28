@@ -56,7 +56,7 @@ describe('nondefense discretionary path', () => {
   it('declines as a GDP share when its real growth is below GDP growth', () => {
     const assumptions = withAssumptions({
       realGDPGrowth: 0.018,
-      nonDefenseDiscretionaryRealGrowth: 0.01,
+      nonDefenseDiscretionaryMode: 'growth', nonDefenseDiscretionaryRealGrowth: 0.01,
     })
     const simulation = simulateConstantRevenue(assumptions, 0.22)
     const row = simulation.years.find((item) => item.year === 2050)!
@@ -98,7 +98,7 @@ describe('ceteris-paribus macro and budget comparison', () => {
   it('requires less permanent revenue when real NDD spending is frozen', () => {
     const baseline = solvePermanentRevenueRate(defaultAssumptions)
     const frozen = solvePermanentRevenueRate(
-      withAssumptions({ nonDefenseDiscretionaryRealGrowth: 0 }),
+      withAssumptions({ nonDefenseDiscretionaryMode: 'growth', nonDefenseDiscretionaryRealGrowth: 0 }),
     )
     expect(frozen.rate).toBeLessThan(baseline.rate)
   })

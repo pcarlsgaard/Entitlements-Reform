@@ -15,7 +15,8 @@ const numericKeys = [
   'individualFPL2026',
   'realFPLGrowth',
   'fullRetirementAge',
-  'vestingYears',
+  'vestingYears', 'socialSecurityClaimAge', 'qualifyingEarnings2026', 'averageWorkingYears',
+  'averageAnnualEarnings2026', 'actuarialDiscountRate', 'medicareSupportGDPShare',
   'currentLawSSBenefit2026',
   'currentLawSSBenefitRealGrowth',
   'prefundingStartAge',
@@ -59,6 +60,15 @@ export function validateModelAssumptions(
     if (!Number.isFinite(assumptions[key])) add(key, 'Enter a finite number.')
   }
   if (issues.length > 0) return issues
+  for (const key of ['fullRetirementAge', 'socialSecurityClaimAge', 'medicareEligibilityAge'] as const)
+    if (!Number.isInteger(assumptions[key])) add(key, 'Use whole years.')
+  if (assumptions.socialSecurityClaimAge < 62 || assumptions.socialSecurityClaimAge > 80) add('socialSecurityClaimAge', 'Claiming age must be 62–80.')
+  if (assumptions.qualifyingEarnings2026 <= 0) add('qualifyingEarnings2026', 'Qualifying earnings must be positive.')
+  if (assumptions.vestingYears <= 0) add('vestingYears', 'Full-benefit years must be positive.')
+  if (assumptions.actuarialDiscountRate < 0 || assumptions.actuarialDiscountRate > 0.1) add('actuarialDiscountRate', 'Use a real discount rate from 0% to 10%.')
+  if (assumptions.medicareSupportGDPShare < 0 || assumptions.medicareSupportGDPShare > 0.15) add('medicareSupportGDPShare', 'Support pool must be 0%–15% of GDP.')
+  if (!['gdpShare', 'perPerson'].includes(assumptions.medicareFundingMode)) add('medicareFundingMode', 'Choose a recognized support rule.')
+  if (!['cbo', 'growth'].includes(assumptions.nonDefenseDiscretionaryMode)) add('nonDefenseDiscretionaryMode', 'Choose a recognized spending path.')
 
   if (!fundingStrategies.includes(assumptions.fundingStrategy)) {
     add('fundingStrategy', 'Select a recognized financing strategy.')
