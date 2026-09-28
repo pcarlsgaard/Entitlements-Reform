@@ -52,8 +52,8 @@ export const defaultAssumptions: ModelAssumptions = {
   cohortSizeGrowth: 0.002,
   startingNominalGDPBillions: cbo2026NominalGDPBillions,
   realGDPGrowth: 0.018,
-  // Explicit wage-distribution growth; do not infer this from GDP per capita.
-  realWageGrowth: 0.0114,
+  // Additive annual deviation from the pinned 2026 Trustees real-wage path.
+  realWageGrowthDeviation: 0,
   inflation: 0.02,
   startingDebtGDP: cbo2026DebtHeldByPublicGDP,
   baselineRealMarketRate: 0.023,
