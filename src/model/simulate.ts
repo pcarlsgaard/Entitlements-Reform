@@ -114,7 +114,8 @@ export function simulate(
   let previousEffectiveRate =
     initialState.effectiveNominalInterestRate ??
     assumptions.startingEffectiveNominalRate
-  let debtPaidOff = beginningDebt === 0
+  let debtTargetReached =
+    beginningDebt / baselineNominalGDP <= assumptions.debtPaydownTargetGDP
 
   for (
     let year = assumptions.reformYear;
@@ -238,22 +239,23 @@ export function simulate(
       totalFederalSpending,
     })
     const scheduledRevenue = scheduledRevenueRate * nominalGDP
-    // Federal debt is floored at zero. If scheduled receipts would create net
-    // financial assets, return the excess through lower taxes instead. In the
-    // payoff year receipts may exceed outlays by the amount needed to retire
-    // the remaining debt; thereafter, with debt at zero, receipts equal outlays.
-    const maximumRevenueWithoutNetAssets = beginningDebt + totalFederalSpending
-    const revenueAdjusted = debtPaidOff || scheduledRevenue > maximumRevenueWithoutNetAssets
-    const revenue = debtPaidOff
+    // Once the selected long-run debt target is reached, stop further nominal
+    // debt paydown. In the crossing year, trim receipts so year-end debt lands
+    // exactly on the target ratio. Thereafter receipts equal total outlays,
+    // keeping the nominal debt balance constant while GDP growth lowers the ratio.
+    const targetDebt = assumptions.debtPaydownTargetGDP * nominalGDP
+    const maximumRevenueToTarget = beginningDebt + totalFederalSpending - targetDebt
+    const revenueAdjusted =
+      debtTargetReached || scheduledRevenue > maximumRevenueToTarget
+    const revenue = debtTargetReached
       ? totalFederalSpending
-      : Math.min(scheduledRevenue, maximumRevenueWithoutNetAssets)
+      : Math.min(scheduledRevenue, maximumRevenueToTarget)
     const revenueRate = revenueAdjusted ? revenue / nominalGDP : scheduledRevenueRate
     const primaryBalance = revenue - totalPrimarySpending
     const primaryDeficit = -primaryBalance
     const overallDeficit = primaryDeficit + netInterest
     const rawEndingDebt = beginningDebt + overallDeficit
-    // Treat sub-dollar numerical residue in the billions-based ledger as zero.
-    const endingDebt = rawEndingDebt <= 1e-9 ? 0 : rawEndingDebt
+    const endingDebt = Math.max(0, rawEndingDebt)
     const endingDebtGDP = endingDebt / nominalGDP
 
     years.push({
@@ -291,7 +293,8 @@ export function simulate(
       debtGDP: beginningDebtGDP,
     })
 
-    if (endingDebt === 0) debtPaidOff = true
+    if (endingDebtGDP <= assumptions.debtPaydownTargetGDP + 1e-12)
+      debtTargetReached = true
     beginningDebt = endingDebt
     previousEffectiveRate = effectiveNominalInterestRate
     baselineNominalGDP *= 1 + gdpGrowth
