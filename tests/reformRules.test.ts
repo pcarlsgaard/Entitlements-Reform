@@ -25,13 +25,16 @@ describe('selected policy rules and robustness', () => {
     expect(dynamic.medicarePV).toBeCloseTo(baseline.medicarePV * 1.02, 7)
     expect(dynamic.socialSecurityPV).toBe(baseline.socialSecurityPV)
   })
-  it('gives equal aggregate costs for equal SS benefits, without phantom savings', () => {
+  it('does not scale the statutory flat SS promise to force current-law totals', () => {
     const a = { ...defaults, fundingStrategy: 'paygo' as const, fullRetirementAge: 67, socialSecurityClaimAge: 67,
       currentLawSSBenefitRealGrowth: 0, flatBenefitFPLMultiple: 24500 / defaults.individualFPL2026 }
     for (const year of [2026, 2035, 2055, 2095]) {
-      const old = socialSecurityForYear(year, a, 'currentLaw'), reform = socialSecurityForYear(year, a)
-      expect(reform.legacyBillions + reform.flatPaygoBillions).toBeCloseTo(old.legacyBillions, 7)
-      for (const cohort of reform.cohorts) expect(cohort.flatBenefitPerPerson).toBeCloseTo(cohort.legacyBenefitPerPerson, 8)
+      const reform = socialSecurityForYear(year, a)
+      for (const cohort of reform.cohorts)
+        expect(cohort.flatBenefitPerPerson).toBeCloseTo(cohort.legacyBenefitPerPerson, 8)
+      const directFlatCost = reform.cohorts.reduce((sum, cohort) =>
+        sum + cohort.survivingBeneficiariesMillions * cohort.flatShare * cohort.flatBenefitPerPerson / 1000, 0)
+      expect(reform.flatBenefitBillions).toBeCloseTo(directFlatCost, 8)
     }
   })
   it('preserves expected flat-benefit lifetime value across claiming ages and cohorts', () => {
