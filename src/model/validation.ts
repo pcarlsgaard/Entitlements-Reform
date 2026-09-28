@@ -47,6 +47,7 @@ const numericKeys = [
   'otherMandatoryGDP2026',
   'policyHorizonYears',
   'policyHorizonDebtTargetGDP',
+  'debtPaydownTargetGDP',
   'peakDebtCeilingGDP',
 ] as const satisfies readonly (keyof ModelAssumptions)[]
 
@@ -175,6 +176,12 @@ export function validateModelAssumptions(
     add(
       'policyHorizonDebtTargetGDP',
       'The policy-horizon debt target cannot be negative.',
+    )
+  }
+  if (assumptions.debtPaydownTargetGDP < 0 || assumptions.debtPaydownTargetGDP > assumptions.startingDebtGDP) {
+    add(
+      'debtPaydownTargetGDP',
+      'The long-run debt target must be between 0% and the starting debt ratio.',
     )
   }
   if (assumptions.peakDebtCeilingGDP < assumptions.startingDebtGDP) {
