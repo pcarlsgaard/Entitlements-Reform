@@ -71,6 +71,8 @@ export const defaultAssumptions: ModelAssumptions = {
   policyHorizonYears: 70,
   policyHorizonDebtTargetGDP: 1.01,
   debtPaydownTargetGDP: 0.40,
+  // Default: balance the total budget once reached and let GDP growth reduce debt/GDP.
+  debtPaydownSurplusCapGDP: 0,
   peakDebtCeilingGDP: 1.5,
 }
 
