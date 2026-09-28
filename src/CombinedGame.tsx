@@ -89,6 +89,8 @@ export default function CombinedGame() {
   const numH = (key: keyof HealthPolicySettings, label: string, multiplier = 1, min = 0, max?: number, step = 1, suffix?: string) =>
     <NumberField key={key} label={label} value={Math.round(Number(h[key]) * multiplier * 1000) / 1000} onChange={n => setHealth({ [key]: n / multiplier })} min={min} max={max} step={step} suffix={suffix} />
   const [decade, horizon] = score.periods as [typeof score.periods[number], typeof score.periods[number]]
+  const debt2036 = score.combined.years.find(row => row.year === 2036)?.endingDebtGDP ?? Number.NaN
+  const debt2050 = score.combined.years.find(row => row.year === 2050)?.endingDebtGDP ?? Number.NaN
   const dynamicReady = deferred.dynamic.enabled && deferred.taxEnabled
   const staticDecadeDeficit = score.staticCombined.years.slice(0, 10).reduce((sum, row) => sum + row.overallDeficit, 0)
   const dynamicDecadeDeficit = score.combined.years.slice(0, 10).reduce((sum, row) => sum + row.overallDeficit, 0)
@@ -122,7 +124,7 @@ export default function CombinedGame() {
 
   return <div className="game app-shell">
     <header className="game-sticky"><div className="game-brand"><span className="eyebrow">Federal policy sandbox · 2026–2095</span><strong>Build a fiscal future{policy.dynamic.enabled && policy.taxEnabled ? ' · dynamic' : ''}</strong></div>
-      <div className="game-header-score" aria-live="polite"><div><small>10-year fiscal improvement</small><strong className={decade.fiscalImprovementBillions >= 0 ? 'good' : 'bad'}>{dollars(decade.fiscalImprovementBillions)}</strong></div><div><small>2095 debt / GDP</small><strong>{ratio(horizon.terminalDebtGDP)}</strong></div><div><small>70-year fiscal improvement</small><strong>{pp(horizon.fiscalImprovementGDP)}</strong></div></div></header>
+      <div className="game-header-score" aria-live="polite"><div><small>10-year fiscal improvement</small><strong className={decade.fiscalImprovementBillions >= 0 ? 'good' : 'bad'}>{dollars(decade.fiscalImprovementBillions)}</strong></div><div><small>2036 debt / GDP · goal ≤100%</small><strong className={debt2036 <= 1 ? 'good' : 'bad'}>{ratio(debt2036)}</strong></div><div><small>2050 debt / GDP · goal ≤60%</small><strong className={debt2050 <= .6 ? 'good' : 'bad'}>{ratio(debt2050)}</strong></div><div><small>2095 debt / GDP</small><strong>{ratio(horizon.terminalDebtGDP)}</strong></div><div><small>70-year fiscal improvement</small><strong>{pp(horizon.fiscalImprovementGDP)}</strong></div></div></header>
     <main className="game-main"><div className="game-title"><div><h1>Design a fiscal scenario</h1><p>Set assumptions and policy, then compare the decade and the 70-year path against the same current-law economy.</p></div><button className="game-reset" onClick={() => setPolicy(defaultCombinedPolicy)}>Reset scenario</button></div>
       <SavedConfigurationsPanel scenario={{ policy, householdProfiles, householdYear, householdSelectedId }} onLoad={loadScenario} />
       <nav className="game-tabs" aria-label="Simulator tabs">{tabs.map(item => <button key={item.id} className={tab === item.id ? 'active' : ''} aria-current={tab === item.id ? 'page' : undefined} onClick={() => setTab(item.id)}>{item.label}</button>)}</nav>
