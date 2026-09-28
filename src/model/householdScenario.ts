@@ -1,6 +1,10 @@
 import { currentLawDeliveryShares } from './currentLaw'
 import { defaultAssumptions } from './defaults'
-import { flatBenefitReal } from './socialSecurity'
+import { flatBenefitReal, legacySocialSecurityBenefitNominal, socialSecurityBenefitShares } from './socialSecurity'
+import { annualWorkCredit, actuarialClaimFactor, currentLawClaimFactor, workCreditFraction } from './claiming'
+import { premiumSupportPerPersonNominal } from './medicare'
+import { nominalGDPBillionsForYear } from './budget'
+import { realIncomeGrowthFactor } from './taxProjection'
 import { calculateTransferAnalysis } from '../tax/model/transfers'
 import type { TransferHouseholdInput, TransferProgramId, TransferProgramResult } from '../tax/model/types'
 import type { CombinedPolicy } from './combined'
@@ -16,6 +20,10 @@ export interface ExampleHousehold {
   childAges2026: number[]
   primaryWage2026: number
   spouseWage2026: number
+  primaryClaimAge: number | null
+  spouseClaimAge: number | null
+  primaryCreditedYears2026: number
+  spouseCreditedYears2026: number
   workThroughAge: number
   legacyBenefitMultiplier: number
   coverage: 'esi' | 'nongroup' | 'uninsured' | 'public'
@@ -34,48 +42,62 @@ const receives = (ids: TransferProgramId[] = []): Record<TransferProgramId, bool
 
 export const exampleHouseholds: ExampleHousehold[] = [
   { id: 'single-parent', label: 'Single parent', description: 'Low wages · two children · SNAP and school meals',
-    filingStatus: 'single', primaryAge2026: 31, spouseAge2026: 31, childAges2026: [3, 8], primaryWage2026: 25_000,
+    filingStatus: 'single', primaryAge2026: 31, spouseAge2026: 31, primaryClaimAge: null, spouseClaimAge: null, primaryCreditedYears2026: 9, spouseCreditedYears2026: 9, childAges2026: [3, 8], primaryWage2026: 25_000,
     spouseWage2026: 0, workThroughAge: 67, legacyBenefitMultiplier: 0.7, coverage: 'public',
     monthlyShelterCost2026: 1250, monthlyDependentCareExpense2026: 350, inKindValuationFactor: 0.75,
     receives: receives(['snap', 'wic', 'schoolMeals', 'summerEbt', 'liheap']), manualAnnualBenefits2026: { wic: 900, liheap: 600 } },
   { id: 'two-earner', label: 'Two-earner family', description: 'Two wages · two children · employer coverage',
-    filingStatus: 'married', primaryAge2026: 38, spouseAge2026: 36, childAges2026: [2, 9], primaryWage2026: 65_000,
+    filingStatus: 'married', primaryAge2026: 38, spouseAge2026: 36, primaryClaimAge: null, spouseClaimAge: null, primaryCreditedYears2026: 16, spouseCreditedYears2026: 14, childAges2026: [2, 9], primaryWage2026: 65_000,
     spouseWage2026: 35_000, workThroughAge: 67, legacyBenefitMultiplier: 1, coverage: 'esi',
     monthlyShelterCost2026: 1600, monthlyDependentCareExpense2026: 500, inKindValuationFactor: 0.75,
     receives: receives(), manualAnnualBenefits2026: {} },
   { id: 'near-retiree', label: 'Near retiree', description: 'Age 64 in 2026 · compare retirement ages',
-    filingStatus: 'single', primaryAge2026: 64, spouseAge2026: 64, childAges2026: [], primaryWage2026: 55_000,
+    filingStatus: 'single', primaryAge2026: 64, spouseAge2026: 64, primaryClaimAge: null, spouseClaimAge: null, primaryCreditedYears2026: 35, spouseCreditedYears2026: 35, childAges2026: [], primaryWage2026: 55_000,
     spouseWage2026: 0, workThroughAge: 67, legacyBenefitMultiplier: 1, coverage: 'nongroup',
     monthlyShelterCost2026: 1400, monthlyDependentCareExpense2026: 0, inKindValuationFactor: 0.75,
     receives: receives(), manualAnnualBenefits2026: {} },
   { id: 'retired-couple', label: 'Retired couple', description: 'Ages 72 and 70 · Social Security and Medicare',
-    filingStatus: 'married', primaryAge2026: 72, spouseAge2026: 70, childAges2026: [], primaryWage2026: 0,
+    filingStatus: 'married', primaryAge2026: 72, spouseAge2026: 70, primaryClaimAge: null, spouseClaimAge: null, primaryCreditedYears2026: 35, spouseCreditedYears2026: 35, childAges2026: [], primaryWage2026: 0,
     spouseWage2026: 0, workThroughAge: 67, legacyBenefitMultiplier: 1, coverage: 'public',
     monthlyShelterCost2026: 1200, monthlyDependentCareExpense2026: 0, inKindValuationFactor: 0.75,
     receives: receives(), manualAnnualBenefits2026: {} },
   { id: 'younger-worker', label: 'Young worker', description: 'Age 26 · longer horizon · no children',
-    filingStatus: 'single', primaryAge2026: 26, spouseAge2026: 26, childAges2026: [], primaryWage2026: 42_000,
+    filingStatus: 'single', primaryAge2026: 26, spouseAge2026: 26, primaryClaimAge: null, spouseClaimAge: null, primaryCreditedYears2026: 4, spouseCreditedYears2026: 4, childAges2026: [], primaryWage2026: 42_000,
     spouseWage2026: 0, workThroughAge: 67, legacyBenefitMultiplier: 0.9, coverage: 'uninsured',
     monthlyShelterCost2026: 1100, monthlyDependentCareExpense2026: 0, inKindValuationFactor: 0.75,
     receives: receives(), manualAnnualBenefits2026: {} },
 ]
 
 function annualSocialSecurity(simulation: SimulationResult, year: number, age: number, factor: number,
-  mode: CombinedPolicy['baselineMode']): number {
-  const assumptions = simulation.assumptions
-  if (age > assumptions.maxModeledAge) return 0
-  const cohort = simulation.socialSecurityByYear.get(year)?.cohorts.find(row =>
-    row.birthYear === year - age)
-  if (!cohort || cohort.survivingBeneficiariesMillions <= 0) return 0
-  const delivery = currentLawDeliveryShares(year, assumptions, mode).socialSecurity
-  // CBO's aggregate calibration is a fiscal allocation factor, not an
-  // individual's award or COLA. Never infer a check by dividing that ledger.
-  const legacy = cohort.legacyBenefitPerPerson * cohort.legacyShare * factor * delivery
-  const flat = flatBenefitReal(year, assumptions) * cohort.flatShare *
-    (1 + assumptions.inflation) ** (year - assumptions.reformYear)
-  const nominalCap = assumptions.socialSecurityBenefitCap2026 === null ? Infinity :
-    assumptions.socialSecurityBenefitCap2026 * (1 + assumptions.inflation) ** (year - assumptions.reformYear)
-  return Math.min(legacy + flat, nominalCap)
+  mode: CombinedPolicy['baselineMode'], claimAge: number, credits: number, reform: boolean): number {
+  const a = simulation.assumptions
+  const birthYear = year - age
+  const grandfathered = a.reformYear - birthYear >= 67
+  const chosenAge = grandfathered ? 67 : claimAge
+  if (age > a.maxModeledAge || age < chosenAge) return 0
+  const shares = reform && !grandfathered ? socialSecurityBenefitShares(birthYear + a.fullRetirementAge, a)
+    : { legacyShare: 1, flatShare: 0 }
+  const inflation = (1 + a.inflation) ** (year - a.reformYear)
+  const delivery = currentLawDeliveryShares(year, a, mode).socialSecurity
+  const legacy = legacySocialSecurityBenefitNominal(birthYear + 67, year, a) *
+    currentLawClaimFactor(chosenAge) * shares.legacyShare * factor * delivery
+  const flat = flatBenefitReal(year, a) * inflation * shares.flatShare *
+    actuarialClaimFactor(birthYear, chosenAge, a) * workCreditFraction(credits, a)
+  const cap = reform && a.socialSecurityBenefitCap2026 !== null ? a.socialSecurityBenefitCap2026 * inflation : Infinity
+  return Math.min(legacy + flat, cap)
+}
+
+/** Credit for completed earnings years before claiming. Past years are editable;
+ * future partial years use CPI-indexed earnings thresholds and projected wages. */
+export function householdWorkCredits(profile: ExampleHousehold, adult: number, claimAge: number, policy: CombinedPolicy): number {
+  const age2026 = adult === 0 ? profile.primaryAge2026 : profile.spouseAge2026
+  let credits = adult === 0 ? profile.primaryCreditedYears2026 : profile.spouseCreditedYears2026
+  const wage = adult === 0 ? profile.primaryWage2026 : profile.spouseWage2026
+  for (let age = age2026; age < claimAge && age <= profile.workThroughAge; age++) {
+    credits += annualWorkCredit(wage * realIncomeGrowthFactor(2026 + age - age2026, policy.assumptions),
+      policy.assumptions.qualifyingEarnings2026)
+  }
+  return credits
 }
 
 function annualMedicarePayment(simulation: SimulationResult, year: number, age: number,
@@ -88,9 +110,9 @@ function annualMedicarePayment(simulation: SimulationResult, year: number, age: 
   const legacy = cohort.legacyBillions * 1000 / cohort.survivingBeneficiariesMillions *
     currentLawDeliveryShares(year, assumptions, mode).seniorMedicare
   // Prefunded support is still a benefit payment, though it is absent from PAYGO spending.
-  const support = cohort.premiumSupportShare * assumptions.premiumSupport2026 *
-    (1 + assumptions.premiumSupportRealGrowth) ** (year - assumptions.reformYear) *
-    (1 + assumptions.inflation) ** (year - assumptions.reformYear)
+  const gdpFactor = (simulation.years.find(row => row.year === year)?.nominalGDP ?? nominalGDPBillionsForYear(year, assumptions)) /
+    nominalGDPBillionsForYear(year, assumptions)
+  const support = cohort.premiumSupportShare * premiumSupportPerPersonNominal(year, assumptions, gdpFactor)
   return legacy + support
 }
 
@@ -133,7 +155,7 @@ export function scoreExampleHousehold(profile: ExampleHousehold, year: number, p
   const ages = [profile.primaryAge2026, ...(profile.filingStatus === 'married' ? [profile.spouseAge2026] : [])].map(age => age + elapsed)
   if (ages.some(age => age > policy.assumptions.maxModeledAge)) return null
   const childAges = profile.childAges2026.map(age => age + elapsed).filter(age => age < 18)
-  const realWageFactor = (1 + policy.assumptions.realGDPGrowth) ** elapsed
+  const realWageFactor = realIncomeGrowthFactor(year, policy.assumptions)
   const inflationFactor = (1 + policy.assumptions.inflation) ** elapsed
   const wages = [profile.primaryWage2026, profile.spouseWage2026].map((wage, index) =>
     (ages[index] ?? 999) <= profile.workThroughAge ? wage * realWageFactor : 0)
@@ -161,13 +183,20 @@ export function scoreExampleHousehold(profile: ExampleHousehold, year: number, p
   const baselineInKindTransferValue = inKindTransfers.reduce((total, row) => total + row.resourceEquivalentValue, 0) * inflationFactor
   const inKindTransferLoss = inKindTransfers.reduce((total, row) => total + (replaced(row) ? row.resourceEquivalentValue : 0), 0) * inflationFactor
   const inKindTransferChange = inKindTransferLoss ? -inKindTransferLoss : 0
-  const adults = ages.map(age => ({
-    age,
-    baselineSS: annualSocialSecurity(baseline, year, age, profile.legacyBenefitMultiplier, policy.baselineMode),
-    reformSS: annualSocialSecurity(combined, year, age, profile.legacyBenefitMultiplier, policy.baselineMode),
-    baselineMedicare: annualMedicarePayment(baseline, year, age, policy.baselineMode),
-    reformMedicare: annualMedicarePayment(combined, year, age, policy.baselineMode),
-  }))
+  const adults = ages.map((age, index) => {
+    const chosen = index === 0 ? profile.primaryClaimAge : profile.spouseClaimAge
+    const claim = chosen ?? combined.assumptions.socialSecurityClaimAge
+    const credits = householdWorkCredits(profile, index, claim, policy)
+    return {
+      age,
+      baselineSS: annualSocialSecurity(baseline, year, age, profile.legacyBenefitMultiplier, policy.baselineMode,
+        chosen ?? 67, credits, false),
+      reformSS: annualSocialSecurity(combined, year, age, profile.legacyBenefitMultiplier, policy.baselineMode,
+        claim, credits, policy.benefits.socialSecurityReform),
+      baselineMedicare: annualMedicarePayment(baseline, year, age, policy.baselineMode),
+      reformMedicare: annualMedicarePayment(combined, year, age, policy.baselineMode),
+    }
+  })
   const baselineSocialSecurity = adults.reduce((sum, adult) => sum + adult.baselineSS, 0)
   const reformSocialSecurity = adults.reduce((sum, adult) => sum + adult.reformSS, 0)
   const baselineMedicarePayment = adults.reduce((sum, adult) => sum + adult.baselineMedicare, 0)

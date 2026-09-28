@@ -1,0 +1,330 @@
+{
+  "input": "configurations/config1-paygo.json",
+  "assumptions": {
+    "reformYear": 2026,
+    "endYear": 2095,
+    "maxModeledAge": 110,
+    "benefitPhaseInYears": 40,
+    "flatBenefitFPLMultiple": 1.5,
+    "individualFPL2026": 15960,
+    "realFPLGrowth": 0,
+    "fullRetirementAge": 70,
+    "socialSecurityBenefitCap2026": null,
+    "vestingYears": 35,
+    "currentLawSSBenefit2026": 24500,
+    "currentLawSSBenefitRealGrowth": 0.005,
+    "fundingStrategy": "paygo",
+    "prefundingStartAge": 18,
+    "realEndowmentYield": 0.025,
+    "medicareEligibilityAge": 65,
+    "premiumSupport2026": 19000,
+    "premiumSupportRealGrowth": 0.018000000000000002,
+    "legacyMedicareCost2026": 19000,
+    "legacyMedicareRealGrowth": 0.015,
+    "legacyMedicareHIShare2026": 0.3401608579088472,
+    "medicareYearA": 2030,
+    "medicareYearB": 2035,
+    "cohortSizeMillions2026": 4.2,
+    "cohortSizeGrowth": 0.002,
+    "startingNominalGDPBillions": 31902,
+    "realGDPGrowth": 0.018,
+    "inflation": 0.02,
+    "startingDebtGDP": 1.00605,
+    "baselineRealMarketRate": 0.023,
+    "startingEffectiveNominalRate": 0.0323741364743303,
+    "debtSensitivity": 0,
+    "debtRatePassThrough": 0.15,
+    "otherOASDIGDP": 0.01,
+    "under65MedicareGDP": 0.006,
+    "nonDefenseDiscretionaryGDP2026": 0.03121,
+    "nonDefenseDiscretionaryRealGrowth": 0.018,
+    "otherMandatoryGDP2026": 0.02994,
+    "policyHorizonYears": 70,
+    "policyHorizonDebtTargetGDP": 1.01,
+    "peakDebtCeilingGDP": 1.5,
+    "qualifyingEarnings2026": 7560,
+    "averageWorkingYears": 35,
+    "averageAnnualEarnings2026": 50000,
+    "actuarialDiscountRate": 0.023,
+    "medicareFundingMode": "gdpShare",
+    "nonDefenseDiscretionaryMode": "cbo",
+    "socialSecurityClaimAge": 70,
+    "medicareSupportGDPShare": 0.03953934245501849
+  },
+  "central": {
+    "frozenOpeningTaxRevenueDebt2095": 0.30838214331645875,
+    "milliseconds": 640.7443310000001,
+    "openingChildCreditBillions": 512.5575562227464,
+    "openingNetTaxRevenueDeltaGDP": 0.01107818310607704,
+    "additionalFiscalAdjustmentGDP": -0.0282679982483387,
+    "periods": [
+      {
+        "from": 2026,
+        "through": 2035,
+        "cumulativeDeficitBillions": 12709.14028765344,
+        "cumulativeDeficitGDP": 0.033198815994367886,
+        "fiscalImprovementBillions": 9323.244814584343,
+        "fiscalImprovementGDP": 0.024354179910227328,
+        "terminalDebtGDP": 0.9877192058074696,
+        "baselineTerminalDebtGDP": 1.209115100917718,
+        "peakDebtGDP": 1.0501713171257558
+      },
+      {
+        "from": 2026,
+        "through": 2095,
+        "cumulativeDeficitBillions": -761263.7696090458,
+        "cumulativeDeficitGDP": -0.06937830844842732,
+        "fiscalImprovementBillions": 1240306.7396882416,
+        "fiscalImprovementGDP": 0.11303622606517327,
+        "terminalDebtGDP": -1.6689462863827629,
+        "baselineTerminalDebtGDP": 1.1931957714329693,
+        "peakDebtGDP": 1.0501713171257558
+      }
+    ],
+    "ledger": [
+      {
+        "year": 2026,
+        "debtGDP": 1.0500421576211505,
+        "baselineDebtGDP": 1.0641297,
+        "revenueGDP": 0.18648818310607704,
+        "ssGDP": 0.05222,
+        "medicareGDP": 0.033319999999999995,
+        "primaryGDP": 0.19791034072722735
+      },
+      {
+        "year": 2035,
+        "debtGDP": 0.9877192058074696,
+        "baselineDebtGDP": 1.209115100917718,
+        "revenueGDP": 0.19623735649279322,
+        "ssGDP": 0.048288103406551944,
+        "medicareGDP": 0.045460627802105004,
+        "primaryGDP": 0.18790742092489796
+      },
+      {
+        "year": 2056,
+        "debtGDP": 0.572550233402401,
+        "baselineDebtGDP": 1.321525086417736,
+        "revenueGDP": 0.21372659850268816,
+        "ssGDP": 0.041012408710605,
+        "medicareGDP": 0.04542224967247106,
+        "primaryGDP": 0.17828189098163524
+      },
+      {
+        "year": 2095,
+        "debtGDP": -1.6689462863827629,
+        "baselineDebtGDP": 1.1931957714329693,
+        "revenueGDP": 0.23714689844577308,
+        "ssGDP": 0.026450321656848078,
+        "medicareGDP": 0.04542224967247104,
+        "primaryGDP": 0.1646048140372739
+      }
+    ]
+  },
+  "slowerGrowth": {
+    "frozenOpeningTaxRevenueDebt2095": 1.1342522742990313,
+    "milliseconds": 495.3293130000002,
+    "openingChildCreditBillions": 512.5575562227464,
+    "openingNetTaxRevenueDeltaGDP": 0.01107818310607704,
+    "additionalFiscalAdjustmentGDP": -0.015128910541534424,
+    "periods": [
+      {
+        "from": 2026,
+        "through": 2035,
+        "cumulativeDeficitBillions": 13766.368528872164,
+        "cumulativeDeficitGDP": 0.036820811752715586,
+        "fiscalImprovementBillions": 8846.664809534428,
+        "fiscalImprovementGDP": 0.023662113861623292,
+        "terminalDebtGDP": 1.0568354010137677,
+        "baselineTerminalDebtGDP": 1.2774581884625826,
+        "peakDebtGDP": 1.0568354010137677
+      },
+      {
+        "from": 2026,
+        "through": 2095,
+        "cumulativeDeficitBillions": -184677.6273873303,
+        "cumulativeDeficitGDP": -0.02127717760757749,
+        "fiscalImprovementBillions": 1048321.8167766018,
+        "fiscalImprovementGDP": 0.12077981399811023,
+        "terminalDebtGDP": -0.49052859028679024,
+        "baselineTerminalDebtGDP": 2.9369738974188215,
+        "peakDebtGDP": 1.0590119778139362
+      }
+    ],
+    "ledger": [
+      {
+        "year": 2026,
+        "debtGDP": 1.0500421576211505,
+        "baselineDebtGDP": 1.0641297,
+        "revenueGDP": 0.18648818310607704,
+        "ssGDP": 0.05222,
+        "medicareGDP": 0.033319999999999995,
+        "primaryGDP": 0.19791034072722735
+      },
+      {
+        "year": 2035,
+        "debtGDP": 1.0568354010137677,
+        "baselineDebtGDP": 1.2774581884625826,
+        "revenueGDP": 0.19390020145901884,
+        "ssGDP": 0.05002887134361791,
+        "medicareGDP": 0.04546062780210498,
+        "primaryGDP": 0.1895306049939952
+      },
+      {
+        "year": 2056,
+        "debtGDP": 0.9381029600250214,
+        "baselineDebtGDP": 1.7184831913958625,
+        "revenueGDP": 0.2069922221332522,
+        "ssGDP": 0.045979953662558685,
+        "medicareGDP": 0.045422249672471056,
+        "primaryGDP": 0.18295373576528673
+      },
+      {
+        "year": 2095,
+        "debtGDP": -0.49052859028679024,
+        "baselineDebtGDP": 2.9369738974188215,
+        "revenueGDP": 0.22605883564408844,
+        "ssGDP": 0.03318466619987081,
+        "medicareGDP": 0.04542224967247103,
+        "primaryGDP": 0.17094564281553956
+      }
+    ]
+  },
+  "higherInterest": {
+    "frozenOpeningTaxRevenueDebt2095": 1.1863579112154699,
+    "milliseconds": 437.6978369999997,
+    "openingChildCreditBillions": 512.5575562227464,
+    "openingNetTaxRevenueDeltaGDP": 0.01107818310607704,
+    "additionalFiscalAdjustmentGDP": -0.017831865698099136,
+    "periods": [
+      {
+        "from": 2026,
+        "through": 2035,
+        "cumulativeDeficitBillions": 14858.270049429728,
+        "cumulativeDeficitGDP": 0.03881277271326128,
+        "fiscalImprovementBillions": 9576.518248692631,
+        "fiscalImprovementGDP": 0.025015780769523155,
+        "terminalDebtGDP": 1.0350973362986622,
+        "baselineTerminalDebtGDP": 1.2627807564102977,
+        "peakDebtGDP": 1.051716248570161
+      },
+      {
+        "from": 2026,
+        "through": 2095,
+        "cumulativeDeficitBillions": -627484.2078091382,
+        "cumulativeDeficitGDP": -0.05718621410060885,
+        "fiscalImprovementBillions": 1660668.727791646,
+        "fiscalImprovementGDP": 0.1513462111648314,
+        "terminalDebtGDP": -1.362747071139914,
+        "baselineTerminalDebtGDP": 2.486778685715504,
+        "peakDebtGDP": 1.051716248570161
+      }
+    ],
+    "ledger": [
+      {
+        "year": 2026,
+        "debtGDP": 1.0500421576211505,
+        "baselineDebtGDP": 1.0641297,
+        "revenueGDP": 0.18648818310607704,
+        "ssGDP": 0.05222,
+        "medicareGDP": 0.033319999999999995,
+        "primaryGDP": 0.19791034072722735
+      },
+      {
+        "year": 2035,
+        "debtGDP": 1.0350973362986622,
+        "baselineDebtGDP": 1.2627807564102977,
+        "revenueGDP": 0.19623735649279322,
+        "ssGDP": 0.048288103406551944,
+        "medicareGDP": 0.045460627802105004,
+        "primaryGDP": 0.18790742092489796
+      },
+      {
+        "year": 2056,
+        "debtGDP": 0.8214211711850538,
+        "baselineDebtGDP": 1.6796459679511686,
+        "revenueGDP": 0.21372659850268816,
+        "ssGDP": 0.041012408710605,
+        "medicareGDP": 0.04542224967247106,
+        "primaryGDP": 0.17828189098163524
+      },
+      {
+        "year": 2095,
+        "debtGDP": -1.362747071139914,
+        "baselineDebtGDP": 2.486778685715504,
+        "revenueGDP": 0.23714689844577308,
+        "ssGDP": 0.026450321656848078,
+        "medicareGDP": 0.04542224967247104,
+        "primaryGDP": 0.1646048140372739
+      }
+    ]
+  },
+  "noDynamics": {
+    "frozenOpeningTaxRevenueDebt2095": 0.5347351182876452,
+    "milliseconds": 427.8298950000003,
+    "openingChildCreditBillions": 512.5575562227464,
+    "openingNetTaxRevenueDeltaGDP": 0.01107818310607704,
+    "additionalFiscalAdjustmentGDP": -0.025281250476837158,
+    "periods": [
+      {
+        "from": 2026,
+        "through": 2035,
+        "cumulativeDeficitBillions": 13217.797631454114,
+        "cumulativeDeficitGDP": 0.034772826871689026,
+        "fiscalImprovementBillions": 8814.587470783668,
+        "fiscalImprovementGDP": 0.023189046512372746,
+        "terminalDebtGDP": 1.0122120101598373,
+        "baselineTerminalDebtGDP": 1.209115100917718,
+        "peakDebtGDP": 1.0519981591237548
+      },
+      {
+        "from": 2026,
+        "through": 2095,
+        "cumulativeDeficitBillions": -650371.0022898675,
+        "cumulativeDeficitGDP": -0.06042082211707452,
+        "fiscalImprovementBillions": 1129413.9723690632,
+        "fiscalImprovementGDP": 0.10492491282788675,
+        "terminalDebtGDP": -1.44329777080999,
+        "baselineTerminalDebtGDP": 1.1931957714329693,
+        "peakDebtGDP": 1.0519981591237548
+      }
+    ],
+    "ledger": [
+      {
+        "year": 2026,
+        "debtGDP": 1.0500421576211505,
+        "baselineDebtGDP": 1.0641297,
+        "revenueGDP": 0.18648818310607704,
+        "ssGDP": 0.05222,
+        "medicareGDP": 0.033319999999999995,
+        "primaryGDP": 0.19791034072722735
+      },
+      {
+        "year": 2035,
+        "debtGDP": 1.0122120101598373,
+        "baselineDebtGDP": 1.209115100917718,
+        "revenueGDP": 0.19623735649279322,
+        "ssGDP": 0.0489300216855567,
+        "medicareGDP": 0.045539342455018506,
+        "primaryGDP": 0.18987975313245578
+      },
+      {
+        "year": 2056,
+        "debtGDP": 0.6663653824805932,
+        "baselineDebtGDP": 1.321525086417736,
+        "revenueGDP": 0.21372659850268816,
+        "ssGDP": 0.04182871549182564,
+        "medicareGDP": 0.04553934245501852,
+        "primaryGDP": 0.18104340845321998
+      },
+      {
+        "year": 2095,
+        "debtGDP": -1.44329777080999,
+        "baselineDebtGDP": 1.1931957714329693,
+        "revenueGDP": 0.23714689844577308,
+        "ssGDP": 0.02697678614924862,
+        "medicareGDP": 0.0455393424550185,
+        "primaryGDP": 0.16709410437058594
+      }
+    ]
+  }
+}

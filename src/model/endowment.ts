@@ -1,5 +1,6 @@
-import { medicareForYear, medicarePremiumSupportShare } from './medicare'
-import { survivalProbability } from './mortality'
+import { medicareForYear, medicarePremiumSupportShare, premiumSupportPerPersonNominal } from './medicare'
+import { projectedSurvival } from './demographics'
+import { actuarialClaimFactor, representativeWorkCredits, workCreditFraction } from './claiming'
 import {
   fullyPrefundsMedicare,
   fullyPrefundsSocialSecurity,
@@ -10,6 +11,7 @@ import {
 import {
   cohortSizeAtAgeMillions,
   flatBenefitReal,
+  ssParticipation,
   socialSecurityBenefitShares,
   socialSecurityForYear,
 } from './socialSecurity'
@@ -22,6 +24,7 @@ import type {
 export function calculateEndowmentPerPerson(
   assumptions: ModelAssumptions,
   fundingYear = assumptions.reformYear,
+  gdpFactorForYear?: (year: number) => number,
 ): EndowmentPerPerson {
   const fundingAge = assumptions.prefundingStartAge
   const ssRetirementYear =
@@ -36,16 +39,18 @@ export function calculateEndowmentPerPerson(
   let medicarePV = 0
 
   for (
-    let age = assumptions.fullRetirementAge;
+    let age = assumptions.socialSecurityClaimAge;
     age <= assumptions.maxModeledAge;
     age += 1
   ) {
     const paymentYear = fundingYear + age - fundingAge
-    const survival = survivalProbability(fundingAge, age)
+    const survival = projectedSurvival(fundingAge, age, fundingYear - fundingAge)
     const discount =
       (1 + assumptions.realEndowmentYield) ** (age - fundingAge)
     socialSecurityPV +=
-      (survival * flatBenefitReal(paymentYear, assumptions) * ssFlatShare) /
+      (survival * flatBenefitReal(paymentYear, assumptions) * ssFlatShare *
+        actuarialClaimFactor(fundingYear - fundingAge, assumptions.socialSecurityClaimAge, assumptions) *
+        workCreditFraction(representativeWorkCredits(assumptions), assumptions)) /
       discount
   }
 
@@ -55,7 +60,7 @@ export function calculateEndowmentPerPerson(
     age += 1
   ) {
     const paymentYear = fundingYear + age - fundingAge
-    const survival = survivalProbability(fundingAge, age)
+    const survival = projectedSurvival(fundingAge, age, fundingYear - fundingAge)
     const discount =
       (1 + assumptions.realEndowmentYield) ** (age - fundingAge)
     const supportShare = medicarePremiumSupportShare(
@@ -63,10 +68,8 @@ export function calculateEndowmentPerPerson(
       paymentYear,
       assumptions,
     )
-    const realPremiumSupport =
-      assumptions.premiumSupport2026 *
-      (1 + assumptions.premiumSupportRealGrowth) **
-        (paymentYear - assumptions.reformYear)
+    const realPremiumSupport = premiumSupportPerPersonNominal(paymentYear, assumptions, gdpFactorForYear?.(paymentYear) ?? 1) /
+      (1 + assumptions.inflation) ** (paymentYear - assumptions.reformYear)
     medicarePV +=
       (survival * realPremiumSupport * supportShare) / discount
   }
@@ -87,14 +90,15 @@ export function annualPrefundingBillions(
 
 const fundingPlanCache = new WeakMap<
   ModelAssumptions,
-  ReadonlyMap<number, AnnualFundingPlan>
+  Map<((year: number) => number) | undefined, ReadonlyMap<number, AnnualFundingPlan>>
 >()
 
 function fullSleevePrefundingBillions(
   year: number,
   assumptions: ModelAssumptions,
+  gdpFactorForYear?: (year: number) => number,
 ): { socialSecurity: number; medicare: number } {
-  const endowment = calculateEndowmentPerPerson(assumptions, year)
+  const endowment = calculateEndowmentPerPerson(assumptions, year, gdpFactorForYear)
   const cohortMillions = cohortSizeAtAgeMillions(
     year,
     assumptions.prefundingStartAge,
@@ -104,7 +108,7 @@ function fullSleevePrefundingBillions(
     (1 + assumptions.inflation) ** (year - assumptions.reformYear)
   return {
     socialSecurity:
-      (endowment.socialSecurityPV * cohortMillions * inflationFactor) /
+      (endowment.socialSecurityPV * cohortMillions * ssParticipation * inflationFactor) /
       1_000,
     medicare:
       (endowment.medicarePV * cohortMillions * inflationFactor) / 1_000,
@@ -132,6 +136,7 @@ function scheduledCurrentLawBenefitSpending(
 function reformPaygoBenefitSpending(
   year: number,
   assumptions: ModelAssumptions,
+  gdpFactor = 1,
 ): number {
   const paygoAssumptions: ModelAssumptions = {
     ...assumptions,
@@ -143,18 +148,19 @@ function reformPaygoBenefitSpending(
     socialSecurity.legacyBillions +
     socialSecurity.flatPaygoBillions +
     medicare.legacyBillions +
-    medicare.premiumSupportPaygoBillions
+    medicare.premiumSupportPaygoBillions * (assumptions.medicareFundingMode === 'gdpShare' ? gdpFactor : 1)
   )
 }
 
 export function benefitDesignSavingsBillions(
   year: number,
   assumptions: ModelAssumptions,
+  gdpFactor = 1,
 ): number {
   return Math.max(
     0,
     scheduledCurrentLawBenefitSpending(year, assumptions) -
-      reformPaygoBenefitSpending(year, assumptions),
+      reformPaygoBenefitSpending(year, assumptions, gdpFactor),
   )
 }
 
@@ -171,6 +177,7 @@ function socialSecurityPrefundedShareForRetirementYear(
 
 function buildFundingPlan(
   assumptions: ModelAssumptions,
+  gdpFactorForYear?: (year: number) => number,
 ): ReadonlyMap<number, AnnualFundingPlan> {
   const plan = new Map<number, AnnualFundingPlan>()
 
@@ -179,11 +186,11 @@ function buildFundingPlan(
     year <= assumptions.endYear;
     year += 1
   ) {
-    const full = fullSleevePrefundingBillions(year, assumptions)
+    const full = fullSleevePrefundingBillions(year, assumptions, gdpFactorForYear)
     const availableReformSavings = usesSavingsFundedSequence(
       assumptions.fundingStrategy,
     )
-      ? benefitDesignSavingsBillions(year, assumptions)
+      ? benefitDesignSavingsBillions(year, assumptions, gdpFactorForYear?.(year) ?? 1)
       : 0
     const socialSecurityPrefunding = usesSavingsFundedSequence(
       assumptions.fundingStrategy,
@@ -266,11 +273,14 @@ function buildFundingPlan(
 
 export function fundingPlanForAssumptions(
   assumptions: ModelAssumptions,
+  gdpFactorForYear?: (year: number) => number,
 ): ReadonlyMap<number, AnnualFundingPlan> {
-  const cached = fundingPlanCache.get(assumptions)
+  const variants = fundingPlanCache.get(assumptions) ?? new Map()
+  const cached = variants.get(gdpFactorForYear)
   if (cached) return cached
-  const plan = buildFundingPlan(assumptions)
-  fundingPlanCache.set(assumptions, plan)
+  const plan = buildFundingPlan(assumptions, gdpFactorForYear)
+  variants.set(gdpFactorForYear, plan)
+  fundingPlanCache.set(assumptions, variants)
   return plan
 }
 

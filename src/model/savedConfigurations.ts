@@ -1,3 +1,5 @@
+import { defaultAssumptions } from './defaults'
+import { eligiblePopulationMillions } from './demographics'
 import { defaultCombinedPolicy } from './combined'
 import type { CombinedPolicy } from './combined'
 import { exampleHouseholds } from './householdScenario'
@@ -63,6 +65,31 @@ export function parseConfiguration(json: string): SavedConfiguration {
       typeof raw.savedAt !== 'string' || !Number.isFinite(Date.parse(raw.savedAt)) || !record(raw.scenario))
     throw new Error('The configuration header is incomplete.')
   const scenario = raw.scenario
+  // Additive v1 migration: preserve existing choices; new GDP-pool generosity
+  // matches the saved 2026 per-person grant. The original JSON remains untouched.
+  if (record(scenario.policy) && record(scenario.policy.assumptions)) {
+    const a = scenario.policy.assumptions
+    const additions = ['qualifyingEarnings2026', 'averageWorkingYears', 'averageAnnualEarnings2026',
+      'actuarialDiscountRate', 'medicareFundingMode'] as const
+    for (const key of additions) if (a[key] === undefined) a[key] = defaultAssumptions[key]
+    if (a.nonDefenseDiscretionaryMode === undefined) a.nonDefenseDiscretionaryMode =
+      a.nonDefenseDiscretionaryGDP2026 === defaultAssumptions.nonDefenseDiscretionaryGDP2026 &&
+      a.nonDefenseDiscretionaryRealGrowth === defaultAssumptions.nonDefenseDiscretionaryRealGrowth ? 'cbo' : 'growth'
+    if (a.socialSecurityClaimAge === undefined) a.socialSecurityClaimAge = a.fullRetirementAge
+    if (a.medicareSupportGDPShare === undefined) {
+      const migrated = { ...defaultAssumptions, ...a } as typeof defaultAssumptions
+      a.medicareSupportGDPShare = Number(a.premiumSupport2026) *
+        eligiblePopulationMillions(2026, migrated.medicareEligibilityAge, migrated) /
+        (1000 * migrated.startingNominalGDPBillions)
+    }
+  }
+  if (Array.isArray(scenario.householdProfiles)) for (const item of scenario.householdProfiles) {
+    if (!record(item)) continue
+    if (item.primaryClaimAge === undefined) item.primaryClaimAge = null
+    if (item.spouseClaimAge === undefined) item.spouseClaimAge = null
+    if (item.primaryCreditedYears2026 === undefined) item.primaryCreditedYears2026 = Math.max(0, Math.min(35, Number(item.primaryAge2026) - 22))
+    if (item.spouseCreditedYears2026 === undefined) item.spouseCreditedYears2026 = Math.max(0, Math.min(35, Number(item.spouseAge2026) - 22))
+  }
   assertShape(defaultCombinedPolicy, scenario.policy, 'policy')
   if (!record(scenario.policy)) throw new Error('Missing policy.')
   const policy = scenario.policy as unknown as CombinedPolicy
@@ -79,6 +106,17 @@ export function parseConfiguration(json: string): SavedConfiguration {
       policy.assumptions.medicareYearB < policy.assumptions.medicareYearA ||
       policy.assumptions.medicareYearA < 2026 || policy.assumptions.medicareYearB > 2095)
     throw new Error('The configuration has incompatible horizon or transition settings.')
+  oneOf(policy.assumptions.medicareFundingMode, ['gdpShare', 'perPerson'], 'Medicare funding rule')
+  oneOf(policy.assumptions.nonDefenseDiscretionaryMode, ['cbo', 'growth'], 'NDD rule')
+  for (const key of ['fullRetirementAge', 'socialSecurityClaimAge', 'medicareEligibilityAge', 'medicareYearA', 'medicareYearB'] as const)
+    if (!Number.isInteger(policy.assumptions[key])) throw new Error(`${key} requires whole years.`)
+  within(policy.assumptions.socialSecurityClaimAge, 62, 80, 'claim age')
+  within(policy.assumptions.vestingYears, 1, 60, 'full-benefit working years')
+  within(policy.assumptions.qualifyingEarnings2026, 1, 100000, 'qualifying earnings')
+  within(policy.assumptions.averageWorkingYears, 0, 60, 'representative working years')
+  within(policy.assumptions.averageAnnualEarnings2026, 0, 1000000, 'representative earnings')
+  within(policy.assumptions.actuarialDiscountRate, 0, 0.10, 'actuarial discount rate')
+  within(policy.assumptions.medicareSupportGDPShare, 0, 0.15, 'senior support GDP share')
   within(policy.assumptions.fullRetirementAge, 62, 80, 'retirement age')
   within(policy.assumptions.medicareEligibilityAge, 60, 80, 'Medicare eligibility age')
   within(policy.assumptions.benefitPhaseInYears, 1, 70, 'benefit phase-in')
@@ -101,6 +139,9 @@ export function parseConfiguration(json: string): SavedConfiguration {
     within(profile.spouseAge2026, 18, 105, 'spouse age')
     within(profile.primaryWage2026, 0, 1e6, 'first adult wages')
     within(profile.spouseWage2026, 0, 1e6, 'spouse wages')
+    for (const claim of [profile.primaryClaimAge, profile.spouseClaimAge]) if (claim !== null) within(claim, 62, 80, 'household claim age')
+    within(profile.primaryCreditedYears2026, 0, Math.max(0, profile.primaryAge2026 - 14), 'past work credits')
+    within(profile.spouseCreditedYears2026, 0, Math.max(0, profile.spouseAge2026 - 14), 'spouse past work credits')
     within(profile.workThroughAge, 18, 80, 'work stop age')
     if (profile.childAges2026.length > 4 || profile.childAges2026.some(age => !Number.isInteger(age) || age < 0 || age > 17))
       throw new Error('Child ages must be between 0 and 17 (up to four children).')

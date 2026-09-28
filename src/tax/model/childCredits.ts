@@ -78,12 +78,7 @@ export function hasDetailedChildCreditMicrodata(): boolean {
   return childCreditMicrodata.distribution.length > 0;
 }
 
-/**
- * Scores the reform child credit over age-aware CPS tax units. GitHub Pages rebuilds
- * the small child-credit snapshot from the pinned 2025 ASEC source before compiling.
- * The checked-in fallback keeps local/offline builds usable and is exact for the
- * default 100%-baseline-refundable design except for the small U6 population estimate.
- */
+/** Score the checked-in age-aware CPS tax-unit snapshot; no CI/network work. */
 export function calculateAggregateChildCreditCost(settings: ReformSettings): number {
   if (hasDetailedChildCreditMicrodata()) {
     const compensationScale = microdataJson.calibration.grossCompensationScaleToBea2025;
@@ -99,18 +94,7 @@ export function calculateAggregateChildCreditCost(settings: ReformSettings): num
     return costDollars / 1e9;
   }
 
-  const childPopulationMillions = baseline.populationsMillions.children;
-  const under6PopulationMillions = Math.min(
-    childPopulationMillions,
-    Math.max(0, childCreditMicrodata.fallbackUnder6PopulationMillions),
-  );
-  const maximumBillions = childPopulationMillions * Math.max(0, settings.childCredit) / 1000
-    + under6PopulationMillions * nonnegative(settings.under6ChildCredit) / 1000;
-  const baselineShare = share(settings.childCreditBaselineRefundableShare ?? 1);
-
-  // Offline fallback: preserve the exact default/full-refund score. A non-100%
-  // baseline should be evaluated with the generated CPS snapshot used on Pages.
-  return baselineShare >= 1 ? maximumBillions : maximumBillions * baselineShare;
+  throw new Error('Missing pinned child-credit microdata; cannot score earnings phase-in safely.');
 }
 
 export function childCreditPopulationSummary(): { childrenMillions: number; under6Millions: number } {

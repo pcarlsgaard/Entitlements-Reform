@@ -17,6 +17,31 @@ export interface SourceRecord {
 
 export const sources: readonly SourceRecord[] = [
   {
+    id: 'ssa-2026-projected-demographics', kind: 'empirical input', agency: 'Social Security Administration',
+    datasetOrReport: '2026 Trustees Alternative II death probabilities and Social Security area population',
+    publicationDate: '2026', relevantTable: 'DeathProbsE_M/F_Alt2_TR2026 and SSPopJul_Alt2_TR2026',
+    url: 'https://www.ssa.gov/oact/Downloadables/CY/index.html',
+    notes: 'Checked-in 2026–2100 single-age population and qx with source SHA256. Mortality follows cohort calendar years, averaging male/female conditional survival 50/50. Population age 100+ is distributed across 100–110 using survival weights. Beyond 2100, qx is frozen and population extends at 0.2% annually plus the selected deviation. This is SSA-area population, a proxy for eligible program populations; SS uses one common opening effective-beneficiary weight for both benefit formulas.',
+  },
+  {
+    id: 'ssa-2026-qualifying-earnings', kind: 'policy assumption', agency: 'Social Security Administration / simulator policy',
+    datasetOrReport: 'Social Security Credits and Benefit Eligibility', publicationDate: '2026', relevantTable: '2026 credit earnings threshold',
+    url: 'https://www.ssa.gov/benefits/retirement/planner/credits.html',
+    notes: 'SSA 2026 threshold is $1,890 per quarter-credit, $7,560 for four. Reform uses $7,560 as an editable full-year earnings threshold, continuous partial-year credit, CPI indexing and 35 credited years for a full flat benefit. These reform rules are policy choices, not current-law eligibility rules. No hard 35-year cliff; shorter records are prorated.',
+  },
+  {
+    id: 'cbo-official-reference-2026', kind: 'empirical input', agency: 'Congressional Budget Office',
+    datasetOrReport: 'Long-Term Budget Projections, February 2026', publicationDate: '2026-02', relevantTable: 'annual_fy_2026-02.csv',
+    url: 'https://github.com/US-CBO/cbo-data',
+    notes: 'Official agency machine-readable dataset, pinned with SHA256 in cboOfficial.json. Published debt/GDP is plotted independently through 2056, with no extrapolation. The custom model shares opening spending calibration but follows its own demographics, growth and interest rules afterward. Not an official score of reform.',
+  },
+  {
+    id: 'cps-child-credit-snapshot', kind: 'empirical input', agency: 'U.S. Census Bureau',
+    datasetOrReport: '2025 CPS ASEC public-use person file', publicationDate: '2025', relevantTable: 'pppub25.csv grouped by TAX_ID',
+    url: 'https://www2.census.gov/programs-surveys/cps/datasets/2025/march/asecpub25csv.zip',
+    notes: 'Pinned source checksum; 9,605 age-aware tax-unit cells. Tax-unit weights calibrated to 72.021348 million children; earnings scaled to the tax model compensation calibration. Full and partial refundability are scored against observed earnings. Checked-in data requires no CI rebuild. Rebuild script is scripts/build_child_credit_microdata.py.',
+  },
+  {
     id: 'dynamic-capital-dbcft-reference', kind: 'modeling assumption', agency: 'Tax Foundation',
     datasetOrReport: 'Options for Reforming America’s Tax Code: Replace the Corporate Income Tax with a Destination-Based Cash Flow Tax',
     publicationDate: '2026', relevantTable: 'Topline Estimates, Option 71',

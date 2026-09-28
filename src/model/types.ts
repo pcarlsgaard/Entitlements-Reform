@@ -23,7 +23,16 @@ export interface ModelAssumptions {
   fullRetirementAge: number
   /** Optional CPI-indexed cap on a retiree's annual Social Security benefit (2026 dollars). */
   socialSecurityBenefitCap2026: number | null
+  /** Full-benefit credited years; shorter records receive proportional flat benefits. */
   vestingYears: number
+  socialSecurityClaimAge: number
+  qualifyingEarnings2026: number
+  averageWorkingYears: number
+  averageAnnualEarnings2026: number
+  actuarialDiscountRate: number
+  medicareFundingMode: 'gdpShare' | 'perPerson'
+  medicareSupportGDPShare: number
+  nonDefenseDiscretionaryMode: 'cbo' | 'growth'
   currentLawSSBenefit2026: number
   currentLawSSBenefitRealGrowth: number
   fundingStrategy: FundingStrategy
@@ -67,6 +76,9 @@ export interface SSCohortAudit extends BenefitShares {
   birthYear: number
   /** Nominal individual legacy benefit before blend, cap, and aggregate CBO calibration. */
   legacyBenefitPerPerson: number
+  flatBenefitPerPerson: number
+  claimAge: number
+  claimYear: number
   retirementYear: number
   initialCohortMillions: number
   survivingBeneficiariesMillions: number

@@ -27,7 +27,7 @@ export const macroBudgetAssumptionKeys = [
 export function centralMacroBudgetReference(
   assumptions: ModelAssumptions,
 ): ModelAssumptions {
-  const reference = { ...assumptions }
+  const reference = { ...assumptions, nonDefenseDiscretionaryMode: defaultAssumptions.nonDefenseDiscretionaryMode }
   for (const key of macroBudgetAssumptionKeys) {
     reference[key] = defaultAssumptions[key]
   }
@@ -37,7 +37,7 @@ export function centralMacroBudgetReference(
 export function hasNoncentralMacroBudgetAssumptions(
   assumptions: ModelAssumptions,
 ): boolean {
-  return macroBudgetAssumptionKeys.some(
+  return assumptions.nonDefenseDiscretionaryMode !== defaultAssumptions.nonDefenseDiscretionaryMode || macroBudgetAssumptionKeys.some(
     (key) => assumptions[key] !== defaultAssumptions[key],
   )
 }

@@ -30,12 +30,7 @@ export function nonDefenseDiscretionaryBillions(
   year: number,
   assumptions: ModelAssumptions,
 ): number {
-  const usesCboCentralPath =
-    assumptions.nonDefenseDiscretionaryGDP2026 ===
-      defaultAssumptions.nonDefenseDiscretionaryGDP2026 &&
-    assumptions.nonDefenseDiscretionaryRealGrowth ===
-      defaultAssumptions.nonDefenseDiscretionaryRealGrowth
-  if (usesCboCentralPath) {
+  if (assumptions.nonDefenseDiscretionaryMode === 'cbo') {
     return (
       cboNondefenseDiscretionaryGDP(year) *
       nominalGDPBillionsForYear(year, assumptions)

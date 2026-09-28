@@ -1,3 +1,4 @@
+import { populationMillions } from '../src/model/demographics'
 import { describe, expect, it } from 'vitest'
 import { defaultAssumptions, withAssumptions } from '../src/model/defaults'
 import {
@@ -24,12 +25,11 @@ describe('SSA mortality', () => {
     expect(survivalProbability(70, 80)).toBeCloseTo(57_695.5 / 77_145, 12)
   })
 
-  it('applies survival from birth before counting benefit entrants', () => {
+  it('uses SSA projected age-specific population for entrants', () => {
     expect(
       cohortSizeAtAgeMillions(2026, 65, defaultAssumptions),
     ).toBeCloseTo(
-      defaultAssumptions.cohortSizeMillions2026 *
-        survivalProbability(0, 65),
+      populationMillions(2026, 65, defaultAssumptions),
       12,
     )
   })
@@ -138,10 +138,10 @@ describe('Endowment PV', () => {
 
   it('higher premium support increases Medicare PV', () => {
     const low = calculateEndowmentPerPerson(
-      withAssumptions({ premiumSupport2026: 15_000 }),
+      withAssumptions({ medicareFundingMode: 'perPerson', premiumSupport2026: 15_000 }),
     )
     const high = calculateEndowmentPerPerson(
-      withAssumptions({ premiumSupport2026: 25_000 }),
+      withAssumptions({ medicareFundingMode: 'perPerson', premiumSupport2026: 25_000 }),
     )
     expect(high.medicarePV).toBeGreaterThan(low.medicarePV)
   })

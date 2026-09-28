@@ -1,6 +1,6 @@
+import ssaProjections from '../data/ssaProjections.json'
 import type { ModelAssumptions } from './types'
-// Simplified common claiming age for the current-law comparator. Early
-// claiming and actuarial adjustments remain outside this model.
+// Reference age for the simplified current-law benefit formula.
 export const currentLawRetirementAge = 67
 import {
   cboCalibrationOtherOASDIGDP,
@@ -23,6 +23,15 @@ export const defaultAssumptions: ModelAssumptions = {
   fullRetirementAge: 70,
   socialSecurityBenefitCap2026: null,
   vestingYears: 35,
+  socialSecurityClaimAge: 70,
+  qualifyingEarnings2026: 7_560,
+  averageWorkingYears: 35,
+  averageAnnualEarnings2026: 50_000,
+  actuarialDiscountRate: 0.023,
+  medicareFundingMode: 'gdpShare',
+  medicareSupportGDPShare: 19_000 * (ssaProjections.population[0]!.slice(65).reduce((sum, n) => sum + n, 0) / 1e6) /
+    (1000 * cbo2026NominalGDPBillions),
+  nonDefenseDiscretionaryMode: 'cbo',
   currentLawSSBenefit2026: 24_500,
   currentLawSSBenefitRealGrowth: 0.005,
   fundingStrategy: 'both',
