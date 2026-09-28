@@ -70,6 +70,7 @@ export const defaultAssumptions: ModelAssumptions = {
   otherMandatoryGDP2026: 0.02994,
   policyHorizonYears: 70,
   policyHorizonDebtTargetGDP: 1.01,
+  debtPaydownTargetGDP: 0.40,
   peakDebtCeilingGDP: 1.5,
 }
 
