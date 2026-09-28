@@ -112,6 +112,7 @@ function rawMedicareForYear(
       (year - assumptions.reformYear) *
     inflationFactor
   const premiumSupport = premiumSupportPerPersonNominal(year, assumptions)
+  const enrollmentGrowthAdjustment = medicareEnrollmentGrowthAdjustment(year)
 
   for (
     let eligibilityYear = firstEligibilityYear;
@@ -122,7 +123,7 @@ function rawMedicareForYear(
     const survivalFraction = projectedSurvival(assumptions.medicareEligibilityAge, age,
       eligibilityYear - assumptions.medicareEligibilityAge)
     const survivingBeneficiariesMillions =
-      populationMillions(year, age, assumptions) * medicareEnrollmentGrowthAdjustment(year)
+      populationMillions(year, age, assumptions) * enrollmentGrowthAdjustment
     const initialCohortMillions = survivalFraction > 0 ? survivingBeneficiariesMillions / survivalFraction : 0
     const premiumSupportShare =
       entitlementDesign === 'currentLaw'
@@ -182,6 +183,15 @@ function scheduledMedicareNetGDP(year: number): number {
     cmsMedicareGrossGDP(year) / cmsMedicareGrossGDP(cboBaselineEndYear)
 }
 
+const centralCurrentLawLegacyCache = new Map<number, number>()
+function centralCurrentLawLegacyBillions(year: number): number {
+  const cached = centralCurrentLawLegacyCache.get(year)
+  if (cached !== undefined) return cached
+  const value = rawMedicareForYear(year, defaultAssumptions, undefined, 'currentLaw').legacyBillions
+  centralCurrentLawLegacyCache.set(year, value)
+  return value
+}
+
 export function medicareForYear(
   year: number,
   assumptions: ModelAssumptions,
@@ -194,18 +204,13 @@ export function medicareForYear(
     resolvePrefundedShare,
     entitlementDesign,
   )
-  const centralCurrentLaw = rawMedicareForYear(
-    year,
-    defaultAssumptions,
-    undefined,
-    'currentLaw',
-  )
+  const centralLegacyBillions = centralCurrentLawLegacyBillions(year)
   const targetLegacyBillions = Math.max(
     0,
     scheduledMedicareNetGDP(year) - cboCalibrationUnder65MedicareGDP,
   ) * cboCalibrationNominalGDPBillions(year)
-  const legacyScale = centralCurrentLaw.legacyBillions > 0
-    ? targetLegacyBillions / centralCurrentLaw.legacyBillions
+  const legacyScale = centralLegacyBillions > 0
+    ? targetLegacyBillions / centralLegacyBillions
     : 1
   const cohorts = result.cohorts.map((cohort) => ({
     ...cohort,
