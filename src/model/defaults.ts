@@ -33,7 +33,8 @@ export const defaultAssumptions: ModelAssumptions = {
     (1000 * cbo2026NominalGDPBillions),
   nonDefenseDiscretionaryMode: 'cbo',
   currentLawSSBenefit2026: 24_500,
-  currentLawSSBenefitRealGrowth: 0.005,
+  // 2026 OASDI Trustees intermediate long-run real covered-wage growth.
+  currentLawSSBenefitRealGrowth: 0.0114,
   fundingStrategy: 'both',
   prefundingStartAge: 18,
   realEndowmentYield: 0.025,
@@ -51,6 +52,8 @@ export const defaultAssumptions: ModelAssumptions = {
   cohortSizeGrowth: 0.002,
   startingNominalGDPBillions: cbo2026NominalGDPBillions,
   realGDPGrowth: 0.018,
+  // Explicit wage-distribution growth; do not infer this from GDP per capita.
+  realWageGrowth: 0.0114,
   inflation: 0.02,
   startingDebtGDP: cbo2026DebtHeldByPublicGDP,
   baselineRealMarketRate: 0.023,
