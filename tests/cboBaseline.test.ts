@@ -13,6 +13,12 @@ import {
 import { defaultAssumptions } from '../src/model/defaults'
 import { medicareForYear } from '../src/model/medicare'
 import { socialSecurityForYear } from '../src/model/socialSecurity'
+import {
+  cmsMedicareEnrollmentMillions,
+  cmsMedicareGrossGDP,
+  ssaOasdiCostGDP,
+  ssaRetiredWorkerMillions,
+} from '../src/data/trustees2026'
 import { simulateCurrentLawConstantRevenue } from '../src/model/simulate'
 
 describe('CBO February 2026 baseline calibration', () => {
@@ -90,21 +96,46 @@ describe('CBO February 2026 baseline calibration', () => {
     expect(Math.max(...cboOfficial.rows.map(r => r.year))).toBe(2056)
   })
 
-  it('uses explicit per-person growth without future CBO recalibration', () => {
+  it('matches CBO entitlement shares through 2056 and uses Trustees-shaped extensions afterward', () => {
+    const sim = simulateCurrentLawConstantRevenue(defaultAssumptions, 'scheduled', 0.22)
+    const row = (year: number) => sim.years.find(item => item.year === year)!
+    for (const year of [2026, 2035, 2056]) {
+      const r = row(year)
+      expect((r.legacySocialSecurity + r.otherOASDI) / r.nominalGDP).toBeCloseTo(cboSocialSecurityGDP(year), 9)
+      expect((r.legacySeniorMedicare + r.under65Medicare) / r.nominalGDP).toBeCloseTo(cboMedicareNetGDP(year), 9)
+    }
+    const ss2095 = cboSocialSecurityGDP(2056) * ssaOasdiCostGDP(2095) / ssaOasdiCostGDP(2056)
+    const med2095 = cboMedicareNetGDP(2056) * cmsMedicareGrossGDP(2095) / cmsMedicareGrossGDP(2056)
+    expect((row(2095).legacySocialSecurity + row(2095).otherOASDI) / row(2095).nominalGDP).toBeCloseTo(ss2095, 9)
+    expect((row(2095).legacySeniorMedicare + row(2095).under65Medicare) / row(2095).nominalGDP).toBeCloseTo(med2095, 9)
+  })
+
+  it('keeps modeled beneficiary growth close to the Trustees reference series', () => {
+    for (const year of [2026, 2035, 2056, 2095]) {
+      const ss = socialSecurityForYear(year, defaultAssumptions, 'currentLaw')
+      const modeled = ss.cohorts.reduce((sum, cohort) => sum + cohort.survivingBeneficiariesMillions, 0)
+      expect(modeled / ssaRetiredWorkerMillions(year)).toBeGreaterThan(0.98)
+      expect(modeled / ssaRetiredWorkerMillions(year)).toBeLessThan(1.02)
+    }
+
+    const base = medicareForYear(2026, defaultAssumptions, undefined, 'currentLaw')
+      .cohorts.reduce((sum, cohort) => sum + cohort.survivingBeneficiariesMillions, 0)
+    for (const year of [2035, 2055, 2095]) {
+      const med = medicareForYear(year, defaultAssumptions, undefined, 'currentLaw')
+      const modeledIndex = med.cohorts.reduce((sum, cohort) => sum + cohort.survivingBeneficiariesMillions, 0) / base
+      const trusteesIndex = cmsMedicareEnrollmentMillions(year) / cmsMedicareEnrollmentMillions(2026)
+      expect(modeledIndex).toBeCloseTo(trusteesIndex, 8)
+    }
+  })
+
+  it('keeps individual legacy award indexing explicit beneath the aggregate calibration', () => {
     const ss56 = socialSecurityForYear(2056, defaultAssumptions, 'currentLaw')
     const ss57 = socialSecurityForYear(2057, defaultAssumptions, 'currentLaw')
-    const med56 = medicareForYear(2056, defaultAssumptions, undefined, 'currentLaw')
-    const med57 = medicareForYear(2057, defaultAssumptions, undefined, 'currentLaw')
-    const average = (result: typeof ss56 | typeof med56) => result.legacyBillions * 1000 /
-      result.cohorts.reduce((sum, cohort) => sum + cohort.survivingBeneficiariesMillions, 0)
-    // Fixed calibration after 2056; individual existing awards receive COLAs,
-    // while real growth applies to the starting award of each new cohort.
     const cohort56 = ss56.cohorts.find(c => c.retirementYear === 2056)!
     const same57 = ss57.cohorts.find(c => c.retirementYear === 2056)!
     const entrant57 = ss57.cohorts.find(c => c.retirementYear === 2057)!
     expect(same57.legacyBenefitPerPerson / cohort56.legacyBenefitPerPerson).toBeCloseTo(1.02, 10)
-    expect(entrant57.legacyBenefitPerPerson / cohort56.legacyBenefitPerPerson).toBeCloseTo(1.005 * 1.02, 10)
-    expect(average(med57) / average(med56)).toBeCloseTo(
-      (1 + defaultAssumptions.legacyMedicareRealGrowth) * (1 + defaultAssumptions.inflation), 8)
+    expect(entrant57.legacyBenefitPerPerson / cohort56.legacyBenefitPerPerson).toBeCloseTo(
+      (1 + defaultAssumptions.currentLawSSBenefitRealGrowth) * (1 + defaultAssumptions.inflation), 10)
   })
 })
