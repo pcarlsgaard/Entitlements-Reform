@@ -28,6 +28,15 @@ describe('portable named simulator configurations', () => {
     expect(parseConfigurationLibrary(JSON.stringify([saved]))).toEqual([saved])
   })
 
+  it('migrates the former constant wage-growth control to a Trustees-path deviation', () => {
+    const legacy = makeConfiguration('Legacy wage setting', scenario(), 'legacy-wage')
+    const assumptions = legacy.scenario.policy.assumptions as unknown as Record<string, unknown>
+    assumptions.realWageGrowth = 0.0114
+    delete assumptions.realWageGrowthDeviation
+    const imported = parseConfiguration(JSON.stringify(legacy))
+    expect(imported.scenario.policy.assumptions.realWageGrowthDeviation).toBeCloseTo(0, 10)
+  })
+
   it('rejects unsupported files and malformed values before loading the model', () => {
     const valid = makeConfiguration('Test', scenario(), 'test-id')
     expect(() => parseConfiguration('{broken')).toThrow(/valid JSON/)
