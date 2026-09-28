@@ -4,7 +4,7 @@ import { flatBenefitReal, legacySocialSecurityBenefitNominal, socialSecurityBene
 import { annualWorkCredit, actuarialClaimFactor, currentLawClaimFactor, workCreditFraction } from './claiming'
 import { premiumSupportPerPersonNominal } from './medicare'
 import { nominalGDPBillionsForYear } from './budget'
-import { realIncomeGrowthFactor } from './taxProjection'
+import { realWageGrowthFactor } from './taxProjection'
 import { calculateTransferAnalysis } from '../tax/model/transfers'
 import type { TransferHouseholdInput, TransferProgramId, TransferProgramResult } from '../tax/model/types'
 import type { CombinedPolicy } from './combined'
@@ -94,7 +94,7 @@ export function householdWorkCredits(profile: ExampleHousehold, adult: number, c
   let credits = adult === 0 ? profile.primaryCreditedYears2026 : profile.spouseCreditedYears2026
   const wage = adult === 0 ? profile.primaryWage2026 : profile.spouseWage2026
   for (let age = age2026; age < claimAge && age <= profile.workThroughAge; age++) {
-    credits += annualWorkCredit(wage * realIncomeGrowthFactor(2026 + age - age2026, policy.assumptions),
+    credits += annualWorkCredit(wage * realWageGrowthFactor(2026 + age - age2026, policy.assumptions),
       policy.assumptions.qualifyingEarnings2026)
   }
   return credits
@@ -155,7 +155,7 @@ export function scoreExampleHousehold(profile: ExampleHousehold, year: number, p
   const ages = [profile.primaryAge2026, ...(profile.filingStatus === 'married' ? [profile.spouseAge2026] : [])].map(age => age + elapsed)
   if (ages.some(age => age > policy.assumptions.maxModeledAge)) return null
   const childAges = profile.childAges2026.map(age => age + elapsed).filter(age => age < 18)
-  const realWageFactor = realIncomeGrowthFactor(year, policy.assumptions)
+  const realWageFactor = realWageGrowthFactor(year, policy.assumptions)
   const inflationFactor = (1 + policy.assumptions.inflation) ** elapsed
   const wages = [profile.primaryWage2026, profile.spouseWage2026].map((wage, index) =>
     (ages[index] ?? 999) <= profile.workThroughAge ? wage * realWageFactor : 0)
