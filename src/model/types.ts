@@ -66,8 +66,10 @@ export interface ModelAssumptions {
   otherMandatoryGDP2026: number
   policyHorizonYears: number
   policyHorizonDebtTargetGDP: number
-  /** Debt/GDP threshold at which further debt paydown stops and the total budget is balanced. */
+  /** Debt/GDP threshold at which further debt paydown stops. */
   debtPaydownTargetGDP: number
+  /** Maximum annual overall surplus devoted to debt paydown, as a share of GDP. */
+  debtPaydownSurplusCapGDP: number
   peakDebtCeilingGDP: number
 }
 
