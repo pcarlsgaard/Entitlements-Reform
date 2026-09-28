@@ -114,8 +114,7 @@ export function simulate(
   let previousEffectiveRate =
     initialState.effectiveNominalInterestRate ??
     assumptions.startingEffectiveNominalRate
-  let debtTargetReached =
-    beginningDebt / baselineNominalGDP <= assumptions.debtPaydownTargetGDP
+  let fiscalBalanceReached = false
 
   for (
     let year = assumptions.reformYear;
@@ -212,10 +211,6 @@ export function simulate(
     }
     const totalPrimarySpending = primaryComponentSum(components)
     const beginningDebtGDP = beginningDebt / nominalGDP
-    if (!debtTargetReached &&
-      beginningDebtGDP <= assumptions.debtPaydownTargetGDP + 1e-12) {
-      debtTargetReached = true
-    }
     const realTargetInterestRate = realMarketRateTarget(
       beginningDebtGDP,
       assumptions,
@@ -243,17 +238,39 @@ export function simulate(
       totalFederalSpending,
     })
     const scheduledRevenue = scheduledRevenueRate * nominalGDP
-    // Once the selected long-run debt target is reached, stop further nominal
-    // debt paydown. In the crossing year, trim receipts so year-end debt lands
-    // exactly on the target ratio. Thereafter receipts equal total outlays,
-    // keeping the nominal debt balance constant while GDP growth lowers the ratio.
+    // The scheduled tax policy runs until it first closes the overall deficit.
+    // From that point onward the budget remains at least balanced. Any additional
+    // surplus used for debt reduction is capped explicitly as a share of GDP.
+    // Once the selected debt/GDP target is reached, the surplus falls to zero:
+    // receipts equal total outlays, nominal debt is held constant, and growth
+    // continues to reduce debt/GDP.
+    if (!fiscalBalanceReached &&
+      scheduledRevenue >= totalFederalSpending - 1e-9) {
+      fiscalBalanceReached = true
+    }
+    const atDebtTarget =
+      beginningDebtGDP <= assumptions.debtPaydownTargetGDP + 1e-12
     const targetDebt = assumptions.debtPaydownTargetGDP * nominalGDP
-    const maximumRevenueToTarget = beginningDebt + totalFederalSpending - targetDebt
-    const revenueAdjusted =
-      debtTargetReached || scheduledRevenue > maximumRevenueToTarget
-    const revenue = debtTargetReached
-      ? totalFederalSpending
-      : Math.min(scheduledRevenue, maximumRevenueToTarget)
+    const maximumRevenueToTarget =
+      beginningDebt + totalFederalSpending - targetDebt
+    let revenue = scheduledRevenue
+    if (fiscalBalanceReached) {
+      const scheduledSurplus = Math.max(
+        0,
+        scheduledRevenue - totalFederalSpending,
+      )
+      const allowedSurplus = atDebtTarget
+        ? 0
+        : Math.min(
+            scheduledSurplus,
+            assumptions.debtPaydownSurplusCapGDP * nominalGDP,
+          )
+      revenue = totalFederalSpending + allowedSurplus
+      if (!atDebtTarget) {
+        revenue = Math.min(revenue, maximumRevenueToTarget)
+      }
+    }
+    const revenueAdjusted = Math.abs(revenue - scheduledRevenue) > 1e-9
     const revenueRate = revenueAdjusted ? revenue / nominalGDP : scheduledRevenueRate
     const primaryBalance = revenue - totalPrimarySpending
     const primaryDeficit = -primaryBalance
@@ -297,8 +314,6 @@ export function simulate(
       debtGDP: beginningDebtGDP,
     })
 
-    if (endingDebtGDP <= assumptions.debtPaydownTargetGDP + 1e-12)
-      debtTargetReached = true
     beginningDebt = endingDebt
     previousEffectiveRate = effectiveNominalInterestRate
     baselineNominalGDP *= 1 + gdpGrowth
