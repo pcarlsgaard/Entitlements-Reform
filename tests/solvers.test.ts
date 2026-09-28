@@ -56,26 +56,22 @@ describe('mature-system timing', () => {
 })
 
 describe('permanent revenue solver', () => {
-  it('uses the solved rate until the debt floor, then balances total outlays', () => {
+  it('uses the solved rate until overall balance, then applies the surplus-cap rule', () => {
     const solution = solvePermanentRevenueRate(shorter)
     expect(solution.converged).toBe(true)
-    const target = shorter.debtPaydownTargetGDP
-    const targetIndex = solution.simulation.years.findIndex(
-      row => row.endingDebtGDP <= target + 1e-12,
-    )
-    const scheduledRows = targetIndex < 0
+    const balanceIndex = solution.simulation.years.findIndex(row => row.overallDeficit <= 1e-9)
+    const scheduledRows = balanceIndex < 0
       ? solution.simulation.years
-      : solution.simulation.years.slice(0, targetIndex)
+      : solution.simulation.years.slice(0, balanceIndex)
     expect(
       scheduledRows.every(
         (row) => Math.abs(row.revenueRate - solution.rate) < 1e-14,
       ),
     ).toBe(true)
-    if (targetIndex >= 0) {
-      expect(solution.simulation.years[targetIndex]!.revenueRate).toBeLessThanOrEqual(solution.rate + 1e-14)
-      for (const row of solution.simulation.years.slice(targetIndex + 1)) {
-        expect(row.endingDebt).toBeCloseTo(row.beginningDebt, 9)
-        expect(row.revenue).toBeCloseTo(row.totalFederalSpending, 10)
+    if (balanceIndex >= 0) {
+      for (const row of solution.simulation.years.slice(balanceIndex)) {
+        expect(row.overallDeficit).toBeCloseTo(0, 9)
+        expect(row.revenue).toBeCloseTo(row.totalFederalSpending, 9)
       }
     }
   })
