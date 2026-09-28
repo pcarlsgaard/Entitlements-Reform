@@ -8,7 +8,25 @@
  *
  * These values are reference/calibration series, not user-policy choices.
  */
-export const SSA_TRUSTEES_REAL_COVERED_WAGE_GROWTH = 0.0114
+export const SSA_TRUSTEES_LONG_RUN_REAL_COVERED_WAGE_GROWTH = 0.0114
+
+// Table V.B1, intermediate assumptions: annual real growth in the average
+// wage in OASDI-covered employment, calendar years 2026–2100.
+const ssaRealCoveredWageGrowthPercent2026 = [
+  1.82, 1.54, 1.71, 1.86, 2.08, 2.08, 1.93, 1.77, 1.47, 1.38,
+  1.28, 1.22, 1.23, 1.23, 1.21, 1.21, 1.20, 1.18, 1.17, 1.16,
+  1.14, 1.14, 1.13, 1.13, 1.12, 1.11, 1.10, 1.10, 1.09, 1.09,
+  1.08, 1.09, 1.10, 1.10, 1.10, 1.11, 1.12, 1.12, 1.12, 1.12,
+  1.12, 1.13, 1.13, 1.13, 1.13, 1.13, 1.13, 1.12, 1.13, 1.13,
+  1.14, 1.14, 1.13, 1.13, 1.13, 1.13, 1.13, 1.14, 1.14, 1.14,
+  1.15, 1.14, 1.14, 1.14, 1.14, 1.14, 1.14, 1.14, 1.14, 1.14,
+  1.13, 1.13, 1.13, 1.13, 1.13,
+] as const
+
+export function ssaRealCoveredWageGrowth(year: number): number {
+  const bounded = Math.max(2026, Math.min(2100, Math.round(year)))
+  return ssaRealCoveredWageGrowthPercent2026[bounded - 2026]! / 100
+}
 
 type Anchor = readonly [year: number, value: number]
 
