@@ -104,7 +104,7 @@ describe('CBO February 2026 baseline calibration', () => {
       expect((r.legacySocialSecurity + r.otherOASDI) / r.nominalGDP).toBeCloseTo(cboSocialSecurityGDP(year), 9)
       expect((r.legacySeniorMedicare + r.under65Medicare) / r.nominalGDP).toBeCloseTo(cboMedicareNetGDP(year), 9)
     }
-    const ss2095 = cboSocialSecurityGDP(2056) * ssaOasdiCostGDP(2095) / ssaOasdiCostGDP(2056)
+    const ss2095 = ssaOasdiCostGDP(2095)
     const med2095 = cboMedicareNetGDP(2056) * cmsMedicareGrossGDP(2095) / cmsMedicareGrossGDP(2056)
     expect((row(2095).legacySocialSecurity + row(2095).otherOASDI) / row(2095).nominalGDP).toBeCloseTo(ss2095, 9)
     expect((row(2095).legacySeniorMedicare + row(2095).under65Medicare) / row(2095).nominalGDP).toBeCloseTo(med2095, 9)
