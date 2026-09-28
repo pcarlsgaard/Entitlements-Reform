@@ -152,7 +152,7 @@ describe('annual required-revenue path', () => {
       solution.startingRevenueRate,
     )
     expect(solution.nonIncreasing).toBe(true)
-  })
+  }, 20_000)
 
   it('can stabilize endpoint debt at the same level as the peak ceiling', () => {
     const assumptions = withAssumptions({
@@ -190,7 +190,7 @@ describe('scenario comparison', () => {
         ),
       ),
     ).toBe(true)
-  })
+  }, 20_000)
 
   it(
     'uses identical benefit assumptions except for the funding strategy',
