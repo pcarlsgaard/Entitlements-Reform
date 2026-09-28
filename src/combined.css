@@ -80,7 +80,7 @@
 .game-card { min-width:0; } .game-field .field-hint, .game-toggle .field-hint { display:block; font-weight:400; font-size:.76rem; color:#79899b; max-width:320px; margin-top:3px; }
 .game-card a { color:#167b60; } .game-plots { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; } .game-plots .game-chart-area { height:290px; }
 .game-table-wrap { overflow:auto; } .game-table { border-collapse:collapse; width:100%; font-size:.84rem; white-space:nowrap; } .game-table th,.game-table td { text-align:right; padding:10px; border-bottom:1px solid #e8eff2; } .game-table th:first-child { text-align:left; } .game-table thead { color:#718195; }
-@media(max-width:850px) { .game-sticky { padding:10px 20px; align-items:flex-start; } .game-header-score { gap:8px 20px; } .game-header-score div:last-child { display:none; } .game-two-col,.game-plots { grid-template-columns:1fr; } }
+@media(max-width:850px) { .game-sticky { padding:10px 20px; align-items:flex-start; } .game-header-score { gap:8px 20px; } .game-header-score div:first-child,.game-header-score div:last-child { display:none; } .game-two-col,.game-plots { grid-template-columns:1fr; } }
 @media(max-width:620px) { .game-sticky { display:block; } .game-header-score { justify-content:space-between; margin-top:8px; } .game-tabs { grid-template-columns:repeat(2,1fr); } .game-tabs button { padding:10px 5px; font-size:.8rem; } .game-main { width:calc(100% - 24px); margin-top:16px; } .game-title { gap:10px; } .game-title h1 { font-size:1.6rem; } .game-reset { align-self:flex-start; } .game-presets span { width:100%; } }
 .game-tabs { grid-template-columns:repeat(5,1fr); }
 .households-tab { display:grid; gap:18px; }
