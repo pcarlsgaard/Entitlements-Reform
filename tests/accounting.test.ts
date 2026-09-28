@@ -5,7 +5,7 @@ import {
   nominalRateFromReal,
   updateEffectiveRate,
 } from '../src/model/debt'
-import { simulateConstantRevenue } from '../src/model/simulate'
+import { simulate, simulateConstantRevenue } from '../src/model/simulate'
 import { fundingStrategies } from '../src/model/fundingStrategy'
 
 describe('interest-rate mechanics', () => {
@@ -59,6 +59,18 @@ describe('annual federal accounting', () => {
       expect(row.revenue).toBeCloseTo(row.totalFederalSpending, 10)
       expect(row.primaryDeficit).toBeCloseTo(0, 10)
       expect(row.overallDeficit).toBeCloseTo(0, 10)
+    }
+  })
+
+  it('keeps the budget balanced after payoff even if the scheduled tax path later falls', () => {
+    const assumptions = withAssumptions({ fundingStrategy: 'paygo', endYear: 2060 })
+    const simulation = simulate(assumptions, (year) => year < 2040 ? 0.50 : 0.05)
+    const payoffIndex = simulation.years.findIndex(row => row.endingDebt === 0)
+    expect(payoffIndex).toBeGreaterThanOrEqual(0)
+    for (const row of simulation.years.slice(payoffIndex + 1)) {
+      expect(row.beginningDebt).toBe(0)
+      expect(row.endingDebt).toBe(0)
+      expect(row.revenue).toBeCloseTo(row.totalFederalSpending, 10)
     }
   })
 
