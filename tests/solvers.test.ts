@@ -56,22 +56,25 @@ describe('mature-system timing', () => {
 })
 
 describe('permanent revenue solver', () => {
-  it('uses the solved rate until payoff, then balances the debt-free budget', () => {
+  it('uses the solved rate until the debt floor, then balances total outlays', () => {
     const solution = solvePermanentRevenueRate(shorter)
     expect(solution.converged).toBe(true)
-    const payoffIndex = solution.simulation.years.findIndex(row => row.endingDebt === 0)
-    const scheduledRows = payoffIndex < 0
+    const target = shorter.debtPaydownTargetGDP
+    const targetIndex = solution.simulation.years.findIndex(
+      row => row.endingDebtGDP <= target + 1e-12,
+    )
+    const scheduledRows = targetIndex < 0
       ? solution.simulation.years
-      : solution.simulation.years.slice(0, payoffIndex)
+      : solution.simulation.years.slice(0, targetIndex)
     expect(
       scheduledRows.every(
         (row) => Math.abs(row.revenueRate - solution.rate) < 1e-14,
       ),
     ).toBe(true)
-    if (payoffIndex >= 0) {
-      expect(solution.simulation.years[payoffIndex]!.revenueRate).toBeLessThanOrEqual(solution.rate + 1e-14)
-      for (const row of solution.simulation.years.slice(payoffIndex + 1)) {
-        expect(row.endingDebt).toBe(0)
+    if (targetIndex >= 0) {
+      expect(solution.simulation.years[targetIndex]!.revenueRate).toBeLessThanOrEqual(solution.rate + 1e-14)
+      for (const row of solution.simulation.years.slice(targetIndex + 1)) {
+        expect(row.endingDebt).toBeCloseTo(row.beginningDebt, 10)
         expect(row.revenue).toBeCloseTo(row.totalFederalSpending, 10)
       }
     }
@@ -134,8 +137,10 @@ describe('annual required-revenue path', () => {
     expect(solution.peakRevenueRate).toBe(
       Math.max(...visibleRows.map((row) => row.revenueRate)),
     )
-    expect(solution.peakRevenueRate).toBeCloseTo(solution.startingRevenueRate, 14)
-    expect(solution.peakRevenueYear).toBe(2026)
+    const peakRow = visibleRows.reduce((peak, row) =>
+      row.revenueRate > peak.revenueRate ? row : peak)
+    expect(solution.peakRevenueRate).toBeCloseTo(peakRow.revenueRate, 14)
+    expect(solution.peakRevenueYear).toBe(peakRow.year)
     expect(solution.minimumRevenueRate).toBeCloseTo(
       Math.min(...visibleRows.map((row) => row.revenueRate)),
       14,
