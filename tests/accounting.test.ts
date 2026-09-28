@@ -41,43 +41,62 @@ describe('annual federal accounting', () => {
     })
   }
 
-  it('stops debt paydown at the selected GDP target and keeps paying interest', () => {
+  it('with a zero surplus cap, balances the budget and lets GDP growth reduce debt/GDP', () => {
     const assumptions = withAssumptions({
       fundingStrategy: 'paygo',
       endYear: 2095,
       debtPaydownTargetGDP: 0.40,
+      debtPaydownSurplusCapGDP: 0,
     })
     const simulation = simulateConstantRevenue(assumptions, 0.50)
-    const targetIndex = simulation.years.findIndex(
-      row => row.endingDebtGDP <= assumptions.debtPaydownTargetGDP + 1e-12,
-    )
-    expect(targetIndex).toBeGreaterThanOrEqual(0)
-    const target = simulation.years[targetIndex]!
-    expect(target.endingDebtGDP).toBeCloseTo(0.40, 10)
-    expect(target.endingDebt).toBeGreaterThan(0)
-
-    for (const row of simulation.years.slice(targetIndex + 1)) {
-      expect(row.netInterest).toBeGreaterThan(0)
-      expect(row.endingDebt).toBeCloseTo(row.beginningDebt, 10)
+    const balanceIndex = simulation.years.findIndex(row => row.overallDeficit <= 1e-9)
+    expect(balanceIndex).toBeGreaterThanOrEqual(0)
+    const debtAtBalance = simulation.years[balanceIndex]!.endingDebt
+    for (const row of simulation.years.slice(balanceIndex)) {
+      expect(row.endingDebt).toBeCloseTo(debtAtBalance, 9)
       expect(row.revenue).toBeCloseTo(row.totalFederalSpending, 10)
       expect(row.primaryBalance).toBeCloseTo(row.netInterest, 10)
       expect(row.overallDeficit).toBeCloseTo(0, 10)
     }
+    expect(simulation.years.at(-1)!.endingDebtGDP)
+      .toBeLessThan(simulation.years[balanceIndex]!.endingDebtGDP)
   })
 
-  it('keeps the post-target budget balanced even if the scheduled tax path later falls', () => {
+  it('caps debt-reduction surpluses and stops them at the selected debt target', () => {
     const assumptions = withAssumptions({
       fundingStrategy: 'paygo',
-      endYear: 2060,
+      endYear: 2095,
       debtPaydownTargetGDP: 0.40,
+      debtPaydownSurplusCapGDP: 0.01,
     })
-    const simulation = simulate(assumptions, (year) => year < 2040 ? 0.50 : 0.05)
+    const simulation = simulateConstantRevenue(assumptions, 0.50)
+    const balanceIndex = simulation.years.findIndex(row => row.overallDeficit <= 1e-9)
+    expect(balanceIndex).toBeGreaterThanOrEqual(0)
     const targetIndex = simulation.years.findIndex(
       row => row.endingDebtGDP <= assumptions.debtPaydownTargetGDP + 1e-12,
     )
-    expect(targetIndex).toBeGreaterThanOrEqual(0)
+    expect(targetIndex).toBeGreaterThan(balanceIndex)
+    for (const row of simulation.years.slice(balanceIndex, targetIndex)) {
+      expect(-row.overallDeficit / row.nominalGDP)
+        .toBeLessThanOrEqual(assumptions.debtPaydownSurplusCapGDP + 1e-12)
+    }
     for (const row of simulation.years.slice(targetIndex + 1)) {
-      expect(row.endingDebt).toBeCloseTo(row.beginningDebt, 10)
+      expect(row.endingDebt).toBeCloseTo(row.beginningDebt, 9)
+      expect(row.revenue).toBeCloseTo(row.totalFederalSpending, 10)
+    }
+  })
+
+  it('keeps the post-balance budget closed even if the scheduled tax path later falls', () => {
+    const assumptions = withAssumptions({
+      fundingStrategy: 'paygo',
+      endYear: 2060,
+      debtPaydownSurplusCapGDP: 0,
+    })
+    const simulation = simulate(assumptions, (year) => year < 2040 ? 0.50 : 0.05)
+    const balanceIndex = simulation.years.findIndex(row => row.overallDeficit <= 1e-9)
+    expect(balanceIndex).toBeGreaterThanOrEqual(0)
+    for (const row of simulation.years.slice(balanceIndex + 1)) {
+      expect(row.endingDebt).toBeCloseTo(row.beginningDebt, 9)
       expect(row.revenue).toBeCloseTo(row.totalFederalSpending, 10)
     }
   })
