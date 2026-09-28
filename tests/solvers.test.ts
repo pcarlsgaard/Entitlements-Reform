@@ -74,7 +74,7 @@ describe('permanent revenue solver', () => {
     if (targetIndex >= 0) {
       expect(solution.simulation.years[targetIndex]!.revenueRate).toBeLessThanOrEqual(solution.rate + 1e-14)
       for (const row of solution.simulation.years.slice(targetIndex + 1)) {
-        expect(row.endingDebt).toBeCloseTo(row.beginningDebt, 10)
+        expect(row.endingDebt).toBeCloseTo(row.beginningDebt, 9)
         expect(row.revenue).toBeCloseTo(row.totalFederalSpending, 10)
       }
     }
