@@ -251,7 +251,9 @@ export function simulate(
     const primaryBalance = revenue - totalPrimarySpending
     const primaryDeficit = -primaryBalance
     const overallDeficit = primaryDeficit + netInterest
-    const endingDebt = Math.max(0, beginningDebt + overallDeficit)
+    const rawEndingDebt = beginningDebt + overallDeficit
+    // Treat sub-dollar numerical residue in the billions-based ledger as zero.
+    const endingDebt = rawEndingDebt <= 1e-9 ? 0 : rawEndingDebt
     const endingDebtGDP = endingDebt / nominalGDP
 
     years.push({
