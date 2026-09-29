@@ -1,10 +1,11 @@
 import snapshotJson from '../data/labor_response_microdata_2025.json'
+import baseline from '../data/baseline_2025.json'
+import microdataJson from '../data/microdata_2025.json'
 import { calculateChildCredit } from './childCredits'
 import {
   calculateAdultCredit,
   calculateCurrentLaw,
   calculateReformWageTax,
-  currentLaw2025,
 } from './household'
 import type { FilingStatus, HouseholdInput, ReformSettings, TaxBreakdown } from './types'
 
@@ -21,6 +22,9 @@ type LaborCell = [
 interface CurrentPoint {
   totalCashWage: number
   employerCompensation: number
+  employerSocialInsurance: number
+  employerHealthInsurance: number
+  employerPensionOtherInsurance: number
   incomeTaxBeforeCredits: number
   currentCredits: number
   employeePayrollTax: number
@@ -66,6 +70,16 @@ const snapshot = snapshotJson as {
 }
 
 const HALF_WINDOW = 500
+const cashScale = microdataJson.calibration.cashWageScaleToBea2025
+const controls = microdataJson.compensationControlsBillions
+const socialInsurancePerCashDollar =
+  controls.employerGovernmentSocialInsurance / controls.cashWagesAndSalaries
+const healthInsurancePerCashDollar =
+  baseline.compensationComponents.employerHealthInsurance / controls.cashWagesAndSalaries
+const pensionOtherInsurancePerCashDollar =
+  baseline.compensationComponents.employerPensionAndOtherInsurance / controls.cashWagesAndSalaries
+const grossCompensationPerCashDollar =
+  1 + socialInsurancePerCashDollar + healthInsurancePerCashDollar + pensionOtherInsurancePerCashDollar
 let preparedCache: PreparedCell[] | null = null
 
 function clampShare(value: number): number {
@@ -90,9 +104,15 @@ function currentPoint(
   }
   const current = calculateCurrentLaw(input)
   const totalCashWage = input.cashWage + (input.secondaryCashWage ?? 0)
+  const employerSocialInsurance = totalCashWage * socialInsurancePerCashDollar
+  const employerHealthInsurance = totalCashWage * healthInsurancePerCashDollar
+  const employerPensionOtherInsurance = totalCashWage * pensionOtherInsurancePerCashDollar
   return {
     totalCashWage,
-    employerCompensation: totalCashWage + current.employerPayrollTax,
+    employerCompensation: totalCashWage * grossCompensationPerCashDollar,
+    employerSocialInsurance,
+    employerHealthInsurance,
+    employerPensionOtherInsurance,
     incomeTaxBeforeCredits: current.incomeTaxBeforeCredits,
     currentCredits: currentCredits(current),
     employeePayrollTax: current.employeePayrollTax,
@@ -102,12 +122,7 @@ function currentPoint(
 }
 
 function employerCompensationForEarner(cashWage: number): number {
-  if (cashWage <= 0) return 0
-  const payroll = currentLaw2025.payroll
-  const employerSocialSecurity =
-    Math.min(cashWage, payroll.socialSecurityWageCap) * payroll.socialSecurityRateEach
-  const employerMedicare = cashWage * payroll.medicareRateEach
-  return cashWage + employerSocialSecurity + employerMedicare
+  return cashWage > 0 ? cashWage * grossCompensationPerCashDollar : 0
 }
 
 function prepareEarner(
@@ -139,8 +154,10 @@ function prepareEarner(
 function preparedCells(): PreparedCell[] {
   if (preparedCache) return preparedCache
   preparedCache = snapshot.distribution.map((row) => {
-    const [primaryCashWage, secondaryCashWage, scheduleAdults, creditAdults,
+    const [rawPrimaryCashWage, rawSecondaryCashWage, scheduleAdults, creditAdults,
       children, under6, taxUnitWeight] = row
+    const primaryCashWage = rawPrimaryCashWage * cashScale
+    const secondaryCashWage = rawSecondaryCashWage * cashScale
     const filingStatus: FilingStatus = scheduleAdults >= 2 ? 'married' : 'single'
     return {
       primaryCashWage,
@@ -171,17 +188,27 @@ function reformTax(
 ): number {
   const payrollIsReplaced = settings.replacedTaxes.payroll
   const individualIncomeIsReplaced = settings.replacedTaxes.individualIncome
-  const employerFicaPassThrough = payrollIsReplaced
-    ? point.employerPayrollTax * clampShare(employerFicaPassThroughRate)
-    : 0
-  const reformWageBase = point.totalCashWage + employerFicaPassThrough
-  const taxableWageBase =
+  const socialInsuranceAvailable = payrollIsReplaced
+    ? point.employerSocialInsurance * clampShare(employerFicaPassThroughRate)
+    : point.employerSocialInsurance
+  const grossReformCompensation =
+    point.totalCashWage + socialInsuranceAvailable
+    + point.employerHealthInsurance + point.employerPensionOtherInsurance
+  const taxableWageBase = (
     point.totalCashWage * (1 - clampShare(settings.cashWageExemptionShare))
-    + employerFicaPassThrough
+    + socialInsuranceAvailable
       * (1 - clampShare(settings.employerSocialInsuranceExemptionShare))
+    + point.employerHealthInsurance
+      * (1 - clampShare(settings.employerHealthInsuranceExemptionShare))
+    + point.employerPensionOtherInsurance
+      * (1 - clampShare(settings.employerPensionOtherInsuranceExemptionShare))
+  ) * (1 - clampShare(settings.exemptionShare))
+  const adultCreditBase = settings.adultCreditEarningsBase === 'cash'
+    ? point.totalCashWage + socialInsuranceAvailable
+    : grossReformCompensation
   const reformCredits =
-    calculateAdultCredit(reformWageBase, cell.creditAdults, settings)
-    + calculateChildCredit(reformWageBase, cell.children, cell.under6, settings)
+    calculateAdultCredit(adultCreditBase, cell.creditAdults, settings)
+    + calculateChildCredit(grossReformCompensation, cell.children, cell.under6, settings)
   const retainedTaxBeforeCredits =
     (individualIncomeIsReplaced ? 0 : point.incomeTaxBeforeCredits)
     + (payrollIsReplaced ? 0 : point.employeePayrollTax + point.employerPayrollTax)
@@ -242,6 +269,9 @@ function average(value: number, weight: number): number {
 /**
  * CPS-weighted change in the marginal return to work under the selected reform.
  *
+ * CPS cash wages are first scaled to the same 2025 BEA wage control used by the
+ * macro scorer. Employer social-insurance, health, and pension compensation are
+ * allocated proportionally using the same national-accounts controls.
  * Current-law finite differences are prepared once and cached. Reform-side
  * marginal wedges are then cheap arithmetic over the compressed tax-unit cells.
  * Health credits are flat amounts with no income phaseout, so they do not change
