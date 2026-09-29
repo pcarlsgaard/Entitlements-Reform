@@ -131,12 +131,14 @@ describe('Con_3_paygo tax-indexing sensitivity', () => {
       const debtTarget = result.combined.years.find(row => row.endingDebtGDP <= policy.assumptions.debtPaydownTargetGDP + 1e-9)
       const y2036 = yearRow(result, 2036)
       const y2050 = yearRow(result, 2050)
+      const y2055 = yearRow(result, 2055)
       const y2095 = yearRow(result, 2095)
       return {
         mode,
         label,
         debt2036: y2036.endingDebtGDP,
         debt2050: y2050.endingDebtGDP,
+        debt2055: y2055.endingDebtGDP,
         debt2095: y2095.endingDebtGDP,
         primaryBalanceYear: primary?.year ?? null,
         totalBalanceYear: total?.year ?? null,
@@ -145,6 +147,7 @@ describe('Con_3_paygo tax-indexing sensitivity', () => {
         balanceSpendingGDP: total ? total.totalFederalSpending / total.nominalGDP : null,
         taxDelta2036: result.annualTaxDelta.get(2036) ?? null,
         taxDelta2050: result.annualTaxDelta.get(2050) ?? null,
+        taxDelta2055: result.annualTaxDelta.get(2055) ?? null,
         taxDelta2095: result.annualTaxDelta.get(2095) ?? null,
         fiscalImprovement70yrGDP: result.periods[1]!.fiscalImprovementGDP,
       }
