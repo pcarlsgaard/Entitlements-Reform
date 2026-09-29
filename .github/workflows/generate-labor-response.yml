@@ -1,0 +1,27 @@
+name: Generate labor response microdata
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/build_labor_response_microdata.py'
+      - '.github/workflows/generate-labor-response.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build pinned CPS labor snapshot
+        run: python scripts/build_labor_response_microdata.py
+      - name: Commit generated snapshot
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/tax/data/labor_response_microdata_2025.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Add CPS labor response microdata snapshot"
+          git push
