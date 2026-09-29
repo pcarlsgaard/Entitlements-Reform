@@ -1,5 +1,6 @@
 import { currentLawRevenueGDP, replacedRevenueDriftGDP } from './revenueBaseline'
 import { taxRevenueChangePath, realGDPPerCapitaGrowthFactor } from './taxProjection'
+import type { TaxIndexingMode } from './taxProjection'
 import { cbo2026RevenueGDP } from '../data/cboBaseline'
 import { calculateMacro, defaultSettings } from '../tax/model/macro'
 import { calculateHousehold, OECD_US_AVERAGE_WAGE_2025, taxWedgeScenarios } from '../tax/model/household'
@@ -129,7 +130,7 @@ const householdExamples: { label: string; input: HouseholdInput }[] = [
   { label: 'Family · $100k + 2 children', input: { filingStatus: 'married', cashWage: 65_000, secondaryCashWage: 35_000, children: 2 } },
 ];
 
-export function scoreCombined(policy: CombinedPolicy) {
+export function scoreCombined(policy: CombinedPolicy, taxIndexingMode: TaxIndexingMode = 'cpi') {
   const assumptions: ModelAssumptions = {
     ...policy.assumptions,
     fullRetirementAge: policy.benefits.socialSecurityReform
@@ -160,7 +161,7 @@ export function scoreCombined(policy: CombinedPolicy) {
   const netTaxRevenueChangeGDP = policy.taxEnabled
     ? (tax.netRevenue - tax.targetRevenue) / tax.gdp : 0
   const annualTaxDelta = policy.taxEnabled
-    ? taxRevenueChangePath(policy.tax, assumptions, health.totalHealthCreditCostBillions) : new Map<number, number>()
+    ? taxRevenueChangePath(policy.tax, assumptions, health.totalHealthCreditCostBillions, taxIndexingMode) : new Map<number, number>()
   const revenueDelta = (year: number) => policy.taxEnabled ?
     (annualTaxDelta.get(year) ?? 0) - replacedRevenueDriftGDP(year, policy.tax) : 0
   const outlaySavingsGDP = policy.taxEnabled
