@@ -158,7 +158,7 @@ export function scoreCombined(policy: CombinedPolicy, taxIndexingMode: TaxIndexi
     : null
   const netWageLogChange = laborResponse?.netWageLogChange ?? 0
   const steadyGDPLevelChange = Math.max(-0.05, Math.min(0.05,
-    netWageLogChange * policy.dynamic.laborElasticity * policy.dynamic.laborShareGDP))
+    netWageLogChange * policy.dynamic.laborElasticity * policy.dynamic.laborShareGDP)) || 0
   // The Tax Foundation's 21% DBCFT estimate replaces both corporate and
   // pass-through business taxation. These two switches jointly proxy that
   // change in tax base; the X-tax rate changes its capital response only mildly.
