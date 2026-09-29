@@ -1,6 +1,7 @@
 import snapshotJson from '../data/labor_response_microdata_2025.json'
 import baseline from '../data/baseline_2025.json'
 import microdataJson from '../data/microdata_2025.json'
+import currentLawJson from '../data/current_law_2025.json'
 import { calculateChildCredit } from './childCredits'
 import {
   calculateAdultCredit,
@@ -22,7 +23,6 @@ type LaborCell = [
 interface CurrentPoint {
   totalCashWage: number
   employerCompensation: number
-  employerSocialInsurance: number
   employerHealthInsurance: number
   employerPensionOtherInsurance: number
   incomeTaxBeforeCredits: number
@@ -72,14 +72,11 @@ const snapshot = snapshotJson as unknown as {
 const HALF_WINDOW = 500
 const cashScale = microdataJson.calibration.cashWageScaleToBea2025
 const controls = microdataJson.compensationControlsBillions
-const socialInsurancePerCashDollar =
-  controls.employerGovernmentSocialInsurance / controls.cashWagesAndSalaries
 const healthInsurancePerCashDollar =
   baseline.compensationComponents.employerHealthInsurance / controls.cashWagesAndSalaries
 const pensionOtherInsurancePerCashDollar =
   baseline.compensationComponents.employerPensionAndOtherInsurance / controls.cashWagesAndSalaries
-const grossCompensationPerCashDollar =
-  1 + socialInsurancePerCashDollar + healthInsurancePerCashDollar + pensionOtherInsurancePerCashDollar
+const payroll = currentLawJson.payroll
 let preparedCache: PreparedCell[] | null = null
 
 function clampShare(value: number): number {
@@ -95,6 +92,7 @@ function currentPoint(
   secondaryCashWage: number,
   filingStatus: FilingStatus,
   children: number,
+  fixedEmployerHealthInsurance: number,
 ): CurrentPoint {
   const input: HouseholdInput = {
     filingStatus,
@@ -104,14 +102,15 @@ function currentPoint(
   }
   const current = calculateCurrentLaw(input)
   const totalCashWage = input.cashWage + (input.secondaryCashWage ?? 0)
-  const employerSocialInsurance = totalCashWage * socialInsurancePerCashDollar
-  const employerHealthInsurance = totalCashWage * healthInsurancePerCashDollar
   const employerPensionOtherInsurance = totalCashWage * pensionOtherInsurancePerCashDollar
   return {
     totalCashWage,
-    employerCompensation: totalCashWage * grossCompensationPerCashDollar,
-    employerSocialInsurance,
-    employerHealthInsurance,
+    // Health insurance is treated as fixed for a local earnings change. Pension
+    // compensation and statutory employer payroll taxes move with earnings.
+    employerCompensation:
+      totalCashWage + current.employerPayrollTax
+      + employerPensionOtherInsurance + fixedEmployerHealthInsurance,
+    employerHealthInsurance: fixedEmployerHealthInsurance,
     employerPensionOtherInsurance,
     incomeTaxBeforeCredits: current.incomeTaxBeforeCredits,
     currentCredits: currentCredits(current),
@@ -121,8 +120,17 @@ function currentPoint(
   }
 }
 
-function employerCompensationForEarner(cashWage: number): number {
-  return cashWage > 0 ? cashWage * grossCompensationPerCashDollar : 0
+function employerPayrollTaxForEarner(cashWage: number): number {
+  if (cashWage <= 0) return 0
+  return Math.min(cashWage, payroll.socialSecurityWageCap) * payroll.socialSecurityRateEach
+    + cashWage * payroll.medicareRateEach
+}
+
+function marginalEmployerCompensationForEarner(cashWage: number): number {
+  if (cashWage <= 0) return 0
+  return cashWage
+    + employerPayrollTaxForEarner(cashWage)
+    + cashWage * pensionOtherInsurancePerCashDollar
 }
 
 function prepareEarner(
@@ -132,6 +140,7 @@ function prepareEarner(
   children: number,
   varySecondary: boolean,
   taxUnitWeight: number,
+  fixedEmployerHealthInsurance: number,
 ): EarnerPrepared | null {
   const earnerWage = varySecondary ? secondaryCashWage : primaryCashWage
   if (earnerWage <= 0) return null
@@ -139,15 +148,19 @@ function prepareEarner(
   const upPrimary = varySecondary ? primaryCashWage : primaryCashWage + HALF_WINDOW
   const downSecondary = varySecondary ? Math.max(0, secondaryCashWage - HALF_WINDOW) : secondaryCashWage
   const upSecondary = varySecondary ? secondaryCashWage + HALF_WINDOW : secondaryCashWage
-  const down = currentPoint(downPrimary, downSecondary, filingStatus, children)
-  const up = currentPoint(upPrimary, upSecondary, filingStatus, children)
+  const down = currentPoint(
+    downPrimary, downSecondary, filingStatus, children, fixedEmployerHealthInsurance,
+  )
+  const up = currentPoint(
+    upPrimary, upSecondary, filingStatus, children, fixedEmployerHealthInsurance,
+  )
   const deltaCompensation = up.employerCompensation - down.employerCompensation
   if (deltaCompensation <= 0) return null
   return {
     down,
     up,
     currentMarginalRate: (up.totalFederalTax - down.totalFederalTax) / deltaCompensation,
-    laborWeight: taxUnitWeight * employerCompensationForEarner(earnerWage),
+    laborWeight: taxUnitWeight * marginalEmployerCompensationForEarner(earnerWage),
   }
 }
 
@@ -159,6 +172,10 @@ function preparedCells(): PreparedCell[] {
     const primaryCashWage = rawPrimaryCashWage * cashScale
     const secondaryCashWage = rawSecondaryCashWage * cashScale
     const filingStatus: FilingStatus = scheduleAdults >= 2 ? 'married' : 'single'
+    // Allocate the observed ESI level from the central tax-unit wage, but hold
+    // that dollar amount fixed across the +/- $500 marginal-wage perturbation.
+    const fixedEmployerHealthInsurance =
+      (primaryCashWage + secondaryCashWage) * healthInsurancePerCashDollar
     return {
       primaryCashWage,
       secondaryCashWage,
@@ -169,10 +186,12 @@ function preparedCells(): PreparedCell[] {
       taxUnitWeight,
       primary: prepareEarner(
         primaryCashWage, secondaryCashWage, filingStatus, children, false, taxUnitWeight,
+        fixedEmployerHealthInsurance,
       ),
       secondary: filingStatus === 'married'
         ? prepareEarner(
           primaryCashWage, secondaryCashWage, filingStatus, children, true, taxUnitWeight,
+          fixedEmployerHealthInsurance,
         )
         : null,
     }
@@ -188,15 +207,15 @@ function reformTax(
 ): number {
   const payrollIsReplaced = settings.replacedTaxes.payroll
   const individualIncomeIsReplaced = settings.replacedTaxes.individualIncome
-  const socialInsuranceAvailable = payrollIsReplaced
-    ? point.employerSocialInsurance * clampShare(employerFicaPassThroughRate)
-    : point.employerSocialInsurance
+  const employerFicaPassThrough = payrollIsReplaced
+    ? point.employerPayrollTax * clampShare(employerFicaPassThroughRate)
+    : 0
   const grossReformCompensation =
-    point.totalCashWage + socialInsuranceAvailable
+    point.totalCashWage + employerFicaPassThrough
     + point.employerHealthInsurance + point.employerPensionOtherInsurance
   const taxableWageBase = (
     point.totalCashWage * (1 - clampShare(settings.cashWageExemptionShare))
-    + socialInsuranceAvailable
+    + employerFicaPassThrough
       * (1 - clampShare(settings.employerSocialInsuranceExemptionShare))
     + point.employerHealthInsurance
       * (1 - clampShare(settings.employerHealthInsuranceExemptionShare))
@@ -204,7 +223,7 @@ function reformTax(
       * (1 - clampShare(settings.employerPensionOtherInsuranceExemptionShare))
   ) * (1 - clampShare(settings.exemptionShare))
   const adultCreditBase = settings.adultCreditEarningsBase === 'cash'
-    ? point.totalCashWage + socialInsuranceAvailable
+    ? point.totalCashWage + employerFicaPassThrough
     : grossReformCompensation
   const reformCredits =
     calculateAdultCredit(adultCreditBase, cell.creditAdults, settings)
@@ -270,8 +289,12 @@ function average(value: number, weight: number): number {
  * CPS-weighted change in the marginal return to work under the selected reform.
  *
  * CPS cash wages are first scaled to the same 2025 BEA wage control used by the
- * macro scorer. Employer social-insurance, health, and pension compensation are
- * allocated proportionally using the same national-accounts controls.
+ * macro scorer. Local labor-cost changes include statutory employer FICA and
+ * earnings-linked pension/other-retirement compensation. Employer health
+ * insurance is allocated at the central tax-unit wage but held fixed across the
+ * local wage perturbation, reflecting its largely per-employee rather than
+ * per-dollar structure. Repealed employer FICA pass-through uses the actual
+ * statutory employer payroll tax, including the Social Security wage cap.
  * Current-law finite differences are prepared once and cached. Reform-side
  * marginal wedges are then cheap arithmetic over the compressed tax-unit cells.
  * Health credits are flat amounts with no income phaseout, so they do not change
