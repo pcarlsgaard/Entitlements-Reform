@@ -3,7 +3,8 @@ import { taxRevenueChangePath, realGDPPerCapitaGrowthFactor } from './taxProject
 import type { TaxIndexingMode } from './taxProjection'
 import { cbo2026RevenueGDP } from '../data/cboBaseline'
 import { calculateMacro, defaultSettings } from '../tax/model/macro'
-import { calculateHousehold, OECD_US_AVERAGE_WAGE_2025, taxWedgeScenarios } from '../tax/model/household'
+import { calculateHousehold } from '../tax/model/household'
+import { calculateLaborResponse } from '../tax/model/laborResponse'
 import { calculateHealthAnalysis, defaultHealthPolicySettings } from '../tax/model/health'
 import type { HealthPolicySettings } from '../tax/model/health'
 import { calculateFederalProgramSavings, defaultTransferReplacementSettings } from '../tax/model/transfers'
@@ -65,25 +66,6 @@ export const defaultCombinedPolicy: CombinedPolicy = {
   baselineMode: 'scheduled',
   dynamic: { enabled: false, laborElasticity: 0.15, laborShareGDP: 0.60, phaseInYears: 10,
     capitalGDPLevelAtReference: 0.014, capitalRateSensitivity: 0.15, capitalPhaseInYears: 15 },
-}
-
-/** Eight illustrative wage/filing scenarios, weighted by compensation, not a national microdata estimate. */
-export function illustrativeNetWageResponse(policy: CombinedPolicy): number {
-  let weightedLogChange = 0
-  let totalWeight = 0
-  for (const scenario of taxWedgeScenarios) {
-    const result = calculateHousehold({
-      filingStatus: scenario.filingStatus, children: scenario.children,
-      cashWage: OECD_US_AVERAGE_WAGE_2025 * scenario.primaryWageShare,
-      secondaryCashWage: OECD_US_AVERAGE_WAGE_2025 * scenario.secondaryWageShare,
-    }, policy.tax, policy.health.employerFicaPassThroughRate)
-    const current = Math.max(-0.5, Math.min(0.8, result.currentMarginalRate))
-    const reform = Math.max(-0.5, Math.min(0.8, result.reformMarginalRate))
-    const weight = result.employerCompensation
-    weightedLogChange += weight * Math.log((1 - reform) / (1 - current))
-    totalWeight += weight
-  }
-  return totalWeight > 0 ? weightedLogChange / totalWeight : 0
 }
 
 export interface PeriodScore {
@@ -171,8 +153,10 @@ export function scoreCombined(policy: CombinedPolicy, taxIndexingMode: TaxIndexi
     otherMandatorySavingsGDP: policy.taxEnabled ? (tax.refundableTaxCreditOutlaySavings + programSavingsBillions) / tax.gdp : 0,
     medicaidMarketplaceSavingsGDP: policy.taxEnabled ? health.estimatedExistingAptcSavingsBillions / tax.gdp : 0,
   }
-  const netWageLogChange = policy.taxEnabled && policy.dynamic.enabled
-    ? illustrativeNetWageResponse(policy) : 0
+  const laborResponse = policy.taxEnabled && policy.dynamic.enabled
+    ? calculateLaborResponse(policy.tax, policy.health.employerFicaPassThroughRate)
+    : null
+  const netWageLogChange = laborResponse?.netWageLogChange ?? 0
   const steadyGDPLevelChange = Math.max(-0.05, Math.min(0.05,
     netWageLogChange * policy.dynamic.laborElasticity * policy.dynamic.laborShareGDP))
   // The Tax Foundation's 21% DBCFT estimate replaces both corporate and
@@ -239,6 +223,7 @@ export function scoreCombined(policy: CombinedPolicy, taxIndexingMode: TaxIndexi
     benefitsOnly,
     combined,
     staticCombined,
+    laborResponse,
     netWageLogChange,
     steadyGDPLevelChange,
     steadyCapitalGDPLevelChange,
