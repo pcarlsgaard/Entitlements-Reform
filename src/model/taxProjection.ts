@@ -4,21 +4,29 @@ import { eligiblePopulationMillions } from './demographics'
 import { ssaRealCoveredWageGrowth } from '../data/trustees2026'
 import type { ModelAssumptions } from './types'
 
+export type TaxIndexingMode = 'cpi' | 'wageBrackets' | 'wageCredits' | 'wageBoth'
+
 /**
- * Re-express CPI-indexed dollar thresholds in the fixed microdata's wage units.
- * This moves households through a progressive schedule as real wages rise without
- * manufacturing a larger aggregate wage base: the macro compensation base itself
- * remains a fixed share of the modeled economy.
+ * Re-express indexed dollar thresholds in the fixed microdata's wage units.
+ * CPI-indexed parameters shrink relative to real wages; wage-indexed parameters
+ * remain fixed relative to the modeled wage distribution.
  */
-export function indexedTaxSettings(tax: ReformSettings, realWageFactor: number): ReformSettings {
-  const dollar = (value: number) => value / realWageFactor
+export function indexedTaxSettings(
+  tax: ReformSettings,
+  realWageFactor: number,
+  indexingMode: TaxIndexingMode = 'cpi',
+): ReformSettings {
+  const wageIndexBrackets = indexingMode === 'wageBrackets' || indexingMode === 'wageBoth'
+  const wageIndexCredits = indexingMode === 'wageCredits' || indexingMode === 'wageBoth'
+  const bracketDollar = (value: number) => value / (wageIndexBrackets ? 1 : realWageFactor)
+  const creditDollar = (value: number) => value / (wageIndexCredits ? 1 : realWageFactor)
   return { ...tax,
-    progressiveZeroBracketPerAdult: dollar(tax.progressiveZeroBracketPerAdult),
-    progressiveTopBracketPerAdult: dollar(tax.progressiveTopBracketPerAdult),
-    progressiveIntermediateStartPerAdult: tax.progressiveIntermediateStartPerAdult === null ? null : dollar(tax.progressiveIntermediateStartPerAdult),
-    adultCredit: dollar(tax.adultCredit),
-    adultCreditPhaseOutStartPerAdult: dollar(tax.adultCreditPhaseOutStartPerAdult),
-    childCredit: dollar(tax.childCredit), under6ChildCredit: dollar(tax.under6ChildCredit ?? 0),
+    progressiveZeroBracketPerAdult: bracketDollar(tax.progressiveZeroBracketPerAdult),
+    progressiveTopBracketPerAdult: bracketDollar(tax.progressiveTopBracketPerAdult),
+    progressiveIntermediateStartPerAdult: tax.progressiveIntermediateStartPerAdult === null ? null : bracketDollar(tax.progressiveIntermediateStartPerAdult),
+    adultCredit: creditDollar(tax.adultCredit),
+    adultCreditPhaseOutStartPerAdult: creditDollar(tax.adultCreditPhaseOutStartPerAdult),
+    childCredit: creditDollar(tax.childCredit), under6ChildCredit: creditDollar(tax.under6ChildCredit ?? 0),
   }
 }
 
@@ -45,14 +53,20 @@ export function realGDPPerCapitaGrowthFactor(year: number, a: ModelAssumptions):
  * Credit eligibility follows wages, while the aggregate cost of a CPI-indexed
  * dollar credit scales with population relative to real GDP.
  */
-export function taxRevenueChangePath(tax: ReformSettings, a: ModelAssumptions, insuranceCost: number): Map<number, number> {
+export function taxRevenueChangePath(
+  tax: ReformSettings,
+  a: ModelAssumptions,
+  insuranceCost: number,
+  indexingMode: TaxIndexingMode = 'cpi',
+): Map<number, number> {
   const result = new Map<number, number>()
+  const wageIndexCredits = indexingMode === 'wageCredits' || indexingMode === 'wageBoth'
   for (let year = a.reformYear; year <= a.endYear; year++) {
     const wageFactor = realWageGrowthFactor(year, a)
     const perCapitaGDPFactor = realGDPPerCapitaGrowthFactor(year, a)
     const score = calculateMacro(
-      indexedTaxSettings(tax, wageFactor),
-      { insuranceCreditCost: insuranceCost / wageFactor },
+      indexedTaxSettings(tax, wageFactor, indexingMode),
+      { insuranceCreditCost: insuranceCost / (wageIndexCredits ? 1 : wageFactor) },
     )
     const creditScaleToGDP = wageFactor / perCapitaGDPFactor
     const adjustedCreditCost = (
