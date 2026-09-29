@@ -40,6 +40,15 @@ function credits(cur:ReturnType<typeof calculateCurrentLaw>){return cur.nonrefun
 type FringeMode='fixed'|'pension'|'all'
 function analyze(settings:ReformSettings,mode:FringeMode){
  let w=0, cm=0, rm=0, log=0, improve=0
+ const bands=[
+  {label:'<25k',lo:0,hi:25000,w:0,c:0,r:0,improve:0},
+  {label:'25-50k',lo:25000,hi:50000,w:0,c:0,r:0,improve:0},
+  {label:'50-75k',lo:50000,hi:75000,w:0,c:0,r:0,improve:0},
+  {label:'75-100k',lo:75000,hi:100000,w:0,c:0,r:0,improve:0},
+  {label:'100-150k',lo:100000,hi:150000,w:0,c:0,r:0,improve:0},
+  {label:'150-250k',lo:150000,hi:250000,w:0,c:0,r:0,improve:0},
+  {label:'250k+',lo:250000,hi:Infinity,w:0,c:0,r:0,improve:0},
+ ]
  for(const row of snapshot.distribution){
    const [rp,rs,adults,creditAdults,children,under6,weight]=row
    const p=rp*cashScale,s=rs*cashScale,status:FilingStatus=adults>=2?'married':'single'
@@ -72,9 +81,11 @@ function analyze(settings:ReformSettings,mode:FringeMode){
      const refM=(reform(up,1)-reform(dn,-1))/dComp
      const lw=weight*(earn*(1+.0765+(mode==='fixed'?0:pensionRatio)+(mode==='all'?healthRatio:0)))
      w+=lw; cm+=lw*curM; rm+=lw*refM; log+=lw*Math.log((1-refM)/(1-curM)); if(refM<curM) improve+=lw
+     const b=bands.find(x=>earn>=x.lo&&earn<x.hi)!
+     b.w+=lw;b.c+=lw*curM;b.r+=lw*refM;if(refM<curM)b.improve+=lw
    }
  }
- return {current:cm/w,reform:rm/w,log:log/w,improvedShare:improve/w}
+ return {current:cm/w,reform:rm/w,log:log/w,improvedShare:improve/w,bands:bands.map(b=>({label:b.label,current:b.c/b.w,reform:b.r/b.w,improvedShare:b.improve/b.w,laborWeightShare:b.w/w}))}
 }
 const health={...defaultHealthPolicySettings,adultHealthCredit:3000,childHealthCredit:1500,uninsuredTakeUpRate:.85,employerHealthPassThroughRate:1,employerFicaPassThroughRate:1,employeePremiumPreTaxShare:1,benchmarkPremiumScale:1.03,replaceAcaAptc:false,redistributionRule:'nationalEqual' as const,recipientScope:'policyholders' as const}
 function score(settings:ReformSettings){
@@ -104,6 +115,16 @@ describe('Con3 MTR diagnostics',()=>{
    console.log('WEDGE_MODES='+JSON.stringify({fixed:analyze(base,'fixed'),pension:analyze(base,'pension'),all:analyze(base,'all')}))
    const bs=score(base)
    console.log('VARIANTS='+JSON.stringify(variants.map(v=>{const s=score({...base,...v.patch});return {name:v.name,...s,revenueDeltaGDP:s.revenueGDP-bs.revenueGDP}})))
+   const grid:any[]=[]
+   for(const middle of [.24,.25]) for(const inter of [.29,.30])
+    for(const start of [90000,100000,110000,120000,125000])
+     for(const top of [180000,200000,220000,240000,250000]){
+      if(top<=start) continue
+      const p={...base,progressiveMiddleRate:middle,progressiveIntermediateRate:inter,progressiveIntermediateStartPerAdult:start,progressiveTopBracketPerAdult:top}
+      const s=score(p)
+      if(s.mtr<.282413452776157) grid.push({middle,inter,start,top,mtr:s.mtr,netWageLog:s.log,revenueGDP:s.revenueGDP,revenueDeltaGDP:s.revenueGDP-bs.revenueGDP})
+     }
+   console.log('GRID_IMPROVERS='+JSON.stringify(grid))
    expect(true).toBe(true)
  },30000)
 })
