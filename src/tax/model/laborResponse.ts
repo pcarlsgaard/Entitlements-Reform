@@ -64,7 +64,7 @@ export interface LaborResponseResult {
   boundedLaborWeightShare: number
 }
 
-const snapshot = snapshotJson as {
+const snapshot = snapshotJson as unknown as {
   sample: { taxUnits: number }
   distribution: LaborCell[]
 }
