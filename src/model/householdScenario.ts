@@ -84,6 +84,7 @@ function annualSocialSecurity(simulation: SimulationResult, year: number, age: n
     year,
     a,
     reform,
+    birthYear + chosenAge,
   ) * currentLawClaimFactor(chosenAge) * shares.legacyShare * factor * delivery
   const flat = flatSocialSecurityBenefitNominal(
     birthYear,
