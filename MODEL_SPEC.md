@@ -112,10 +112,14 @@ cap_COLA_t = protected_benefit_(t-1) * selected_COLA_rate_t
 benefit_t = benefit_(t-1) + min(uncapped_COLA_t, cap_COLA_t)
 ```
 
-The protected-benefit threshold can be wage indexed or CPI-W indexed. The CRFB
-75th-percentile example of roughly $33,000 protected in 2026 is a UI preset only;
-the model does not hard-code CRFB's DYNASIM savings estimate or assume that the
-aggregate cohort represents the 75th percentile.
+The protected-benefit threshold can be wage indexed or CPI-W indexed. For a
+transition cohort, the dollar cap is applied once to the full legacy/flat blended
+benefit; it is not separately applied to each component. If only the flat sleeve is
+prefunded, the combined-benefit cap factor is calculated first and then applied to
+the flat sleeve's present value. The CRFB 75th-percentile example of roughly
+$33,000 protected in 2026 is a UI preset only; the model does not hard-code CRFB's
+DYNASIM savings estimate or assume that the aggregate cohort represents the 75th
+percentile.
 
 The optional annual maximum benefit is applied directly after the legacy/flat blend
 as a per-retired-worker dollar ceiling. Supported indexing rules are CPI-W, chained
