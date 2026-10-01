@@ -15,6 +15,7 @@ const numericKeys = [
   'individualFPL2026',
   'realFPLGrowth',
   'fullRetirementAge',
+  'socialSecurityCOLAStartYear',
   'vestingYears', 'socialSecurityClaimAge', 'qualifyingEarnings2026', 'averageWorkingYears',
   'averageAnnualEarnings2026', 'actuarialDiscountRate', 'medicareSupportGDPShare',
   'currentLawSSBenefit2026',
@@ -70,8 +71,18 @@ export function validateModelAssumptions(
   if (assumptions.vestingYears <= 0) add('vestingYears', 'Full-benefit years must be positive.')
   if (assumptions.actuarialDiscountRate < 0 || assumptions.actuarialDiscountRate > 0.1) add('actuarialDiscountRate', 'Use a real discount rate from 0% to 10%.')
   if (assumptions.medicareSupportGDPShare < 0 || assumptions.medicareSupportGDPShare > 0.15) add('medicareSupportGDPShare', 'Support pool must be 0%–15% of GDP.')
-  if (!['gdpShare', 'perPerson'].includes(assumptions.medicareFundingMode)) add('medicareFundingMode', 'Choose a recognized support rule.')
+  if (typeof assumptions.flatBenefitTransitionEnabled !== 'boolean')
+    add('flatBenefitTransitionEnabled', 'Choose whether the flat-benefit transition is enabled.')
+  if (typeof assumptions.socialSecurityRetirementAgeReformEnabled !== 'boolean')
+    add('socialSecurityRetirementAgeReformEnabled', 'Choose whether retirement-age reform is enabled.')
+    if (!['gdpShare', 'perPerson'].includes(assumptions.medicareFundingMode)) add('medicareFundingMode', 'Choose a recognized support rule.')
   if (!['cbo', 'growth'].includes(assumptions.nonDefenseDiscretionaryMode)) add('nonDefenseDiscretionaryMode', 'Choose a recognized spending path.')
+  if (!['cpiW', 'chainedCPI', 'cpiE'].includes(assumptions.socialSecurityCOLAIndex))
+    add('socialSecurityCOLAIndex', 'Choose a recognized Social Security COLA index.')
+  if (!['wage', 'cpi'].includes(assumptions.socialSecurityCOLACapIndexing))
+    add('socialSecurityCOLACapIndexing', 'Choose a recognized COLA-cap indexing rule.')
+  if (!['cpi', 'chainedCPI', 'fixed20Wage', 'fixed30Wage'].includes(assumptions.socialSecurityBenefitCapIndexing))
+    add('socialSecurityBenefitCapIndexing', 'Choose a recognized benefit-cap indexing rule.')
 
   if (!fundingStrategies.includes(assumptions.fundingStrategy)) {
     add('fundingStrategy', 'Select a recognized financing strategy.')
@@ -94,9 +105,23 @@ export function validateModelAssumptions(
   if (assumptions.benefitPhaseInYears <= 0) {
     add('benefitPhaseInYears', 'The phase-in must be at least one year.')
   }
+  if (
+    assumptions.socialSecurityCOLAStartYear < assumptions.reformYear ||
+    assumptions.socialSecurityCOLAStartYear > assumptions.endYear
+  ) {
+    add('socialSecurityCOLAStartYear', 'The COLA reform start year must fall within the simulation horizon.')
+  }
+  if (assumptions.socialSecurityCOLACapProtectedBenefit2026 !== null &&
+    (!Number.isFinite(assumptions.socialSecurityCOLACapProtectedBenefit2026) ||
+      assumptions.socialSecurityCOLACapProtectedBenefit2026 <= 0)) {
+    add('socialSecurityCOLACapProtectedBenefit2026', 'The protected benefit for the COLA cap must be positive.')
+  }
   if (assumptions.socialSecurityBenefitCap2026 !== null &&
     (!Number.isFinite(assumptions.socialSecurityBenefitCap2026) || assumptions.socialSecurityBenefitCap2026 <= 0)) {
     add('socialSecurityBenefitCap2026', 'The annual benefit cap must be positive.')
+  }
+  if (assumptions.socialSecurityBenefitCap2026 !== null && assumptions.fundingStrategy !== 'paygo') {
+    add('fundingStrategy', 'Total Social Security benefit caps currently require PAYGO financing.')
   }
   if (assumptions.fullRetirementAge < 0 || assumptions.fullRetirementAge >= assumptions.maxModeledAge) {
     add('fullRetirementAge', 'Retirement age must be below the maximum modeled age.')

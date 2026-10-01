@@ -1,7 +1,8 @@
 import { currentLawDeliveryShares } from './currentLaw'
 import { defaultAssumptions } from './defaults'
-import { flatBenefitReal, legacySocialSecurityBenefitNominal, socialSecurityBenefitShares } from './socialSecurity'
-import { annualWorkCredit, actuarialClaimFactor, currentLawClaimFactor, workCreditFraction } from './claiming'
+import { flatSocialSecurityBenefitNominal, legacySocialSecurityBenefitNominal, socialSecurityBenefitShares } from './socialSecurity'
+import { socialSecurityBenefitCapNominal, socialSecurityCombinedCOLACapScale } from './socialSecurityPolicy'
+import { annualWorkCredit, currentLawClaimFactor } from './claiming'
 import { premiumSupportPerPersonNominal } from './medicare'
 import { nominalGDPBillionsForYear } from './budget'
 import { realWageGrowthFactor } from './taxProjection'
@@ -77,13 +78,55 @@ function annualSocialSecurity(simulation: SimulationResult, year: number, age: n
   if (age > a.maxModeledAge || age < chosenAge) return 0
   const shares = reform && !grandfathered ? socialSecurityBenefitShares(birthYear + a.fullRetirementAge, a)
     : { legacyShare: 1, flatShare: 0 }
-  const inflation = (1 + a.inflation) ** (year - a.reformYear)
   const delivery = currentLawDeliveryShares(year, a, mode).socialSecurity
-  const legacy = legacySocialSecurityBenefitNominal(birthYear + 67, year, a) *
-    currentLawClaimFactor(chosenAge) * shares.legacyShare * factor * delivery
-  const flat = flatBenefitReal(year, a) * inflation * shares.flatShare *
-    actuarialClaimFactor(birthYear, chosenAge, a) * workCreditFraction(credits, a)
-  const cap = reform && a.socialSecurityBenefitCap2026 !== null ? a.socialSecurityBenefitCap2026 * inflation : Infinity
+  const claimYear = birthYear + chosenAge
+  const initialYear = Math.max(claimYear, a.reformYear)
+  const claimAdjustment = currentLawClaimFactor(chosenAge)
+  const legacyUncappedCOLA = legacySocialSecurityBenefitNominal(
+    birthYear + 67,
+    year,
+    a,
+    reform,
+    claimYear,
+    false,
+  ) * claimAdjustment * shares.legacyShare * factor
+  const flatUncappedCOLA = flatSocialSecurityBenefitNominal(
+    birthYear,
+    claimYear,
+    year,
+    a,
+    reform,
+    credits,
+    false,
+  ) * shares.flatShare
+  const initialLegacy = legacySocialSecurityBenefitNominal(
+    birthYear + 67,
+    initialYear,
+    a,
+    reform,
+    claimYear,
+    false,
+  ) * claimAdjustment * shares.legacyShare * factor
+  const initialFlat = flatSocialSecurityBenefitNominal(
+    birthYear,
+    claimYear,
+    initialYear,
+    a,
+    reform,
+    credits,
+    false,
+  ) * shares.flatShare
+  const colaCapScale = socialSecurityCombinedCOLACapScale(
+    initialLegacy + initialFlat,
+    initialYear,
+    year,
+    a,
+    reform,
+  )
+  const legacy = legacyUncappedCOLA * colaCapScale * delivery
+  const flat = flatUncappedCOLA * colaCapScale
+  const capBase = reform ? socialSecurityBenefitCapNominal(year, a) : null
+  const cap = capBase === null ? Infinity : capBase
   return Math.min(legacy + flat, cap)
 }
 

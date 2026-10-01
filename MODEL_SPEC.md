@@ -18,7 +18,12 @@ This document defines the intended economics and accounting of the simulator. Th
 
 ## 1.1 Benefit phase-in
 
-The old-age benefit formula transitions by **retirement cohort**.
+The flat/capped-benefit transition is an independently switchable Social Security
+module. It may be combined with COLA, maximum-benefit, or retirement-age changes,
+or turned off so those add-on reforms can be scored against the legacy benefit
+formula by themselves.
+
+When enabled, the old-age benefit formula transitions by **retirement cohort**.
 
 For a cohort retiring in year `r`:
 
@@ -85,6 +90,60 @@ Default full retirement age:
 - **70**.
 
 The architecture should allow longevity indexing later, but do not assume a longevity formula without an explicit parameter.
+
+---
+
+## 1.5 Modular post-award COLA and maximum-benefit reforms
+
+Social Security benefit reforms that operate after the initial award are modeled as
+cohort cash-flow rules, not as imported percentages of the actuarial shortfall.
+
+Supported COLA index choices:
+
+- CPI-W: current-law benchmark, represented by the model inflation assumption.
+- Chained CPI: CPI-W less 0.30 percentage point per year, floored at zero.
+- CPI-E: CPI-W plus 0.15 percentage point per year.
+
+The COLA reform begins in an explicit calendar year. Before that date, current-law
+CPI-W applies. Once a worker has an initial annual benefit, the simulator advances it
+year by year rather than applying an aggregate spending haircut.
+
+An optional CRFB-style dollar COLA cap is specified as the amount of annual benefit
+that remains fully inflation protected in 2026 dollars. For each post-award year:
+
+```text
+uncapped_COLA_t = benefit_(t-1) * selected_COLA_rate_t
+cap_COLA_t = protected_benefit_(t-1) * selected_COLA_rate_t
+benefit_t = benefit_(t-1) + min(uncapped_COLA_t, cap_COLA_t)
+```
+
+The protected-benefit threshold can be wage indexed or CPI-W indexed. For a
+transition cohort, the dollar cap is applied once to the full legacy/flat blended
+benefit; it is not separately applied to each component. If only the flat sleeve is
+prefunded, the combined-benefit cap factor is calculated first and then applied to
+the flat sleeve's present value. The CRFB 75th-percentile example of roughly
+$33,000 protected in 2026 is a UI preset only; the model does not hard-code CRFB's
+DYNASIM savings estimate or assume that the aggregate cohort represents the 75th
+percentile.
+
+The optional annual maximum benefit is applied directly after the legacy/flat blend
+as a per-retired-worker dollar ceiling. Supported indexing rules are CPI-W, chained
+CPI, a 20-year nominal freeze followed by wage indexing, and a 30-year nominal
+freeze followed by wage indexing. The $50,000 value is a UI reference corresponding
+to CRFB's single-retiree Six Figure Limit at normal retirement age. The simulator
+preserves its pre-existing direct-cap semantics; CRFB's couple aggregation and
+claim-age-specific cap adjustment are not yet modeled.
+
+COLA reforms are included in the present value of prefunded flat-benefit sleeves.
+The total-benefit cap remains incompatible with prefunding because, during the
+transition, allocating a cap between legacy PAYGO and flat prefunded components
+would require an additional explicit rule.
+
+Distribution-sensitive PIA reforms such as 40-year averaging, mini-PIA, or
+progressive bend-point changes are not approximated with a hard-coded savings
+percentage. They should be added only when the model has an earnings-history
+distribution or an equally explicit cohort formula that can preserve interactions
+with the flat-benefit transition.
 
 ---
 
