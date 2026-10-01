@@ -201,3 +201,83 @@ describe('200 percent FPL transition cohort table', () => {
     expect(report).toHaveLength(25)
   }, 30_000)
 })
+
+
+function accumulationAtReturn(retirementYear: number, percentile: number, realReturn: number): number {
+  if (retirementYear <= a.reformYear) return 0
+  const wage2026 = annualEarningsAtPercentile(percentile)
+  let fv = 0
+  for (let year = a.reformYear; year < retirementYear; year += 1) {
+    const wage = wage2026 * realWageGrowthFactor(year, a)
+    fv += wage * (1 + realReturn) ** (retirementYear - year - 1)
+  }
+  return fv
+}
+
+function accumulatedTaxGainAtReturn(retirementYear: number, wage2026: number, realReturn: number): number {
+  let fv = 0
+  for (let year = a.reformYear; year < retirementYear; year += 1) {
+    const wage = wage2026 * realWageGrowthFactor(year, a)
+    const gain = calculateHousehold(
+      { filingStatus: 'single', cashWage: wage, children: 0 },
+      defaultCombinedPolicy.tax,
+      defaultCombinedPolicy.health.employerFicaPassThroughRate,
+    ).dollarChange
+    fv += gain * (1 + realReturn) ** (retirementYear - year - 1)
+  }
+  return fv
+}
+
+function workerReturnRow(
+  label: string,
+  percentile: number | null,
+  retirementYear: number,
+  wage2026: number,
+  relativeBenefit: number,
+  realReturn: number,
+) {
+  const transitionYears = 20
+  const alpha = Math.max(0, Math.min(1, (retirementYear - a.reformYear) / transitionYears))
+  const birthYear = retirementYear - 67
+  const realAwardGrowth = (1 + a.currentLawSSBenefitRealGrowth) ** Math.max(0, retirementYear - a.reformYear)
+  const current = a.currentLawSSBenefit2026 * relativeBenefit * realAwardGrowth
+  const flat = a.individualFPL2026 * 2
+  const reform = (1 - alpha) * current + alpha * flat
+  const annualLoss = Math.max(0, current - reform)
+  const pvLoss = annualLoss * annuityFactorAt67(birthYear)
+  let accumWages = 0
+  for (let year = a.reformYear; year < retirementYear; year += 1) {
+    const wage = wage2026 * realWageGrowthFactor(year, a)
+    accumWages += wage * (1 + realReturn) ** (retirementYear - year - 1)
+  }
+  const saveRate = accumWages > 0 ? pvLoss / accumWages : 0
+  const taxFV = accumulatedTaxGainAtReturn(retirementYear, wage2026, realReturn)
+  return {
+    label,
+    retirementYear,
+    currentBenefit: current,
+    reformBenefit: reform,
+    benefitChange: reform / current - 1,
+    saveRate,
+    taxCoverage: pvLoss > 0 ? taxFV / pvLoss : null,
+    residualSaveRate: pvLoss > 0 ? Math.max(0, (pvLoss - taxFV) / accumWages) : 0,
+  }
+}
+
+describe('200 percent FPL cohort table at 3.5 percent real return', () => {
+  it('prints replacement saving rates', () => {
+    const workers = [
+      ['P10', 0.10, annualEarningsAtPercentile(0.10), relativeBenefitAtPercentile(0.10)],
+      ['P50', 0.50, annualEarningsAtPercentile(0.50), relativeBenefitAtPercentile(0.50)],
+      ['P75', 0.75, annualEarningsAtPercentile(0.75), relativeBenefitAtPercentile(0.75)],
+      ['P90', 0.90, annualEarningsAtPercentile(0.90), relativeBenefitAtPercentile(0.90)],
+      ['Maximum', null, 184500, (4152 * 12) / a.currentLawSSBenefit2026],
+    ] as const
+    const years = [2035, 2045, 2055, 2065, 2075]
+    const report = years.flatMap(year =>
+      workers.map(([label, percentile, wage, relative]) =>
+        workerReturnRow(label, percentile, year, wage, relative, 0.035)))
+    console.log('FLAT_200_20_RETURN_35=' + JSON.stringify(report))
+    expect(report).toHaveLength(25)
+  }, 30_000)
+})
