@@ -20,10 +20,14 @@ export interface ModelAssumptions {
   reformYear: number
   endYear: number
   maxModeledAge: number
+  /** Whether retirement cohorts transition from the legacy formula to the flat/capped target benefit. */
+  flatBenefitTransitionEnabled: boolean
   benefitPhaseInYears: number
   flatBenefitFPLMultiple: number
   individualFPL2026: number
   realFPLGrowth: number
+  /** Whether the selected full/representative claiming ages replace the current-law age in reform scenarios. */
+  socialSecurityRetirementAgeReformEnabled: boolean
   fullRetirementAge: number
   /** Post-award Social Security COLA index. Current law is CPI-W. */
   socialSecurityCOLAIndex: SocialSecurityCOLAIndex
