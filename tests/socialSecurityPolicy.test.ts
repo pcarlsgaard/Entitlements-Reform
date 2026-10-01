@@ -59,6 +59,8 @@ describe('Social Security initial-benefit modules', () => {
   it('starts PPI with the selected eligibility year and makes a 50th-percentile threshold stronger than 75th', () => {
     const current = withAssumptions({
       socialSecurityInitialBenefitMode: 'currentLaw',
+      fullRetirementAge: 67,
+      socialSecurityClaimAge: 67,
       socialSecurityCOLAMode: 'current',
       fundingStrategy: 'paygo',
     })
@@ -66,6 +68,8 @@ describe('Social Security initial-benefit modules', () => {
       socialSecurityInitialBenefitMode: 'progressivePriceIndexing',
       socialSecurityPPIThresholdPercentile: 0.50,
       socialSecurityPPIStartYear: 2033,
+      fullRetirementAge: 67,
+      socialSecurityClaimAge: 67,
       socialSecurityCOLAMode: 'current',
       fundingStrategy: 'paygo',
     })
