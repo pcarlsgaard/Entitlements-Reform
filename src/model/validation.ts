@@ -11,10 +11,12 @@ const numericKeys = [
   'endYear',
   'maxModeledAge',
   'benefitPhaseInYears',
+  'socialSecurityPPIProtectedPercentile',
   'flatBenefitFPLMultiple',
   'individualFPL2026',
   'realFPLGrowth',
   'fullRetirementAge',
+  'socialSecurityReformFRA',
   'socialSecurityCOLACap',
   'socialSecurityCOLAAdjustment',
   'vestingYears', 'socialSecurityClaimAge', 'qualifyingEarnings2026', 'averageWorkingYears',
@@ -65,7 +67,7 @@ export function validateModelAssumptions(
     if (!Number.isFinite(assumptions[key])) add(key, 'Enter a finite number.')
   }
   if (issues.length > 0) return issues
-  for (const key of ['fullRetirementAge', 'socialSecurityClaimAge', 'medicareEligibilityAge'] as const)
+  for (const key of ['fullRetirementAge', 'socialSecurityReformFRA', 'socialSecurityClaimAge', 'medicareEligibilityAge'] as const)
     if (!Number.isInteger(assumptions[key])) add(key, 'Use whole years.')
   if (assumptions.socialSecurityClaimAge < 62 || assumptions.socialSecurityClaimAge > 80) add('socialSecurityClaimAge', 'Claiming age must be 62–80.')
   if (assumptions.qualifyingEarnings2026 <= 0) add('qualifyingEarnings2026', 'Qualifying earnings must be positive.')
@@ -73,12 +75,19 @@ export function validateModelAssumptions(
   if (assumptions.actuarialDiscountRate < 0 || assumptions.actuarialDiscountRate > 0.1) add('actuarialDiscountRate', 'Use a real discount rate from 0% to 10%.')
   if (assumptions.medicareSupportGDPShare < 0 || assumptions.medicareSupportGDPShare > 0.15) add('medicareSupportGDPShare', 'Support pool must be 0%–15% of GDP.')
   if (!['gdpShare', 'perPerson'].includes(assumptions.medicareFundingMode)) add('medicareFundingMode', 'Choose a recognized support rule.')
+  if (!['current', 'flatTransition', 'progressivePriceIndexing'].includes(assumptions.socialSecurityInitialBenefitMode))
+    add('socialSecurityInitialBenefitMode', 'Choose a recognized Social Security initial benefit formula.')
+  if (assumptions.socialSecurityPPIProtectedPercentile < 0.30 || assumptions.socialSecurityPPIProtectedPercentile > 0.90)
+    add('socialSecurityPPIProtectedPercentile', 'Use a protected percentile from 30% to 90%.')
   if (!['current', 'chainedCpi', 'cap', 'custom'].includes(assumptions.socialSecurityCOLAMode))
     add('socialSecurityCOLAMode', 'Choose a recognized Social Security COLA rule.')
   if (assumptions.socialSecurityCOLACap < 0 || assumptions.socialSecurityCOLACap > 0.10)
     add('socialSecurityCOLACap', 'Use a COLA cap from 0% to 10%.')
   if (assumptions.socialSecurityCOLAAdjustment < -0.05 || assumptions.socialSecurityCOLAAdjustment > 0.05)
     add('socialSecurityCOLAAdjustment', 'Use a COLA adjustment from -5 to +5 percentage points.')
+  if (assumptions.socialSecurityDollarCOLACapPercentile !== null &&
+    (assumptions.socialSecurityDollarCOLACapPercentile < 0.50 || assumptions.socialSecurityDollarCOLACapPercentile > 0.90))
+    add('socialSecurityDollarCOLACapPercentile', 'Use a dollar COLA cap percentile from 50% to 90%.')
   if (!['cbo', 'growth'].includes(assumptions.nonDefenseDiscretionaryMode)) add('nonDefenseDiscretionaryMode', 'Choose a recognized spending path.')
 
   if (!fundingStrategies.includes(assumptions.fundingStrategy)) {
@@ -105,6 +114,9 @@ export function validateModelAssumptions(
   if (assumptions.socialSecurityBenefitCap2026 !== null &&
     (!Number.isFinite(assumptions.socialSecurityBenefitCap2026) || assumptions.socialSecurityBenefitCap2026 <= 0)) {
     add('socialSecurityBenefitCap2026', 'The annual benefit cap must be positive.')
+  }
+  if (assumptions.socialSecurityReformFRA < 62 || assumptions.socialSecurityReformFRA > 80) {
+    add('socialSecurityReformFRA', 'Social Security reform FRA must be 62–80.')
   }
   if (assumptions.fullRetirementAge < 0 || assumptions.fullRetirementAge >= assumptions.maxModeledAge) {
     add('fullRetirementAge', 'Retirement age must be below the maximum modeled age.')

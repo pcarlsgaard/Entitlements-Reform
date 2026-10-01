@@ -86,20 +86,36 @@ Default full retirement age:
 
 The architecture should allow longevity indexing later, but do not assume a longevity formula without an explicit parameter.
 
-## 1.5 Post-award COLA reforms
+## 1.5 Modular initial-benefit reforms
+
+The reform scenario must explicitly select one initial retired-worker benefit formula:
+
+- **Current-law earnings formula**: preserves the current-law new-award growth assumption. This permits COLA-only or retirement-age-only reform.
+- **Flat-benefit transition**: uses the cohort blend in section 1.1 and the flat promise in section 1.2.
+- **Progressive price indexing (PPI)**: preserves current-law initial-benefit growth through a selected percentile and progressively reduces real new-award growth above that percentile, reaching price-indexed growth at the top of the modeled distribution.
+
+The current-law comparator ignores this selection and always uses scheduled/payable current-law benefits.
+
+SSA defines PPI using the AIME distribution and PIA factors. The aggregate simulator does not carry beneficiary-level AIME histories. It therefore uses the SSA December 2025 retired-worker benefit distribution as a transparent rank proxy, normalized to preserve aggregate current-law spending when PPI is off. The 50th-percentile option corresponds conceptually to SSA B1.4; the 60th- and 75th-percentile thresholds are model extensions. They are not represented as official SSA scores.
+
+The earnings-related reform full retirement age is a separate parameter from the flat-benefit reference age. Raising the reform FRA changes the benefit adjustment at a fixed representative claiming age; the claiming-age assumption remains separately editable.
+
+## 1.6 Post-award COLA reforms
 
 COLA policy is a separate, stackable Social Security lever. It changes benefits only after an award is in payment; it does not reduce the initial award.
 
-Supported rules:
+Supported index rules:
 
 - current CPI assumption;
 - chained CPI preset, modeled as CPI minus 0.3 percentage point per year, floored at zero;
-- a user-selected maximum annual COLA;
+- a user-selected **maximum percentage COLA**;
 - a custom additive adjustment to CPI.
 
-For a benefit awarded in year `a`, the reform COLA compounds from `max(a, reformYear)` onward. Current-law comparator benefits always retain the baseline CPI assumption. The same COLA rule must be used in PAYGO benefit spending and in the Social Security prefunding present value.
+In addition, an independent **maximum dollar COLA** can be set at the 50th, 75th, or 90th percentile of the retired-worker benefit distribution. Beneficiaries below the selected threshold receive the full chosen percentage COLA. Beneficiaries above the threshold receive no more dollar increase than the reference beneficiary at the selected percentile. The dollar cap may stack with chained CPI.
 
-The chained-CPI differential is an SSA actuarial approximation, not a hard-coded aggregate savings estimate. No CRFB percentage-of-gap-closed value is used in the fiscal engine.
+For a benefit awarded in year `a`, the reform COLA applies from `max(a, reformYear)` onward. Current-law comparator benefits always retain the baseline CPI assumption. The percentile-dollar cap is applied to the earnings-related legacy/PPI stream. The flat component continues to use the selected percentage index because its uniform benefit promise does not carry the modeled earnings-related distribution.
+
+The chained-CPI differential is an SSA actuarial approximation. The percentile-dollar mechanism follows CRFB's design concept. No CRFB or SSA percentage-of-gap-closed value is hard-coded into the fiscal engine.
 
 ---
 

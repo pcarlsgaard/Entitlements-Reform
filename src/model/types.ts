@@ -6,6 +6,11 @@ export type CurrentLawBaselineMode = 'scheduled' | 'payable'
 
 export type SocialSecurityCOLAMode = 'current' | 'chainedCpi' | 'cap' | 'custom'
 
+export type SocialSecurityInitialBenefitMode =
+  | 'current'
+  | 'flatTransition'
+  | 'progressivePriceIndexing'
+
 export type FundingStrategy =
   | 'paygo'
   | 'socialSecurityOnly'
@@ -19,10 +24,16 @@ export interface ModelAssumptions {
   endYear: number
   maxModeledAge: number
   benefitPhaseInYears: number
+  /** Initial retired-worker benefit formula used in the reform scenario. */
+  socialSecurityInitialBenefitMode: SocialSecurityInitialBenefitMode
+  /** AIME percentile protected from progressive price indexing, expressed 0–1. */
+  socialSecurityPPIProtectedPercentile: number
   flatBenefitFPLMultiple: number
   individualFPL2026: number
   realFPLGrowth: number
   fullRetirementAge: number
+  /** Full retirement age used by modular earnings-related reforms; current law remains age 67. */
+  socialSecurityReformFRA: number
   /** Optional CPI-indexed cap on a retiree's annual Social Security benefit (2026 dollars). */
   socialSecurityBenefitCap2026: number | null
   /** Post-award COLA rule for the reformed OASI retired-worker stream. */
@@ -31,6 +42,8 @@ export interface ModelAssumptions {
   socialSecurityCOLACap: number
   /** Additive annual percentage-point change from CPI when mode is 'custom'. */
   socialSecurityCOLAAdjustment: number
+  /** Optional CRFB-style dollar COLA cap, set by benefit percentile (for example 0.75). */
+  socialSecurityDollarCOLACapPercentile: number | null
   /** Full-benefit credited years; shorter records receive proportional flat benefits. */
   vestingYears: number
   socialSecurityClaimAge: number
