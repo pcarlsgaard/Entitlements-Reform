@@ -23,6 +23,28 @@ const flat: CombinedPolicy = {
   },
 }
 
+
+function flatScenario(label: string, fplMultiple: number, phaseInYears: number): { label: string; policy: CombinedPolicy } {
+  return {
+    label,
+    policy: {
+      ...defaultCombinedPolicy,
+      taxEnabled: false,
+      benefits: { socialSecurityReform: true, medicareReform: false },
+      assumptions: {
+        ...defaultCombinedPolicy.assumptions,
+        fundingStrategy: 'paygo',
+        socialSecurityInitialBenefitMode: 'flatTransition',
+        flatBenefitFPLMultiple: fplMultiple,
+        benefitPhaseInYears: phaseInYears,
+        socialSecurityCOLAMode: 'current',
+        socialSecurityDollarCOLACapPercentile: null,
+        socialSecurityBenefitCap2026: null,
+      },
+    },
+  }
+}
+
 function ppi(protectedPercentile: 0.50 | 0.75): CombinedPolicy {
   return {
     ...defaultCombinedPolicy,
@@ -78,9 +100,18 @@ function summarize(label: string, policy: CombinedPolicy) {
 
 describe('Social Security package comparison report', () => {
   it('prints isolated Social Security package comparisons', () => {
+    const flatScenarios = [
+      flatScenario('125% FPL / 20y', 1.25, 20),
+      flatScenario('125% FPL / 30y', 1.25, 30),
+      flatScenario('125% FPL / 40y', 1.25, 40),
+      flatScenario('200% FPL / 10y', 2.00, 10),
+      flatScenario('200% FPL / 15y', 2.00, 15),
+      flatScenario('200% FPL / 20y', 2.00, 20),
+      flatScenario('200% FPL / 30y', 2.00, 30),
+    ]
     const report = [
       summarize('Current law', currentLaw),
-      summarize('Flat transition', flat),
+      ...flatScenarios.map(item => summarize(item.label, item.policy)),
       summarize('PPI50 + FRA68 + chained CPI + 75th dollar COLA cap', ppi(0.50)),
       summarize('PPI75 + FRA68 + chained CPI + 75th dollar COLA cap', ppi(0.75)),
     ]
