@@ -117,13 +117,13 @@ The protected-benefit threshold can be wage indexed or CPI-W indexed. The CRFB
 the model does not hard-code CRFB's DYNASIM savings estimate or assume that the
 aggregate cohort represents the 75th percentile.
 
-The optional annual maximum benefit is applied after the legacy/flat blend. The
-2026 value is a per-retired-worker amount at the current-law full retirement age
-and is adjusted using the current-law claiming-age factor. Supported indexing rules
-are CPI-W, chained CPI, a 20-year nominal freeze followed by wage indexing, and a
-30-year nominal freeze followed by wage indexing. The $50,000 single-retiree value
-is a UI preset corresponding to CRFB's Six Figure Limit; couple aggregation is not
-modeled in the aggregate cohort engine.
+The optional annual maximum benefit is applied directly after the legacy/flat blend
+as a per-retired-worker dollar ceiling. Supported indexing rules are CPI-W, chained
+CPI, a 20-year nominal freeze followed by wage indexing, and a 30-year nominal
+freeze followed by wage indexing. The $50,000 value is a UI reference corresponding
+to CRFB's single-retiree Six Figure Limit at normal retirement age. The simulator
+preserves its pre-existing direct-cap semantics; CRFB's couple aggregation and
+claim-age-specific cap adjustment are not yet modeled.
 
 COLA reforms are included in the present value of prefunded flat-benefit sleeves.
 The total-benefit cap remains incompatible with prefunding because, during the
