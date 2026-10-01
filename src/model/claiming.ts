@@ -29,10 +29,12 @@ export function actuarialClaimFactor(birthYear: number, claimAge: number, a: Mod
   if (claimAge < earliestClaimAge) return 0
   return claimAnnuity(birthYear, a.fullRetirementAge, a) / claimAnnuity(birthYear, claimAge, a)
 }
-/** Simplified current-law FRA-67 reduction and delayed credit, capped at age 70. */
-export function currentLawClaimFactor(age: number): number {
+/** Simplified statutory claiming adjustment around a selectable full retirement age. */
+export function currentLawClaimFactor(age: number, fullRetirementAge = 67): number {
   if (age < 62) return 0
-  const earlyMonths = Math.max(0, (67 - age) * 12)
-  return age < 67 ? 1 - Math.min(36, earlyMonths) * (5 / 900) - Math.max(0, earlyMonths - 36) * (5 / 1200)
-    : 1 + Math.max(0, Math.min(70, age) - 67) * 0.08
+  const earlyMonths = Math.max(0, (fullRetirementAge - age) * 12)
+  return age < fullRetirementAge
+    ? 1 - Math.min(36, earlyMonths) * (5 / 900) -
+      Math.max(0, earlyMonths - 36) * (5 / 1200)
+    : 1 + Math.max(0, Math.min(70, age) - fullRetirementAge) * 0.08
 }
