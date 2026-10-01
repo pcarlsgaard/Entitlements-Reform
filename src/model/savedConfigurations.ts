@@ -79,8 +79,9 @@ export function parseConfiguration(json: string): SavedConfiguration {
     delete a.realWageGrowth
     const additions = ['qualifyingEarnings2026', 'averageWorkingYears', 'averageAnnualEarnings2026',
       'actuarialDiscountRate', 'medicareFundingMode', 'realWageGrowthDeviation', 'debtPaydownTargetGDP',
-      'debtPaydownSurplusCapGDP', 'socialSecurityCOLAMode', 'socialSecurityCOLACap',
-      'socialSecurityCOLAAdjustment'] as const
+      'debtPaydownSurplusCapGDP', 'socialSecurityInitialBenefitMode', 'socialSecurityPPIProtectedPercentile',
+      'socialSecurityReformFRA', 'socialSecurityCOLAMode', 'socialSecurityCOLACap',
+      'socialSecurityCOLAAdjustment', 'socialSecurityDollarCOLACapPercentile'] as const
     for (const key of additions) if (a[key] === undefined) a[key] = defaultAssumptions[key]
     // Pre-split configurations carried the old 0.5% stylized SS award-growth default.
     // Move that untouched legacy default to the 2026 Trustees wage-growth central value.
@@ -121,11 +122,14 @@ export function parseConfiguration(json: string): SavedConfiguration {
       policy.assumptions.medicareYearA < 2026 || policy.assumptions.medicareYearB > 2095)
     throw new Error('The configuration has incompatible horizon or transition settings.')
   oneOf(policy.assumptions.medicareFundingMode, ['gdpShare', 'perPerson'], 'Medicare funding rule')
+  oneOf(policy.assumptions.socialSecurityInitialBenefitMode, ['current', 'flatTransition', 'progressivePriceIndexing'], 'Social Security initial benefit formula')
   oneOf(policy.assumptions.socialSecurityCOLAMode, ['current', 'chainedCpi', 'cap', 'custom'], 'Social Security COLA rule')
   oneOf(policy.assumptions.nonDefenseDiscretionaryMode, ['cbo', 'growth'], 'NDD rule')
-  for (const key of ['fullRetirementAge', 'socialSecurityClaimAge', 'medicareEligibilityAge', 'medicareYearA', 'medicareYearB'] as const)
+  for (const key of ['fullRetirementAge', 'socialSecurityReformFRA', 'socialSecurityClaimAge', 'medicareEligibilityAge', 'medicareYearA', 'medicareYearB'] as const)
     if (!Number.isInteger(policy.assumptions[key])) throw new Error(`${key} requires whole years.`)
   within(policy.assumptions.socialSecurityClaimAge, 62, 80, 'claim age')
+  within(policy.assumptions.socialSecurityReformFRA, 62, 80, 'Social Security reform FRA')
+  within(policy.assumptions.socialSecurityPPIProtectedPercentile, 0.30, 0.90, 'PPI protected percentile')
   within(policy.assumptions.vestingYears, 1, 60, 'full-benefit working years')
   within(policy.assumptions.qualifyingEarnings2026, 1, 100000, 'qualifying earnings')
   within(policy.assumptions.averageWorkingYears, 0, 60, 'representative working years')
@@ -133,6 +137,8 @@ export function parseConfiguration(json: string): SavedConfiguration {
   within(policy.assumptions.actuarialDiscountRate, 0, 0.10, 'actuarial discount rate')
   within(policy.assumptions.socialSecurityCOLACap, 0, 0.10, 'Social Security COLA cap')
   within(policy.assumptions.socialSecurityCOLAAdjustment, -0.05, 0.05, 'Social Security COLA adjustment')
+  if (policy.assumptions.socialSecurityDollarCOLACapPercentile !== null)
+    within(policy.assumptions.socialSecurityDollarCOLACapPercentile, 0.50, 0.90, 'dollar COLA cap percentile')
   within(policy.assumptions.medicareSupportGDPShare, 0, 0.15, 'senior support GDP share')
   within(policy.assumptions.fullRetirementAge, 62, 80, 'retirement age')
   within(policy.assumptions.medicareEligibilityAge, 60, 80, 'Medicare eligibility age')
