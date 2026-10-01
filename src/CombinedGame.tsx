@@ -83,7 +83,7 @@ export default function CombinedGame() {
       socialSecurityInitialBenefitMode: 'progressivePriceIndexing',
       socialSecurityPPIProtectedPercentile: protectedPercentile,
       socialSecurityReformFRA: 68,
-      socialSecurityClaimAge: 68,
+      socialSecurityClaimAge: 67,
       socialSecurityCOLAMode: 'chainedCpi',
       socialSecurityDollarCOLACapPercentile: 0.75,
       socialSecurityBenefitCap2026: null,
