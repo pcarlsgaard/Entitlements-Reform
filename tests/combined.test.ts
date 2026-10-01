@@ -17,6 +17,41 @@ describe('combined fiscal bridge', () => {
     expect(debt2095).toBeGreaterThan(debt2056)
   })
 
+  it('can run a COLA reform without the flat-benefit or retirement-age modules', () => {
+    const baseAssumptions = {
+      ...defaultCombinedPolicy.assumptions,
+      flatBenefitTransitionEnabled: false,
+      socialSecurityRetirementAgeReformEnabled: false,
+    }
+    const neutral = scoreCombined({
+      ...defaultCombinedPolicy,
+      taxEnabled: false,
+      benefits: { socialSecurityReform: true, medicareReform: false },
+      assumptions: { ...baseAssumptions, socialSecurityCOLAIndex: 'cpiW' },
+    })
+    const colaOnly = scoreCombined({
+      ...defaultCombinedPolicy,
+      taxEnabled: false,
+      benefits: { socialSecurityReform: true, medicareReform: false },
+      assumptions: {
+        ...baseAssumptions,
+        socialSecurityCOLAIndex: 'chainedCPI',
+        socialSecurityCOLAStartYear: 2027,
+      },
+    })
+    const index = 2050 - 2026
+    expect(neutral.combined.years[index]!.flatSocialSecurityPaygo).toBe(0)
+    expect(colaOnly.combined.years[index]!.flatSocialSecurityPaygo).toBe(0)
+    expect(neutral.combined.assumptions.fullRetirementAge).toBe(67)
+    expect(neutral.combined.years[index]!.legacySocialSecurity).toBeCloseTo(
+      neutral.baseline.years[index]!.legacySocialSecurity,
+      8,
+    )
+    expect(colaOnly.combined.years[index]!.legacySocialSecurity).toBeLessThan(
+      colaOnly.baseline.years[index]!.legacySocialSecurity,
+    )
+  })
+
   it('books tax replacement, transfer savings, and ACA credits in their respective budget lines', () => {
     const result = scoreCombined(defaultCombinedPolicy)
     const year = result.combined.years[0]!
