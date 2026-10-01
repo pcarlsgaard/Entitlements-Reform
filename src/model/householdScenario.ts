@@ -1,7 +1,8 @@
 import { currentLawDeliveryShares } from './currentLaw'
 import { defaultAssumptions } from './defaults'
-import { flatBenefitReal, legacySocialSecurityBenefitNominal, socialSecurityBenefitShares } from './socialSecurity'
-import { annualWorkCredit, actuarialClaimFactor, currentLawClaimFactor, workCreditFraction } from './claiming'
+import { flatSocialSecurityBenefitNominal, legacySocialSecurityBenefitNominal, socialSecurityBenefitShares } from './socialSecurity'
+import { socialSecurityBenefitCapNominal } from './socialSecurityPolicy'
+import { annualWorkCredit, currentLawClaimFactor } from './claiming'
 import { premiumSupportPerPersonNominal } from './medicare'
 import { nominalGDPBillionsForYear } from './budget'
 import { realWageGrowthFactor } from './taxProjection'
@@ -77,13 +78,23 @@ function annualSocialSecurity(simulation: SimulationResult, year: number, age: n
   if (age > a.maxModeledAge || age < chosenAge) return 0
   const shares = reform && !grandfathered ? socialSecurityBenefitShares(birthYear + a.fullRetirementAge, a)
     : { legacyShare: 1, flatShare: 0 }
-  const inflation = (1 + a.inflation) ** (year - a.reformYear)
   const delivery = currentLawDeliveryShares(year, a, mode).socialSecurity
-  const legacy = legacySocialSecurityBenefitNominal(birthYear + 67, year, a) *
-    currentLawClaimFactor(chosenAge) * shares.legacyShare * factor * delivery
-  const flat = flatBenefitReal(year, a) * inflation * shares.flatShare *
-    actuarialClaimFactor(birthYear, chosenAge, a) * workCreditFraction(credits, a)
-  const cap = reform && a.socialSecurityBenefitCap2026 !== null ? a.socialSecurityBenefitCap2026 * inflation : Infinity
+  const legacy = legacySocialSecurityBenefitNominal(
+    birthYear + 67,
+    year,
+    a,
+    reform,
+  ) * currentLawClaimFactor(chosenAge) * shares.legacyShare * factor * delivery
+  const flat = flatSocialSecurityBenefitNominal(
+    birthYear,
+    birthYear + chosenAge,
+    year,
+    a,
+    reform,
+    credits,
+  ) * shares.flatShare
+  const capBase = reform ? socialSecurityBenefitCapNominal(year, a) : null
+  const cap = capBase === null ? Infinity : capBase * currentLawClaimFactor(chosenAge)
   return Math.min(legacy + flat, cap)
 }
 
