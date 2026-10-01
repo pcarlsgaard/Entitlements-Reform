@@ -1,5 +1,7 @@
 import { medicareForYear, medicarePremiumSupportShare, premiumSupportPerPersonNominal } from './medicare'
 import { projectedSurvival } from './demographics'
+import { currentLawClaimFactor } from './claiming'
+import { socialSecurityCombinedCOLACapScale } from './socialSecurityPolicy'
 import {
   fullyPrefundsMedicare,
   fullyPrefundsSocialSecurity,
@@ -10,6 +12,7 @@ import {
 import {
   cohortSizeAtAgeMillions,
   flatSocialSecurityBenefitNominal,
+  legacySocialSecurityBenefitNominal,
   ssParticipation,
   socialSecurityBenefitShares,
   socialSecurityForYear,
@@ -30,10 +33,31 @@ export function calculateEndowmentPerPerson(
     fundingYear + assumptions.fullRetirementAge - fundingAge
   const medicareEligibilityYear =
     fundingYear + assumptions.medicareEligibilityAge - fundingAge
-  const ssFlatShare = socialSecurityBenefitShares(
-    ssRetirementYear,
+  const { legacyShare: ssLegacyShare, flatShare: ssFlatShare } =
+    socialSecurityBenefitShares(ssRetirementYear, assumptions)
+  const ssBirthYear = fundingYear - fundingAge
+  const ssClaimYear =
+    fundingYear + assumptions.socialSecurityClaimAge - fundingAge
+  const ssInitialYear = Math.max(ssClaimYear, assumptions.reformYear)
+  const initialLegacyBenefit = legacySocialSecurityBenefitNominal(
+    ssBirthYear + 67,
+    ssInitialYear,
     assumptions,
-  ).flatShare
+    true,
+    ssClaimYear,
+    false,
+  ) * currentLawClaimFactor(assumptions.socialSecurityClaimAge)
+  const initialFlatBenefit = flatSocialSecurityBenefitNominal(
+    ssBirthYear,
+    ssClaimYear,
+    ssInitialYear,
+    assumptions,
+    true,
+    undefined,
+    false,
+  )
+  const initialBlendedBenefit =
+    ssLegacyShare * initialLegacyBenefit + ssFlatShare * initialFlatBenefit
   let socialSecurityPV = 0
   let medicarePV = 0
 
@@ -43,19 +67,27 @@ export function calculateEndowmentPerPerson(
     age += 1
   ) {
     const paymentYear = fundingYear + age - fundingAge
-    const survival = projectedSurvival(fundingAge, age, fundingYear - fundingAge)
+    const survival = projectedSurvival(fundingAge, age, ssBirthYear)
     const discount =
       (1 + assumptions.realEndowmentYield) ** (age - fundingAge)
-    const claimYear =
-      fundingYear + assumptions.socialSecurityClaimAge - fundingAge
-    const nominalFlatBenefit = flatSocialSecurityBenefitNominal(
-      fundingYear - fundingAge,
-      claimYear,
+    const nominalFlatBenefitUncappedCOLA = flatSocialSecurityBenefitNominal(
+      ssBirthYear,
+      ssClaimYear,
       paymentYear,
       assumptions,
+      true,
+      undefined,
+      false,
+    )
+    const colaCapScale = socialSecurityCombinedCOLACapScale(
+      initialBlendedBenefit,
+      ssInitialYear,
+      paymentYear,
+      assumptions,
+      true,
     )
     const realFlatBenefit =
-      nominalFlatBenefit /
+      nominalFlatBenefitUncappedCOLA * colaCapScale /
       (1 + assumptions.inflation) ** (paymentYear - assumptions.reformYear)
     socialSecurityPV +=
       (survival * realFlatBenefit * ssFlatShare) / discount
