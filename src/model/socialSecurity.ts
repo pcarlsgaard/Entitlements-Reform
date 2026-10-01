@@ -24,6 +24,9 @@ export function socialSecurityBenefitShares(
   retirementYear: number,
   assumptions: ModelAssumptions,
 ): BenefitShares {
+  if (!assumptions.flatBenefitTransitionEnabled) {
+    return { legacyShare: 1, flatShare: 0 }
+  }
   const flatShare = clamp(
     (retirementYear - assumptions.reformYear) /
       assumptions.benefitPhaseInYears,
