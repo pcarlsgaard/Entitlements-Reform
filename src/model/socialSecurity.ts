@@ -301,8 +301,7 @@ export function socialSecurityForYear(
       ? socialSecurityBenefitCapNominal(year, assumptions)
       : null
     const capBillions = capPerPerson !== null
-      ? capPerPerson * currentLawClaimFactor(cohort.claimAge) *
-        cohort.survivingBeneficiariesMillions / 1_000
+      ? capPerPerson * cohort.survivingBeneficiariesMillions / 1_000
       : Number.POSITIVE_INFINITY
     const capScale = uncappedTotal > 0 ? Math.min(1, capBillions / uncappedTotal) : 1
     const legacyPaygoBillions = uncappedLegacy * capScale
