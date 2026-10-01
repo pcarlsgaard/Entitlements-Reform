@@ -16,10 +16,12 @@ export const defaultAssumptions: ModelAssumptions = {
   // at a separate, clearly marked policy horizon.
   endYear: 2160,
   maxModeledAge: 110,
+  flatBenefitTransitionEnabled: true,
   benefitPhaseInYears: 20,
   flatBenefitFPLMultiple: 1.25,
   individualFPL2026: 15_960,
   realFPLGrowth: 0,
+  socialSecurityRetirementAgeReformEnabled: true,
   fullRetirementAge: 70,
   socialSecurityCOLAIndex: 'cpiW',
   socialSecurityCOLAStartYear: 2027,
