@@ -94,7 +94,7 @@ function annualSocialSecurity(simulation: SimulationResult, year: number, age: n
     credits,
   ) * shares.flatShare
   const capBase = reform ? socialSecurityBenefitCapNominal(year, a) : null
-  const cap = capBase === null ? Infinity : capBase * currentLawClaimFactor(chosenAge)
+  const cap = capBase === null ? Infinity : capBase
   return Math.min(legacy + flat, cap)
 }
 
