@@ -3,6 +3,7 @@ import { actuarialClaimFactor, currentLawClaimFactor, representativeWorkCredits,
 import { cboBaselineEndYear, cboCalibrationNominalGDPBillions, cboCalibrationOtherOASDIGDP, cboSocialSecurityGDP } from '../data/cboBaseline'
 import { ssaOasdiCostGDP, ssaRetiredWorkerMillions } from '../data/trustees2026'
 import { currentLawRetirementAge, defaultAssumptions } from './defaults'
+import { relativeBenefitAtPercentile, socialSecurityBenefitBins } from './socialSecurityDistribution'
 import {
   fullyPrefundsSocialSecurity,
   usesSavingsFundedSequence,
@@ -23,6 +24,9 @@ export function socialSecurityBenefitShares(
   retirementYear: number,
   assumptions: ModelAssumptions,
 ): BenefitShares {
+  if (assumptions.socialSecurityInitialBenefitMode !== 'flatTransition') {
+    return { legacyShare: 1, flatShare: 0 }
+  }
   const flatShare = clamp(
     (retirementYear - assumptions.reformYear) /
       assumptions.benefitPhaseInYears,
@@ -84,19 +88,82 @@ export function flatBenefitNominal(
     postAwardCOLAFactor(awardYear, year, assumptions, entitlementDesign)
 }
 
-/** Real wage growth affects new legacy awards only; the selected COLA compounds after retirement. */
+function ppiGrowthMultiplier(
+  percentile: number,
+  assumptions: ModelAssumptions,
+  entitlementDesign: EntitlementDesign,
+): number {
+  if (
+    entitlementDesign === 'currentLaw' ||
+    assumptions.socialSecurityInitialBenefitMode !== 'progressivePriceIndexing'
+  ) return 1
+  const protectedPercentile = clamp(assumptions.socialSecurityPPIProtectedPercentile, 0, 0.95)
+  if (percentile <= protectedPercentile) return 1
+  return clamp((1 - percentile) / Math.max(1e-9, 1 - protectedPercentile))
+}
+
+function legacyBenefitAtCOLAStart(
+  retirementYear: number,
+  claimYear: number,
+  percentile: number,
+  relativeBenefit: number,
+  assumptions: ModelAssumptions,
+  entitlementDesign: EntitlementDesign,
+): number {
+  const colaStartYear = Math.max(assumptions.reformYear, claimYear)
+  const preAwardInflationYears = Math.max(0, colaStartYear - assumptions.reformYear)
+  const realGrowth = assumptions.currentLawSSBenefitRealGrowth *
+    ppiGrowthMultiplier(percentile, assumptions, entitlementDesign)
+  return assumptions.currentLawSSBenefit2026 *
+    relativeBenefit *
+    (1 + realGrowth) ** Math.max(0, retirementYear - assumptions.reformYear) *
+    (1 + assumptions.inflation) ** preAwardInflationYears
+}
+
+/**
+ * Earnings-related retired-worker benefit. Progressive price indexing changes
+ * growth of new awards above the protected percentile. A CRFB-style percentile
+ * COLA cap limits the annual dollar increase, not the percentage COLA.
+ */
 export function legacySocialSecurityBenefitNominal(
   retirementYear: number,
+  claimYear: number,
   year: number,
   assumptions: ModelAssumptions,
   entitlementDesign: EntitlementDesign = 'reform',
 ): number {
-  const awardYear = Math.max(assumptions.reformYear, retirementYear)
-  const preAwardInflationYears = Math.max(0, Math.min(year, awardYear) - assumptions.reformYear)
-  return assumptions.currentLawSSBenefit2026 *
-    (1 + assumptions.currentLawSSBenefitRealGrowth) ** Math.max(0, retirementYear - assumptions.reformYear) *
-    (1 + assumptions.inflation) ** preAwardInflationYears *
-    postAwardCOLAFactor(awardYear, year, assumptions, entitlementDesign)
+  const colaStartYear = Math.max(assumptions.reformYear, claimYear)
+  const yearsAfterCOLAStart = Math.max(0, year - colaStartYear)
+  const colaFactor = (1 + socialSecurityCOLARate(assumptions, entitlementDesign)) ** yearsAfterCOLAStart
+  const dollarCapPercentile = entitlementDesign === 'reform'
+    ? assumptions.socialSecurityDollarCOLACapPercentile
+    : null
+
+  const referenceInitial = dollarCapPercentile === null
+    ? Number.POSITIVE_INFINITY
+    : legacyBenefitAtCOLAStart(
+        retirementYear,
+        claimYear,
+        dollarCapPercentile,
+        relativeBenefitAtPercentile(dollarCapPercentile),
+        assumptions,
+        entitlementDesign,
+      )
+
+  return socialSecurityBenefitBins.reduce((sum, bin) => {
+    const initial = legacyBenefitAtCOLAStart(
+      retirementYear,
+      claimYear,
+      bin.percentileMidpoint,
+      bin.relativeBenefit,
+      assumptions,
+      entitlementDesign,
+    )
+    const indexed = dollarCapPercentile === null || initial <= referenceInitial
+      ? initial * colaFactor
+      : initial + referenceInitial * (colaFactor - 1)
+    return sum + bin.share * indexed
+  }, 0)
 }
 
 export function firstPrefundedSSRetirementYear(
@@ -114,6 +181,7 @@ export function isSSFlatComponentPrefunded(
   assumptions: ModelAssumptions,
 ): boolean {
   return (
+    assumptions.socialSecurityInitialBenefitMode === 'flatTransition' &&
     fullyPrefundsSocialSecurity(assumptions.fundingStrategy) &&
     retirementYear >= firstPrefundedSSRetirementYear(assumptions)
   )
@@ -171,16 +239,24 @@ function rawSocialSecurityForYear(
     const retirementAge = entitlementDesign === 'currentLaw' || alreadyRetired
       ? currentLawRetirementAge : assumptions.socialSecurityClaimAge
     if (age < retirementAge) continue
-    // Reference cohort date locks the transition blend independently of claiming.
+    // Flat-transition cohorts lock their blend at the flat-benefit reference age.
+    // Other earnings-related reforms use the selected reform FRA as their reference.
+    const reformReferenceAge = assumptions.socialSecurityInitialBenefitMode === 'flatTransition'
+      ? assumptions.fullRetirementAge
+      : assumptions.socialSecurityReformFRA
     const retirementYear = birthYear + (entitlementDesign === 'currentLaw' || alreadyRetired
-      ? currentLawRetirementAge : assumptions.fullRetirementAge)
+      ? currentLawRetirementAge : reformReferenceAge)
     const claimYear = birthYear + retirementAge
+    const claimAgeForAdjustment = entitlementDesign === 'currentLaw' || alreadyRetired
+      ? retirementAge
+      : retirementAge - (assumptions.socialSecurityReformFRA - currentLawRetirementAge)
     const currentLawBenefit = legacySocialSecurityBenefitNominal(
-      birthYear + 67,
+      birthYear + currentLawRetirementAge,
+      claimYear,
       year,
       assumptions,
       entitlementDesign,
-    ) * currentLawClaimFactor(retirementAge)
+    ) * currentLawClaimFactor(claimAgeForAdjustment)
     const survivalFraction = projectedSurvival(retirementAge, age, birthYear)
     const survivingBeneficiariesMillions =
       populationMillions(year, age, assumptions) * ssParticipation * beneficiaryGrowthAdjustment
