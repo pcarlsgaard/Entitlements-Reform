@@ -138,6 +138,23 @@ export function legacySocialSecurityBenefitNominal(
   const dollarCapPercentile = entitlementDesign === 'reform'
     ? assumptions.socialSecurityDollarCOLACapPercentile
     : null
+  const usesDistribution =
+    entitlementDesign === 'reform' &&
+    (assumptions.socialSecurityInitialBenefitMode === 'progressivePriceIndexing' ||
+      dollarCapPercentile !== null)
+
+  // Keep the common current-law/flat-transition path scalar. The distribution
+  // is needed only for rank-targeted PPI or dollar-COLA caps.
+  if (!usesDistribution) {
+    return legacyBenefitAtCOLAStart(
+      retirementYear,
+      claimYear,
+      0.5,
+      1,
+      assumptions,
+      entitlementDesign,
+    ) * colaFactor
+  }
 
   const referenceInitial = dollarCapPercentile === null
     ? Number.POSITIVE_INFINITY
