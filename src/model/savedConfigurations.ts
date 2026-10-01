@@ -79,7 +79,9 @@ export function parseConfiguration(json: string): SavedConfiguration {
     delete a.realWageGrowth
     const additions = ['qualifyingEarnings2026', 'averageWorkingYears', 'averageAnnualEarnings2026',
       'actuarialDiscountRate', 'medicareFundingMode', 'realWageGrowthDeviation', 'debtPaydownTargetGDP',
-      'debtPaydownSurplusCapGDP', 'socialSecurityCOLAMode', 'socialSecurityCOLACap',
+      'debtPaydownSurplusCapGDP', 'socialSecurityInitialBenefitMode',
+      'socialSecurityPPIThresholdPercentile', 'socialSecurityPPIStartYear',
+      'socialSecurityCOLAMode', 'socialSecurityCOLACap', 'socialSecurityCOLADollarCapPercentile',
       'socialSecurityCOLAAdjustment'] as const
     for (const key of additions) if (a[key] === undefined) a[key] = defaultAssumptions[key]
     // Pre-split configurations carried the old 0.5% stylized SS award-growth default.
@@ -121,6 +123,7 @@ export function parseConfiguration(json: string): SavedConfiguration {
       policy.assumptions.medicareYearA < 2026 || policy.assumptions.medicareYearB > 2095)
     throw new Error('The configuration has incompatible horizon or transition settings.')
   oneOf(policy.assumptions.medicareFundingMode, ['gdpShare', 'perPerson'], 'Medicare funding rule')
+  oneOf(policy.assumptions.socialSecurityInitialBenefitMode, ['currentLaw', 'flatTransition', 'progressivePriceIndexing'], 'Social Security initial benefit rule')
   oneOf(policy.assumptions.socialSecurityCOLAMode, ['current', 'chainedCpi', 'cap', 'custom'], 'Social Security COLA rule')
   oneOf(policy.assumptions.nonDefenseDiscretionaryMode, ['cbo', 'growth'], 'NDD rule')
   for (const key of ['fullRetirementAge', 'socialSecurityClaimAge', 'medicareEligibilityAge', 'medicareYearA', 'medicareYearB'] as const)
@@ -131,7 +134,11 @@ export function parseConfiguration(json: string): SavedConfiguration {
   within(policy.assumptions.averageWorkingYears, 0, 60, 'representative working years')
   within(policy.assumptions.averageAnnualEarnings2026, 0, 1000000, 'representative earnings')
   within(policy.assumptions.actuarialDiscountRate, 0, 0.10, 'actuarial discount rate')
+  within(policy.assumptions.socialSecurityPPIThresholdPercentile, 0.30, 0.95, 'Social Security PPI threshold')
+  within(policy.assumptions.socialSecurityPPIStartYear, 2026, 2095, 'Social Security PPI start year')
   within(policy.assumptions.socialSecurityCOLACap, 0, 0.10, 'Social Security COLA cap')
+  if (policy.assumptions.socialSecurityCOLADollarCapPercentile !== null)
+    within(policy.assumptions.socialSecurityCOLADollarCapPercentile, 0.50, 0.95, 'Social Security dollar COLA cap percentile')
   within(policy.assumptions.socialSecurityCOLAAdjustment, -0.05, 0.05, 'Social Security COLA adjustment')
   within(policy.assumptions.medicareSupportGDPShare, 0, 0.15, 'senior support GDP share')
   within(policy.assumptions.fullRetirementAge, 62, 80, 'retirement age')
