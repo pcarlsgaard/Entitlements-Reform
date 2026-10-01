@@ -7,6 +7,7 @@ import {
   socialSecurityBenefitCapNominal,
   socialSecurityCOLAProtectedBenefitNominal,
   socialSecurityCOLARate,
+  socialSecurityCombinedCOLACapScale,
 } from '../src/model/socialSecurityPolicy'
 
 describe('modular Social Security benefit reforms', () => {
@@ -44,6 +45,22 @@ describe('modular Social Security benefit reforms', () => {
     expect(socialSecurityCOLAProtectedBenefitNominal(2026, a)).toBe(33_000)
     expect(applySocialSecurityCOLAs(50_000, 2026, 2027, a)).toBeCloseTo(50_660, 8)
     expect(applySocialSecurityCOLAs(30_000, 2026, 2027, a)).toBeCloseTo(30_600, 8)
+  })
+
+  it('applies one dollar COLA cap to the combined transition benefit', () => {
+    const a = {
+      ...defaultAssumptions,
+      inflation: 0.02,
+      socialSecurityCOLACapProtectedBenefit2026: 33_000,
+    }
+    const scale = socialSecurityCombinedCOLACapScale(
+      40_000,
+      2026,
+      2027,
+      a,
+    )
+    expect(40_000 * 1.02 * scale).toBeCloseTo(40_660, 8)
+    expect(scale).toBeLessThan(1)
   })
 
   it('can combine a COLA cap with chained CPI without additive savings assumptions', () => {
