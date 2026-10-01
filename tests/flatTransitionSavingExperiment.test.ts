@@ -21,11 +21,11 @@ function annualEarningsAtPercentile(p: number): number {
   return Math.exp(Math.log(w1) + t * (Math.log(w2) - Math.log(w1)))
 }
 
-function annuityFactorAt70(birthYear: number): number {
+function annuityFactorAt67(birthYear: number): number {
   let pv = 0
-  for (let age = 70; age <= a.maxModeledAge; age += 1) {
-    pv += projectedSurvival(70, age, birthYear) /
-      (1 + a.actuarialDiscountRate) ** (age - 70)
+  for (let age = 67; age <= a.maxModeledAge; age += 1) {
+    pv += projectedSurvival(67, age, birthYear) /
+      (1 + a.actuarialDiscountRate) ** (age - 67)
   }
   return pv
 }
@@ -45,13 +45,12 @@ function accumulationFactor(retirementYear: number, percentile: number): number 
 
 function row(targetFPL: number, transitionYears: number, retirementYear: number) {
   const alpha = Math.max(0, Math.min(1, (retirementYear - a.reformYear) / transitionYears))
-  const birthYear = retirementYear - 70
-  const currentLawReferenceYear = birthYear + 67
+  const birthYear = retirementYear - 67
+  const currentLawReferenceYear = retirementYear
   const realAwardGrowth = (1 + a.currentLawSSBenefitRealGrowth) **
     Math.max(0, currentLawReferenceYear - a.reformYear)
-  const delayedClaimFactor = 1.24 // currentLawClaimFactor(70)
   const flat = a.individualFPL2026 * targetFPL
-  const annuity = annuityFactorAt70(birthYear)
+  const annuity = annuityFactorAt67(birthYear)
 
   let losingShare = 0
   let weightedSaverRate = 0
@@ -61,7 +60,7 @@ function row(targetFPL: number, transitionYears: number, retirementYear: number)
 
   for (const bin of socialSecurityBenefitBins) {
     const current = a.currentLawSSBenefit2026 * bin.relativeBenefit *
-      realAwardGrowth * delayedClaimFactor
+      realAwardGrowth
     const reformed = (1 - alpha) * current + alpha * flat
     const annualLoss = Math.max(0, current - reformed)
     if (annualLoss > 0) {
@@ -80,7 +79,7 @@ function row(targetFPL: number, transitionYears: number, retirementYear: number)
   for (const p of [0.50, 0.75, 0.90] as const) {
     const bin = socialSecurityBenefitBins.find(b => b.percentileMidpoint >= p) ?? socialSecurityBenefitBins.at(-1)!
     const current = a.currentLawSSBenefit2026 * bin.relativeBenefit *
-      realAwardGrowth * delayedClaimFactor
+      realAwardGrowth
     const reformed = (1 - alpha) * current + alpha * flat
     const annualLoss = Math.max(0, current - reformed)
     const pvLoss = annualLoss * annuity
