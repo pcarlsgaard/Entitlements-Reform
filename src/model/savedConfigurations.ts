@@ -79,7 +79,8 @@ export function parseConfiguration(json: string): SavedConfiguration {
     delete a.realWageGrowth
     const additions = ['qualifyingEarnings2026', 'averageWorkingYears', 'averageAnnualEarnings2026',
       'actuarialDiscountRate', 'medicareFundingMode', 'realWageGrowthDeviation', 'debtPaydownTargetGDP',
-      'debtPaydownSurplusCapGDP', 'socialSecurityCOLAIndex', 'socialSecurityCOLAStartYear',
+      'debtPaydownSurplusCapGDP', 'flatBenefitTransitionEnabled', 'socialSecurityRetirementAgeReformEnabled',
+      'socialSecurityCOLAIndex', 'socialSecurityCOLAStartYear',
       'socialSecurityCOLACapProtectedBenefit2026', 'socialSecurityCOLACapIndexing',
       'socialSecurityBenefitCapIndexing'] as const
     for (const key of additions) if (a[key] === undefined) a[key] = defaultAssumptions[key]
