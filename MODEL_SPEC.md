@@ -16,6 +16,16 @@ This document defines the intended economics and accounting of the simulator. Th
 
 # 1. Social Security old-age reform
 
+## 1.0 Modular Social Security benefit policy
+
+When Social Security policy changes are enabled, the initial-benefit formula is selected independently from retirement-age and COLA policy:
+
+- **Current-law initial formula**: no flat-benefit or PPI change; this allows COLA-only or FRA-only scenarios.
+- **Flat transition**: uses the cohort blend in §1.1.
+- **Progressive price indexing (PPI)**: retains the earnings-related formula and modifies upper PIA factors as described in §1.6.
+
+Only one initial-benefit formula is active at a time. Post-award COLA rules, the full retirement age, and the optional total annual benefit cap are stackable modules.
+
 ## 1.1 Benefit phase-in
 
 The old-age benefit formula transitions by **retirement cohort**.
@@ -90,16 +100,33 @@ The architecture should allow longevity indexing later, but do not assume a long
 
 COLA policy is a separate, stackable Social Security lever. It changes benefits only after an award is in payment; it does not reduce the initial award.
 
-Supported rules:
+The **COLA inflation index** may be:
 
 - current CPI assumption;
 - chained CPI preset, modeled as CPI minus 0.3 percentage point per year, floored at zero;
-- a user-selected maximum annual COLA;
+- a user-selected maximum percentage COLA;
 - a custom additive adjustment to CPI.
 
-For a benefit awarded in year `a`, the reform COLA compounds from `max(a, reformYear)` onward. Current-law comparator benefits always retain the baseline CPI assumption. The same COLA rule must be used in PAYGO benefit spending and in the Social Security prefunding present value.
+A second, independent **dollar COLA cap** may limit the annual dollar increase to the increase received at a selected PIA percentile. CRFB's central illustration uses the 75th percentile. Thus a higher benefit can receive a smaller effective percentage COLA even though the underlying inflation index is unchanged. The dollar cap can be combined with chained CPI.
 
-The chained-CPI differential is an SSA actuarial approximation, not a hard-coded aggregate savings estimate. No CRFB percentage-of-gap-closed value is used in the fiscal engine.
+The model uses SSA's 2025 retired-worker PIA award distribution for benefit ranks. Because the fiscal core is organized by eligibility cohort rather than a full beneficiary microsimulation, the selected percentile is applied within each modeled cohort. CRFB's central DYNASIM4 design uses the percentile across all beneficiaries; the cohort implementation is therefore a transparent approximation, not an imported CRFB score.
+
+For a benefit already in payment at enactment, the reform COLA begins in the reform year. For future beneficiaries it begins after claiming. Current-law comparator benefits always retain baseline CPI with no dollar cap.
+
+## 1.6 Progressive price indexing
+
+PPI is an alternative initial-benefit formula, not an add-on to the flat transition.
+
+Following SSA's B1.4 structure:
+
+- benefits at or below the selected AIME percentile remain on the current-law initial-benefit path;
+- a new bend point is created at that percentile;
+- upper PIA factors are progressively reduced;
+- the taxable-maximum initial benefit moves from wage indexing toward price indexing for cohorts newly eligible after the selected start year.
+
+Default PPI start year is **2033**, matching SSA's current B1.4 illustration. The default protected percentile is **50%**, with 60%, 75%, and other user-selected thresholds available.
+
+The aggregate implementation maps SSA's published 2025 retired-worker PIA distribution to percentile ranks. For each eligibility cohort it preserves the selected threshold PIA and reduces the slope above it so the taxable-maximum anchor follows price rather than real-wage growth. The slope is floored at zero if the price-indexed maximum would otherwise fall below the protected threshold. This reconstructs the policy mechanics inside the cohort engine; SSA's published percent-of-shortfall estimates are validation benchmarks only and are not used as fiscal coefficients.
 
 ---
 
