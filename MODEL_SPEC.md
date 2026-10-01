@@ -18,7 +18,12 @@ This document defines the intended economics and accounting of the simulator. Th
 
 ## 1.1 Benefit phase-in
 
-The old-age benefit formula transitions by **retirement cohort**.
+The flat/capped-benefit transition is an independently switchable Social Security
+module. It may be combined with COLA, maximum-benefit, or retirement-age changes,
+or turned off so those add-on reforms can be scored against the legacy benefit
+formula by themselves.
+
+When enabled, the old-age benefit formula transitions by **retirement cohort**.
 
 For a cohort retiring in year `r`:
 
