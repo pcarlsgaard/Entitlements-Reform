@@ -86,6 +86,21 @@ Default full retirement age:
 
 The architecture should allow longevity indexing later, but do not assume a longevity formula without an explicit parameter.
 
+## 1.5 Post-award COLA reforms
+
+COLA policy is a separate, stackable Social Security lever. It changes benefits only after an award is in payment; it does not reduce the initial award.
+
+Supported rules:
+
+- current CPI assumption;
+- chained CPI preset, modeled as CPI minus 0.3 percentage point per year, floored at zero;
+- a user-selected maximum annual COLA;
+- a custom additive adjustment to CPI.
+
+For a benefit awarded in year `a`, the reform COLA compounds from `max(a, reformYear)` onward. Current-law comparator benefits always retain the baseline CPI assumption. The same COLA rule must be used in PAYGO benefit spending and in the Social Security prefunding present value.
+
+The chained-CPI differential is an SSA actuarial approximation, not a hard-coded aggregate savings estimate. No CRFB percentage-of-gap-closed value is used in the fiscal engine.
+
 ---
 
 # 2. Prefunding architecture
