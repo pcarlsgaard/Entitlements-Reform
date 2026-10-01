@@ -3,7 +3,7 @@ import { actuarialClaimFactor, currentLawClaimFactor, representativeWorkCredits,
 import { cboBaselineEndYear, cboCalibrationNominalGDPBillions, cboCalibrationOtherOASDIGDP, cboSocialSecurityGDP } from '../data/cboBaseline'
 import { ssaOasdiCostGDP, ssaRetiredWorkerMillions } from '../data/trustees2026'
 import { currentLawRetirementAge, defaultAssumptions } from './defaults'
-import { applySocialSecurityCOLAs, socialSecurityBenefitCapNominal } from './socialSecurityPolicy'
+import { applySocialSecurityCOLAs, socialSecurityBenefitCapNominal, socialSecurityCombinedCOLACapScale } from './socialSecurityPolicy'
 import {
   fullyPrefundsSocialSecurity,
   usesSavingsFundedSequence,
@@ -49,6 +49,7 @@ export function legacySocialSecurityBenefitNominal(
   assumptions: ModelAssumptions,
   usePolicyCOLA = true,
   claimYear = retirementYear,
+  applyDollarCOLACap = true,
 ): number {
   const yearsToReferenceAward = Math.max(
     0,
@@ -68,6 +69,7 @@ export function legacySocialSecurityBenefitNominal(
     year,
     assumptions,
     usePolicyCOLA,
+    applyDollarCOLACap,
   )
 }
 
@@ -78,6 +80,7 @@ export function flatSocialSecurityBenefitNominal(
   assumptions: ModelAssumptions,
   usePolicyCOLA = true,
   creditedYears = representativeWorkCredits(assumptions),
+  applyDollarCOLACap = true,
 ): number {
   const yearsToClaim = Math.max(0, claimYear - assumptions.reformYear)
   const initialBenefit =
@@ -91,6 +94,7 @@ export function flatSocialSecurityBenefitNominal(
     year,
     assumptions,
     usePolicyCOLA,
+    applyDollarCOLACap,
   )
 }
 
