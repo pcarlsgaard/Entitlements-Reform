@@ -205,30 +205,37 @@ function rawSocialSecurityForYear(
         ? { legacyShare: 1, flatShare: 0 }
         : socialSecurityBenefitShares(retirementYear, assumptions)
     const initialYear = Math.max(claimYear, assumptions.reformYear)
-    const initialLegacyBenefit = legacySocialSecurityBenefitNominal(
-      birthYear + 67,
-      initialYear,
-      assumptions,
-      usePolicyCOLA,
-      claimYear,
-      false,
-    ) * currentLawClaimAdjustment
-    const initialFlatBenefit = flatSocialSecurityBenefitNominal(
-      birthYear,
-      claimYear,
-      initialYear,
-      assumptions,
-      usePolicyCOLA,
-      representativeWorkCredits(assumptions),
-      false,
-    )
-    const colaCapScale = socialSecurityCombinedCOLACapScale(
-      legacyShare * initialLegacyBenefit + flatShare * initialFlatBenefit,
-      initialYear,
-      year,
-      assumptions,
-      usePolicyCOLA,
-    )
+    let colaCapScale = 1
+    if (
+      usePolicyCOLA &&
+      assumptions.socialSecurityCOLACapProtectedBenefit2026 !== null &&
+      year > initialYear
+    ) {
+      const initialLegacyBenefit = legacySocialSecurityBenefitNominal(
+        birthYear + 67,
+        initialYear,
+        assumptions,
+        true,
+        claimYear,
+        false,
+      ) * currentLawClaimAdjustment
+      const initialFlatBenefit = flatSocialSecurityBenefitNominal(
+        birthYear,
+        claimYear,
+        initialYear,
+        assumptions,
+        true,
+        representativeWorkCredits(assumptions),
+        false,
+      )
+      colaCapScale = socialSecurityCombinedCOLACapScale(
+        legacyShare * initialLegacyBenefit + flatShare * initialFlatBenefit,
+        initialYear,
+        year,
+        assumptions,
+        true,
+      )
+    }
     const currentLawBenefit = currentLawBenefitUncappedCOLA * colaCapScale
     const individualFlatBenefit = individualFlatBenefitUncappedCOLA * colaCapScale
     const prefundedShare = clamp(
