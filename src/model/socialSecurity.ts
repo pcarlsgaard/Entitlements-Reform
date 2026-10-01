@@ -174,28 +174,60 @@ function rawSocialSecurityForYear(
     const retirementYear = birthYear + (entitlementDesign === 'currentLaw' || alreadyRetired
       ? currentLawRetirementAge : assumptions.fullRetirementAge)
     const claimYear = birthYear + retirementAge
-    const currentLawBenefit = legacySocialSecurityBenefitNominal(
+    const usePolicyCOLA = entitlementDesign === 'reform'
+    const currentLawClaimAdjustment = currentLawClaimFactor(retirementAge)
+    const currentLawBenefitUncappedCOLA = legacySocialSecurityBenefitNominal(
       birthYear + 67,
       year,
       assumptions,
-      entitlementDesign === 'reform',
+      usePolicyCOLA,
       claimYear,
-    ) * currentLawClaimFactor(retirementAge)
+      false,
+    ) * currentLawClaimAdjustment
     const survivalFraction = projectedSurvival(retirementAge, age, birthYear)
     const survivingBeneficiariesMillions =
       populationMillions(year, age, assumptions) * ssParticipation * beneficiaryGrowthAdjustment
     const initialCohortMillions = survivalFraction > 0 ? survivingBeneficiariesMillions / survivalFraction : 0
-    const individualFlatBenefit = flatSocialSecurityBenefitNominal(
+    const individualFlatBenefitUncappedCOLA = flatSocialSecurityBenefitNominal(
       birthYear,
       claimYear,
       year,
       assumptions,
-      entitlementDesign === 'reform',
+      usePolicyCOLA,
+      representativeWorkCredits(assumptions),
+      false,
     )
     const { legacyShare, flatShare } =
       entitlementDesign === 'currentLaw'
         ? { legacyShare: 1, flatShare: 0 }
         : socialSecurityBenefitShares(retirementYear, assumptions)
+    const initialYear = Math.max(claimYear, assumptions.reformYear)
+    const initialLegacyBenefit = legacySocialSecurityBenefitNominal(
+      birthYear + 67,
+      initialYear,
+      assumptions,
+      usePolicyCOLA,
+      claimYear,
+      false,
+    ) * currentLawClaimAdjustment
+    const initialFlatBenefit = flatSocialSecurityBenefitNominal(
+      birthYear,
+      claimYear,
+      initialYear,
+      assumptions,
+      usePolicyCOLA,
+      representativeWorkCredits(assumptions),
+      false,
+    )
+    const colaCapScale = socialSecurityCombinedCOLACapScale(
+      legacyShare * initialLegacyBenefit + flatShare * initialFlatBenefit,
+      initialYear,
+      year,
+      assumptions,
+      usePolicyCOLA,
+    )
+    const currentLawBenefit = currentLawBenefitUncappedCOLA * colaCapScale
+    const individualFlatBenefit = individualFlatBenefitUncappedCOLA * colaCapScale
     const prefundedShare = clamp(
       entitlementDesign === 'currentLaw'
         ? 0
