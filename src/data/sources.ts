@@ -176,7 +176,7 @@ export const sources: readonly SourceRecord[] = [
     publicationDate: '2026-03-24',
     relevantTable: 'Appendix I: Design Elements for the Six Figure Limit',
     url: 'https://www.crfb.org/sixfigurelimit',
-    notes: 'CRFB sets a $100,000 couple cap and $50,000 single-retiree cap at the normal retirement age, adjusted for claiming age. It models chained-CPI indexing and alternatives that hold the nominal cap fixed for 20 or 30 years before wage indexing. The aggregate simulator exposes the single-worker cap and those indexing rules; it does not model marital aggregation.',
+    notes: 'CRFB sets a $100,000 couple cap and $50,000 single-retiree cap at the normal retirement age, adjusted for claiming age. It models chained-CPI indexing and alternatives that hold the nominal cap fixed for 20 or 30 years before wage indexing. The simulator uses $50,000 as a reference preset and exposes those indexing rules, but preserves its existing direct per-worker cap semantics; it does not reproduce marital aggregation or CRFB claim-age-specific cap adjustments.',
   },
   {
     id: 'ssa-claiming-cola-convention',
