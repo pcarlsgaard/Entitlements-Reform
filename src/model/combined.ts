@@ -119,8 +119,16 @@ export function scoreCombined(policy: CombinedPolicy, taxIndexingMode: TaxIndexi
       ? policy.assumptions.fullRetirementAge : currentLawRetirementAge,
     medicareEligibilityAge: policy.benefits.medicareReform
       ? policy.assumptions.medicareEligibilityAge : defaultAssumptions.medicareEligibilityAge,
+    socialSecurityCOLAIndex: policy.benefits.socialSecurityReform
+      ? policy.assumptions.socialSecurityCOLAIndex : 'cpiW',
+    socialSecurityCOLAStartYear: policy.benefits.socialSecurityReform
+      ? policy.assumptions.socialSecurityCOLAStartYear : defaultAssumptions.socialSecurityCOLAStartYear,
+    socialSecurityCOLACapProtectedBenefit2026: policy.benefits.socialSecurityReform
+      ? policy.assumptions.socialSecurityCOLACapProtectedBenefit2026 : null,
+    socialSecurityCOLACapIndexing: policy.assumptions.socialSecurityCOLACapIndexing,
     socialSecurityBenefitCap2026: policy.benefits.socialSecurityReform
       ? policy.assumptions.socialSecurityBenefitCap2026 : null,
+    socialSecurityBenefitCapIndexing: policy.assumptions.socialSecurityBenefitCapIndexing,
     fundingStrategy: policy.benefits.socialSecurityReform && policy.benefits.medicareReform &&
       policy.assumptions.socialSecurityBenefitCap2026 === null
       ? policy.assumptions.fundingStrategy : 'paygo',
@@ -130,7 +138,12 @@ export function scoreCombined(policy: CombinedPolicy, taxIndexingMode: TaxIndexi
     ...assumptions, fundingStrategy: 'paygo' as const,
     fullRetirementAge: currentLawRetirementAge,
     medicareEligibilityAge: defaultAssumptions.medicareEligibilityAge,
+    socialSecurityCOLAIndex: 'cpiW' as const,
+    socialSecurityCOLAStartYear: defaultAssumptions.socialSecurityCOLAStartYear,
+    socialSecurityCOLACapProtectedBenefit2026: null,
+    socialSecurityCOLACapIndexing: defaultAssumptions.socialSecurityCOLACapIndexing,
     socialSecurityBenefitCap2026: null,
+    socialSecurityBenefitCapIndexing: defaultAssumptions.socialSecurityBenefitCapIndexing,
   }
   const health = calculateHealthAnalysis(policy.tax, policy.health)
   const programSavingsBillions = calculateFederalProgramSavings(policy.transfers)
