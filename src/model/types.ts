@@ -4,6 +4,10 @@ export type EntitlementDesign = 'reform' | 'currentLaw'
 
 export type CurrentLawBaselineMode = 'scheduled' | 'payable'
 
+export type SocialSecurityCOLAIndex = 'cpiW' | 'chainedCPI' | 'cpiE'
+export type SocialSecurityCOLACapIndexing = 'wage' | 'cpi'
+export type SocialSecurityBenefitCapIndexing = 'cpi' | 'chainedCPI' | 'fixed20Wage' | 'fixed30Wage'
+
 export type FundingStrategy =
   | 'paygo'
   | 'socialSecurityOnly'
@@ -21,8 +25,18 @@ export interface ModelAssumptions {
   individualFPL2026: number
   realFPLGrowth: number
   fullRetirementAge: number
-  /** Optional CPI-indexed cap on a retiree's annual Social Security benefit (2026 dollars). */
+  /** Post-award Social Security COLA index. Current law is CPI-W. */
+  socialSecurityCOLAIndex: SocialSecurityCOLAIndex
+  /** First calendar year in which the selected COLA reform applies. */
+  socialSecurityCOLAStartYear: number
+  /** Optional CRFB-style COLA dollar cap, expressed as the 2026 annual benefit fully protected by the cap. */
+  socialSecurityCOLACapProtectedBenefit2026: number | null
+  /** How the protected-benefit threshold for the COLA cap grows over time. */
+  socialSecurityCOLACapIndexing: SocialSecurityCOLACapIndexing
+  /** Optional annual retired-worker benefit cap at the current-law FRA, in 2026 dollars. */
   socialSecurityBenefitCap2026: number | null
+  /** Indexing rule for the annual benefit cap. */
+  socialSecurityBenefitCapIndexing: SocialSecurityBenefitCapIndexing
   /** Full-benefit credited years; shorter records receive proportional flat benefits. */
   vestingYears: number
   socialSecurityClaimAge: number
