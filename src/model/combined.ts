@@ -113,10 +113,15 @@ const householdExamples: { label: string; input: HouseholdInput }[] = [
 ];
 
 export function scoreCombined(policy: CombinedPolicy, taxIndexingMode: TaxIndexingMode = 'cpi') {
+  const useRetirementAgeReform =
+    policy.benefits.socialSecurityReform &&
+    policy.assumptions.socialSecurityRetirementAgeReformEnabled
   const assumptions: ModelAssumptions = {
     ...policy.assumptions,
-    fullRetirementAge: policy.benefits.socialSecurityReform
+    fullRetirementAge: useRetirementAgeReform
       ? policy.assumptions.fullRetirementAge : currentLawRetirementAge,
+    socialSecurityClaimAge: useRetirementAgeReform
+      ? policy.assumptions.socialSecurityClaimAge : currentLawRetirementAge,
     medicareEligibilityAge: policy.benefits.medicareReform
       ? policy.assumptions.medicareEligibilityAge : defaultAssumptions.medicareEligibilityAge,
     socialSecurityCOLAIndex: policy.benefits.socialSecurityReform
