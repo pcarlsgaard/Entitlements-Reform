@@ -4,6 +4,8 @@ export type EntitlementDesign = 'reform' | 'currentLaw'
 
 export type CurrentLawBaselineMode = 'scheduled' | 'payable'
 
+export type SocialSecurityCOLAMode = 'current' | 'chainedCpi' | 'cap' | 'custom'
+
 export type FundingStrategy =
   | 'paygo'
   | 'socialSecurityOnly'
@@ -23,6 +25,12 @@ export interface ModelAssumptions {
   fullRetirementAge: number
   /** Optional CPI-indexed cap on a retiree's annual Social Security benefit (2026 dollars). */
   socialSecurityBenefitCap2026: number | null
+  /** Post-award COLA rule for the reformed OASI retired-worker stream. */
+  socialSecurityCOLAMode: SocialSecurityCOLAMode
+  /** Maximum annual COLA when socialSecurityCOLAMode is 'cap'. */
+  socialSecurityCOLACap: number
+  /** Additive annual percentage-point change from CPI when mode is 'custom'. */
+  socialSecurityCOLAAdjustment: number
   /** Full-benefit credited years; shorter records receive proportional flat benefits. */
   vestingYears: number
   socialSecurityClaimAge: number
