@@ -81,6 +81,7 @@ export function applySocialSecurityCOLAs(
   throughYear: number,
   assumptions: ModelAssumptions,
   usePolicy = true,
+  applyDollarCap = true,
 ): number {
   if (throughYear <= initialYear) return initialAnnualBenefit
   let benefit = initialAnnualBenefit
@@ -88,7 +89,7 @@ export function applySocialSecurityCOLAs(
   for (let year = initialYear + 1; year <= throughYear; year += 1) {
     const cola = socialSecurityCOLARate(year, assumptions, usePolicy)
     let increase = benefit * cola
-    if (usePolicy) {
+    if (usePolicy && applyDollarCap) {
       const protectedBenefit = socialSecurityCOLAProtectedBenefitNominal(
         year - 1,
         assumptions,
@@ -134,4 +135,43 @@ export function socialSecurityBenefitCapNominal(
     default:
       return base * nominalCpiFactor(assumptions.reformYear, year, assumptions)
   }
+}
+
+
+/**
+ * Scale a blended transition benefit for a dollar COLA cap. The cap is
+ * intentionally applied after the legacy/flat blend so a cohort receives only
+ * one protected dollar COLA, not one for each component.
+ */
+export function socialSecurityCombinedCOLACapScale(
+  initialBlendedBenefit: number,
+  initialYear: number,
+  throughYear: number,
+  assumptions: ModelAssumptions,
+  usePolicy = true,
+): number {
+  if (
+    !usePolicy ||
+    assumptions.socialSecurityCOLACapProtectedBenefit2026 === null ||
+    initialBlendedBenefit <= 0 ||
+    throughYear <= initialYear
+  ) return 1
+  const uncapped = applySocialSecurityCOLAs(
+    initialBlendedBenefit,
+    initialYear,
+    throughYear,
+    assumptions,
+    true,
+    false,
+  )
+  if (uncapped <= 0) return 1
+  const capped = applySocialSecurityCOLAs(
+    initialBlendedBenefit,
+    initialYear,
+    throughYear,
+    assumptions,
+    true,
+    true,
+  )
+  return Math.min(1, capped / uncapped)
 }
