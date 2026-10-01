@@ -136,7 +136,28 @@ export default function CombinedGame() {
     taxEnabled: choice === 'tax' || choice === 'both',
     benefits: { socialSecurityReform: choice === 'benefits' || choice === 'both', medicareReform: choice === 'benefits' || choice === 'both' },
   }))
-  const fundingAllowed = policy.benefits.socialSecurityReform && policy.benefits.medicareReform && a.socialSecurityBenefitCap2026 === null
+  const ssPreset = (choice: 'clear'|'flat'|'ppi50'|'ppi75') => setPolicy(p => ({
+    ...p,
+    benefits: { ...p.benefits, socialSecurityReform: true },
+    assumptions: {
+      ...p.assumptions,
+      fundingStrategy: 'paygo',
+      socialSecurityBenefitCap2026: null,
+      socialSecurityCOLADollarCapPercentile:
+        choice === 'ppi50' || choice === 'ppi75' ? 0.75 : null,
+      socialSecurityCOLAMode:
+        choice === 'ppi50' || choice === 'ppi75' ? 'chainedCpi' : 'current',
+      socialSecurityInitialBenefitMode:
+        choice === 'flat' ? 'flatTransition' :
+        choice === 'ppi50' || choice === 'ppi75' ? 'progressivePriceIndexing' : 'currentLaw',
+      socialSecurityPPIThresholdPercentile: choice === 'ppi75' ? 0.75 : 0.50,
+      socialSecurityPPIStartYear: 2033,
+      fullRetirementAge: choice === 'flat' ? 70 : choice === 'ppi50' || choice === 'ppi75' ? 68 : 67,
+      socialSecurityClaimAge: choice === 'flat' ? 70 : 67,
+    },
+  }))
+  const fundingAllowed = policy.benefits.socialSecurityReform && policy.benefits.medicareReform &&
+    a.socialSecurityBenefitCap2026 === null && a.socialSecurityInitialBenefitMode === 'flatTransition'
 
   return <div className="game app-shell">
     <header className="game-sticky"><div className="game-brand"><span className="eyebrow">Federal policy sandbox · 2026–2095</span><strong>Build a fiscal future{policy.dynamic.enabled && policy.taxEnabled ? ' · dynamic' : ''}</strong></div>
@@ -188,20 +209,72 @@ export default function CombinedGame() {
           <section className="game-card"><h2>Taxes replaced</h2><fieldset disabled={!policy.taxEnabled}>{(['individualIncome','payroll','corporateIncome','customs'] as const).map((key,i)=>{const amount=taxBaseline2025.federalReceipts[key];return <Toggle key={key} label={`${(['Individual income','Payroll','Corporate income','Customs'][i] ?? key)} · ${amount.toFixed(0)}B · ${pct(amount / score.tax.gdp,2)} GDP`} checked={t.replacedTaxes[key]} onChange={v=>setTax({replacedTaxes:{...t.replacedTaxes,[key]:v}})} />})}</fieldset></section>
           <section className="game-card"><h2>Opening tax ledger · 2025 basis</h2><dl className="game-ledger"><div><dt>Gross X tax receipts</dt><dd>{taxBillionsGDP(score.tax.grossRevenue)}</dd></div><div><dt>Adult and child tax credits</dt><dd>{taxBillionsGDP(score.tax.adultCreditCost+score.tax.childCreditCost,'−')}</dd></div><div><dt>Health credits</dt><dd>{taxBillionsGDP(score.health.totalHealthCreditCostBillions,'−')}</dd></div><div><dt>Replaced receipts</dt><dd>{taxBillionsGDP(score.tax.targetRevenue,'−')}</dd></div><div><dt>Transfers and ACA credit savings</dt><dd>{taxBillionsGDP(score.tax.federalTransferSavings,'+')}</dd></div><div><dt>Refundable tax credit outlay savings</dt><dd>{taxBillionsGDP(score.tax.refundableTaxCreditOutlaySavings,'+')}</dd></div><div className="game-total"><dt>Net fiscal improvement if enabled</dt><dd>{taxBillionsGDP(score.tax.deficitReduction,score.tax.deficitReduction>=0?'+':'−')}</dd></div></dl><small>Aggregate federal dollar amounts also show their share of opening GDP. Per-person credits and bracket thresholds remain in dollars because they are household policy parameters, not federal aggregates. This is the opening 2025-basis score; long-run progressive wage-tax receipts are rescored against the Trustees real-wage path, while the flat X-tax gross base remains tied to the aggregate macro base.</small></section>
         </div></div>}
-      {tab === 'entitlements' && <div className="game-two-col"><div className="game-column"><section className="game-card"><h2>Social Security</h2><Toggle label="Reform Social Security" checked={policy.benefits.socialSecurityReform} onChange={v=>setBenefits({socialSecurityReform:v})} /><fieldset disabled={!policy.benefits.socialSecurityReform}>
-        {numA('flatBenefitFPLMultiple','Flat benefit floor',100,0,400,5,'% FPL')}{numA('benefitPhaseInYears','Cohort transition',1,1,70,1,'years')}{numA('fullRetirementAge','Full-benefit reference age',1,62,80,1,'years', 'The cohort blend is locked at this reference age. Claiming earlier or later adjusts the flat benefit using projected survival.')}
-        {numA('socialSecurityClaimAge','Representative claiming age',1,62,80,1,'years')}
-        {numA('vestingYears','Credited years for full benefit',1,1,60,1,'years')}
-        {numA('qualifyingEarnings2026','Earnings for one credited year',1,1,100000,100,'$', '2026 dollars, CPI indexed. Half this earnings level earns half a year; maximum one credit-year per year.')}
-        {numA('averageWorkingYears','Representative years worked',1,0,60,.5,'years')}
-        {numA('averageAnnualEarnings2026','Representative annual earnings',1,0,1000000,1000,'$', 'Illustrative aggregate work record, not an estimated national distribution. Household records are editable separately.')}
-        {numA('actuarialDiscountRate','Real actuarial discount rate',100,0,10,.1,'%', 'Expected lifetime value of the flat component is neutral before caps, at a fixed work record. Legacy benefits retain statutory early/delayed adjustments.')}
+      {tab === 'entitlements' && <div className="game-two-col"><div className="game-column"><section className="game-card"><h2>Social Security</h2>
+        <Toggle label="Enable Social Security policy changes" checked={policy.benefits.socialSecurityReform} onChange={v=>setBenefits({socialSecurityReform:v})} />
+        <div className="game-presets" aria-label="Social Security presets"><span>Presets</span>
+          <button onClick={()=>ssPreset('clear')}>Current formula</button>
+          <button onClick={()=>ssPreset('flat')}>Flat transition</button>
+          <button onClick={()=>ssPreset('ppi50')}>PPI50 package</button>
+          <button onClick={()=>ssPreset('ppi75')}>PPI75 package</button>
+        </div>
+        <fieldset disabled={!policy.benefits.socialSecurityReform}>
+          <Select label="Initial benefit formula" value={a.socialSecurityInitialBenefitMode} options={[
+            {value:'currentLaw',label:'Current-law initial benefit formula'},
+            {value:'flatTransition',label:'Transition to flat / capped benefit'},
+            {value:'progressivePriceIndexing',label:'Progressive price indexing (PPI)'},
+          ]} onChange={v=>setA({
+            socialSecurityInitialBenefitMode:v as ModelAssumptions['socialSecurityInitialBenefitMode'],
+            fundingStrategy:v === 'flatTransition' ? a.fundingStrategy : 'paygo',
+          })} />
 
-        <Toggle label="Cap annual retired-worker benefits" checked={a.socialSecurityBenefitCap2026 !== null} onChange={v=>setA({socialSecurityBenefitCap2026:v?36000:null,fundingStrategy:'paygo'})} />{a.socialSecurityBenefitCap2026 !== null && <NumberField label="Annual cap (2026 dollars)" value={a.socialSecurityBenefitCap2026} min={1000} max={200000} step={1000} suffix="$" onChange={n=>setA({socialSecurityBenefitCap2026:n})} />}
-        <Select label="Post-award COLA" value={a.socialSecurityCOLAMode} options={[{value:'current',label:'Current CPI assumption'},{value:'chainedCpi',label:'Chained CPI (−0.3 pp)'},{value:'cap',label:'Cap annual COLA'},{value:'custom',label:'Custom CPI adjustment'}]} onChange={v=>setA({socialSecurityCOLAMode:v as ModelAssumptions['socialSecurityCOLAMode']})} />
-        {a.socialSecurityCOLAMode === 'cap' && numA('socialSecurityCOLACap','Maximum annual COLA',100,0,10,.1,'%')}
-        {a.socialSecurityCOLAMode === 'custom' && numA('socialSecurityCOLAAdjustment','COLA adjustment vs CPI',100,-5,5,.1,'pp')}
-        {numA('realFPLGrowth','Real flat benefit growth',100,-2,6,.1,'%')}</fieldset><small>The annual benefit cap applies to each reformed cohort’s total retired-worker benefit after legacy calibration and rises with inflation; prefunding is unavailable with that benefit cap. COLA changes apply after claiming to both legacy and flat portions in the reform scenario. Chained CPI uses SSA’s approximate −0.3 percentage-point annual differential; the current-law comparator keeps the baseline CPI assumption.</small></section>
+          {a.socialSecurityInitialBenefitMode === 'flatTransition' && <>
+            {numA('flatBenefitFPLMultiple','Flat benefit target',100,0,400,5,'% FPL')}
+            {numA('benefitPhaseInYears','Cohort transition',1,1,70,1,'years')}
+            {numA('vestingYears','Credited years for full benefit',1,1,60,1,'years')}
+            {numA('qualifyingEarnings2026','Earnings for one credited year',1,1,100000,100,'$', '2026 dollars, CPI indexed. Half this earnings level earns half a year; maximum one credit-year per year.')}
+            {numA('averageWorkingYears','Representative years worked',1,0,60,.5,'years')}
+            {numA('averageAnnualEarnings2026','Representative annual earnings',1,0,1000000,1000,'$', 'Illustrative aggregate work record. Household records are editable separately.')}
+            {numA('actuarialDiscountRate','Real actuarial discount rate',100,0,10,.1,'%', 'Expected lifetime value of the flat component is neutral before caps at a fixed work record.')}
+            {numA('realFPLGrowth','Real flat benefit growth',100,-2,6,.1,'%')}
+          </>}
+
+          {a.socialSecurityInitialBenefitMode === 'progressivePriceIndexing' && <>
+            {numA('socialSecurityPPIThresholdPercentile','PPI protected earnings percentile',100,30,95,5,'th percentile',
+              'Initial benefits remain on the current-law wage-indexed path through this AIME percentile. Above it, upper PIA factors are progressively reduced; the taxable-maximum benefit moves toward price indexing.')}
+            {numA('socialSecurityPPIStartYear','First eligibility year under PPI',1,2026,2095,1,'',
+              'SSA current illustrative PPI provisions begin with newly eligible workers in 2033.')}
+          </>}
+
+          {numA('fullRetirementAge',a.socialSecurityInitialBenefitMode === 'flatTransition' ? 'Flat-benefit reference age' : 'Full retirement age',1,62,80,1,'years',
+            a.socialSecurityInitialBenefitMode === 'flatTransition'
+              ? 'The cohort blend is locked at this reference age; flat-benefit claiming adjustments are actuarially neutral.'
+              : 'For current-law/PPI formulas, statutory early and delayed claiming adjustments are measured from this age.')}
+          {numA('socialSecurityClaimAge','Representative claiming age',1,62,80,1,'years',
+            'Used for aggregate cohort scoring. Holding this fixed while raising the FRA models the benefit reduction at a given claiming age.')}
+
+          <Toggle label="Cap total annual retired-worker benefit" checked={a.socialSecurityBenefitCap2026 !== null} onChange={v=>setA({socialSecurityBenefitCap2026:v?36000:null,fundingStrategy:'paygo'})} />
+          {a.socialSecurityBenefitCap2026 !== null && <NumberField label="Total benefit cap (2026 dollars, CPI-indexed)" value={a.socialSecurityBenefitCap2026} min={1000} max={200000} step={1000} suffix="$" onChange={n=>setA({socialSecurityBenefitCap2026:n})} />}
+
+          <Select label="COLA inflation index" value={a.socialSecurityCOLAMode} options={[
+            {value:'current',label:'Current CPI assumption'},
+            {value:'chainedCpi',label:'Chained CPI (−0.3 pp)'},
+            {value:'cap',label:'Custom percentage COLA ceiling'},
+            {value:'custom',label:'Custom CPI adjustment'},
+          ]} onChange={v=>setA({socialSecurityCOLAMode:v as ModelAssumptions['socialSecurityCOLAMode']})} />
+          {a.socialSecurityCOLAMode === 'cap' && numA('socialSecurityCOLACap','Percentage COLA ceiling',100,0,10,.1,'%')}
+          {a.socialSecurityCOLAMode === 'custom' && numA('socialSecurityCOLAAdjustment','COLA adjustment vs CPI',100,-5,5,.1,'pp')}
+
+          <Toggle label="Cap COLA dollar increase by PIA percentile" checked={a.socialSecurityCOLADollarCapPercentile !== null}
+            onChange={v=>setA({socialSecurityCOLADollarCapPercentile:v?0.75:null})} />
+          {a.socialSecurityCOLADollarCapPercentile !== null && <NumberField
+            label="Dollar COLA cap reference percentile"
+            value={Math.round(a.socialSecurityCOLADollarCapPercentile*100)}
+            min={50} max={95} step={5} suffix="th"
+            onChange={n=>setA({socialSecurityCOLADollarCapPercentile:n/100})}
+            note="CRFB's 75th-percentile design limits a larger benefit's annual dollar increase to the COLA received at the 75th-percentile PIA. This is separate from a percentage COLA ceiling." />}
+        </fieldset>
+        <small><strong>What is active:</strong> the initial-benefit formula, retirement age, COLA index, dollar COLA cap, and total-benefit cap are independent modules. Selecting “Current-law initial benefit formula” does not activate the flat benefit. The total-benefit cap is stated in 2026 dollars and rises with CPI. The percentile COLA cap limits dollars of annual increase, while Chained CPI changes the percentage index; the two can be combined. PPI and percentile COLA calculations use the SSA 2025 retired-worker PIA distribution. The percentile COLA cap is applied within modeled eligibility cohorts, a transparent cohort approximation to CRFB’s all-beneficiary percentile design.</small>
+      </section>
         <section className="game-card"><h2>Medicare</h2><Toggle label="Reform Medicare" checked={policy.benefits.medicareReform} onChange={v=>setBenefits({medicareReform:v})} /><fieldset disabled={!policy.benefits.medicareReform}>
           <Select label="Premium-support budget rule" value={a.medicareFundingMode} options={[{value:'gdpShare',label:'Fixed GDP share / eligible population'},{value:'perPerson',label:'Fixed real per-person path'}]} onChange={v=>setA({medicareFundingMode:v as ModelAssumptions['medicareFundingMode']})} />
           {a.medicareFundingMode === 'gdpShare' ? <>{numA('medicareSupportGDPShare','Senior support pool',100,0,15,.1,'% GDP', 'Federal contribution after beneficiary financing. Under-65 Medicare is separate. Population aging changes support per eligible senior.')}<p>2026 average federal support: ${Math.round(premiumSupportPerPersonNominal(2026,a)).toLocaleString()} per eligible senior. Income and wealth allocation rules remain unspecified; the model shows the average grant.</p></> : <>{numA('premiumSupport2026','Federal support / senior',1,0,60000,500,'$')}{numA('premiumSupportRealGrowth','Real support growth',100,-2,8,.1,'%')}</>}
