@@ -10,7 +10,7 @@ import {
 } from './fundingStrategy'
 import {
   cohortSizeAtAgeMillions,
-  flatBenefitReal,
+  flatBenefitNominal,
   ssParticipation,
   socialSecurityBenefitShares,
   socialSecurityForYear,
@@ -47,8 +47,14 @@ export function calculateEndowmentPerPerson(
     const survival = projectedSurvival(fundingAge, age, fundingYear - fundingAge)
     const discount =
       (1 + assumptions.realEndowmentYield) ** (age - fundingAge)
+    const claimYear = fundingYear + assumptions.socialSecurityClaimAge - fundingAge
+    const realFlatPayment = flatBenefitNominal(
+      claimYear,
+      paymentYear,
+      assumptions,
+    ) / (1 + assumptions.inflation) ** (paymentYear - assumptions.reformYear)
     socialSecurityPV +=
-      (survival * flatBenefitReal(paymentYear, assumptions) * ssFlatShare *
+      (survival * realFlatPayment * ssFlatShare *
         actuarialClaimFactor(fundingYear - fundingAge, assumptions.socialSecurityClaimAge, assumptions) *
         workCreditFraction(representativeWorkCredits(assumptions), assumptions)) /
       discount

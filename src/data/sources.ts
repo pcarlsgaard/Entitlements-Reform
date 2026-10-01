@@ -149,6 +149,16 @@ export const sources: readonly SourceRecord[] = [
     notes: 'Eligibility populations apply SSA survival from birth. Through 2056 old-age SS and senior Medicare legacy spending is scaled by year to CBO totals net of separately displayed other-OASDI and under-65/offsetting-receipts components. After 2056 the 2056 calibration factor is held fixed; cohort sizes and explicit benefit growth drive legacy costs. Flat Social Security and the full federal premium-support contribution remain policy promises and are not rescaled. CBO legacy allocation factors calibrate aggregate fiscal costs only; household Social Security uses the separate individual award primitive and inflation-only post-retirement COLAs.',
   },
   {
+    id: 'ssa-chained-cpi-2026',
+    kind: 'policy scoring source',
+    agency: 'Social Security Administration, Office of the Chief Actuary',
+    datasetOrReport: 'Long Range Solvency Provisions — COLA, 2026 Trustees assumptions',
+    publicationDate: '2026',
+    relevantTable: 'Chained CPI-W provision',
+    url: 'https://www.ssa.gov/OACT/solvency/provisions/charts/chart_run125.html',
+    notes: 'SSA estimates chained CPI-W would reduce annual OASI COLAs by about 0.3 percentage point on average. The simulator uses that differential as the chained-CPI preset; the COLA-cap and custom-adjustment modes are direct policy primitives rather than imported aggregate savings scores.',
+  },
+  {
     id: 'ssa-claiming-cola-convention',
     kind: 'modeling assumption',
     agency: 'Social Security Administration / model implementation',

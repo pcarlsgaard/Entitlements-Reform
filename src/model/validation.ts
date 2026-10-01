@@ -15,6 +15,8 @@ const numericKeys = [
   'individualFPL2026',
   'realFPLGrowth',
   'fullRetirementAge',
+  'socialSecurityCOLACap',
+  'socialSecurityCOLAAdjustment',
   'vestingYears', 'socialSecurityClaimAge', 'qualifyingEarnings2026', 'averageWorkingYears',
   'averageAnnualEarnings2026', 'actuarialDiscountRate', 'medicareSupportGDPShare',
   'currentLawSSBenefit2026',
@@ -71,6 +73,12 @@ export function validateModelAssumptions(
   if (assumptions.actuarialDiscountRate < 0 || assumptions.actuarialDiscountRate > 0.1) add('actuarialDiscountRate', 'Use a real discount rate from 0% to 10%.')
   if (assumptions.medicareSupportGDPShare < 0 || assumptions.medicareSupportGDPShare > 0.15) add('medicareSupportGDPShare', 'Support pool must be 0%–15% of GDP.')
   if (!['gdpShare', 'perPerson'].includes(assumptions.medicareFundingMode)) add('medicareFundingMode', 'Choose a recognized support rule.')
+  if (!['current', 'chainedCpi', 'cap', 'custom'].includes(assumptions.socialSecurityCOLAMode))
+    add('socialSecurityCOLAMode', 'Choose a recognized Social Security COLA rule.')
+  if (assumptions.socialSecurityCOLACap < 0 || assumptions.socialSecurityCOLACap > 0.10)
+    add('socialSecurityCOLACap', 'Use a COLA cap from 0% to 10%.')
+  if (assumptions.socialSecurityCOLAAdjustment < -0.05 || assumptions.socialSecurityCOLAAdjustment > 0.05)
+    add('socialSecurityCOLAAdjustment', 'Use a COLA adjustment from -5 to +5 percentage points.')
   if (!['cbo', 'growth'].includes(assumptions.nonDefenseDiscretionaryMode)) add('nonDefenseDiscretionaryMode', 'Choose a recognized spending path.')
 
   if (!fundingStrategies.includes(assumptions.fundingStrategy)) {
