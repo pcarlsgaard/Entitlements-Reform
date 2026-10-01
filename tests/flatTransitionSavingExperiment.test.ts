@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { defaultAssumptions } from '../src/model/defaults'
 import { projectedSurvival } from '../src/model/demographics'
-import { socialSecurityBenefitBins } from '../src/model/socialSecurityDistribution'
+import { relativeBenefitAtPercentile, socialSecurityBenefitBins } from '../src/model/socialSecurityDistribution'
 
 const a = defaultAssumptions
 
@@ -188,10 +188,10 @@ function workerRow(
 describe('200 percent FPL transition cohort table', () => {
   it('prints worker distribution across retirement cohorts', () => {
     const workers = [
-      ['P10', annualEarningsAtPercentile(0.10), 750 / 2071.30],
-      ['P50', annualEarningsAtPercentile(0.50), 1550 / 2071.30],
-      ['P75', annualEarningsAtPercentile(0.75), 2150 / 2071.30],
-      ['P90', annualEarningsAtPercentile(0.90), 2650 / 2071.30],
+      ['P10', annualEarningsAtPercentile(0.10), relativeBenefitAtPercentile(0.10)],
+      ['P50', annualEarningsAtPercentile(0.50), relativeBenefitAtPercentile(0.50)],
+      ['P75', annualEarningsAtPercentile(0.75), relativeBenefitAtPercentile(0.75)],
+      ['P90', annualEarningsAtPercentile(0.90), relativeBenefitAtPercentile(0.90)],
       ['Maximum', 184500, (4152 * 12) / a.currentLawSSBenefit2026],
     ] as const
     const years = [2035, 2045, 2055, 2065, 2075]
