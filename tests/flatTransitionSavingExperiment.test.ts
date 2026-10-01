@@ -281,3 +281,26 @@ describe('200 percent FPL cohort table at 3.5 percent real return', () => {
     expect(report).toHaveLength(25)
   }, 30_000)
 })
+
+
+describe('200 percent FPL cohort return sensitivity', () => {
+  it('prints 2.5, 3.5, and 4.5 percent real return scenarios', () => {
+    const workers = [
+      ['P10', 0.10, annualEarningsAtPercentile(0.10), relativeBenefitAtPercentile(0.10)],
+      ['P50', 0.50, annualEarningsAtPercentile(0.50), relativeBenefitAtPercentile(0.50)],
+      ['P75', 0.75, annualEarningsAtPercentile(0.75), relativeBenefitAtPercentile(0.75)],
+      ['P90', 0.90, annualEarningsAtPercentile(0.90), relativeBenefitAtPercentile(0.90)],
+      ['Maximum', null, 184500, (4152 * 12) / a.currentLawSSBenefit2026],
+    ] as const
+    const years = [2035, 2045, 2055, 2065, 2075]
+    const returns = [0.025, 0.035, 0.045]
+    const report = returns.flatMap(realReturn =>
+      years.flatMap(year =>
+        workers.map(([label, percentile, wage, relative]) => ({
+          realReturn,
+          ...workerReturnRow(label, percentile, year, wage, relative, realReturn),
+        }))))
+    console.log('FLAT_200_20_RETURN_SENSITIVITY=' + JSON.stringify(report))
+    expect(report).toHaveLength(75)
+  }, 30_000)
+})
