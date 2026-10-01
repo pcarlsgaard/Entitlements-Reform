@@ -116,6 +116,9 @@ export function validateModelAssumptions(
     (!Number.isFinite(assumptions.socialSecurityBenefitCap2026) || assumptions.socialSecurityBenefitCap2026 <= 0)) {
     add('socialSecurityBenefitCap2026', 'The annual benefit cap must be positive.')
   }
+  if (assumptions.socialSecurityBenefitCap2026 !== null && assumptions.fundingStrategy !== 'paygo') {
+    add('fundingStrategy', 'Total Social Security benefit caps currently require PAYGO financing.')
+  }
   if (assumptions.fullRetirementAge < 0 || assumptions.fullRetirementAge >= assumptions.maxModeledAge) {
     add('fullRetirementAge', 'Retirement age must be below the maximum modeled age.')
   }
