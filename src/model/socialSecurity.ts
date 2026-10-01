@@ -41,12 +41,62 @@ export function flatBenefitReal(
   )
 }
 
-/** Real growth affects new awards only. Existing awards receive inflation COLAs. */
-export function legacySocialSecurityBenefitNominal(retirementYear: number, year: number,
-  assumptions: ModelAssumptions): number {
+export function socialSecurityCOLARate(
+  assumptions: ModelAssumptions,
+  entitlementDesign: EntitlementDesign = 'reform',
+): number {
+  const current = Math.max(0, assumptions.inflation)
+  if (entitlementDesign === 'currentLaw') return current
+  switch (assumptions.socialSecurityCOLAMode) {
+    case 'chainedCpi':
+      return Math.max(0, current - 0.003)
+    case 'cap':
+      return Math.min(current, Math.max(0, assumptions.socialSecurityCOLACap))
+    case 'custom':
+      return Math.max(0, current + assumptions.socialSecurityCOLAAdjustment)
+    default:
+      return current
+  }
+}
+
+function postAwardCOLAFactor(
+  awardYear: number,
+  year: number,
+  assumptions: ModelAssumptions,
+  entitlementDesign: EntitlementDesign,
+): number {
+  const colaStartYear = Math.max(assumptions.reformYear, awardYear)
+  if (year <= colaStartYear) return 1
+  return (1 + socialSecurityCOLARate(assumptions, entitlementDesign)) ** (year - colaStartYear)
+}
+
+/** Real FPL growth affects new flat awards only; the selected COLA compounds after claiming. */
+export function flatBenefitNominal(
+  claimYear: number,
+  year: number,
+  assumptions: ModelAssumptions,
+  entitlementDesign: EntitlementDesign = 'reform',
+): number {
+  const awardYear = Math.max(assumptions.reformYear, claimYear)
+  const preAwardInflationYears = Math.max(0, Math.min(year, awardYear) - assumptions.reformYear)
+  return flatBenefitReal(awardYear, assumptions) *
+    (1 + assumptions.inflation) ** preAwardInflationYears *
+    postAwardCOLAFactor(awardYear, year, assumptions, entitlementDesign)
+}
+
+/** Real wage growth affects new legacy awards only; the selected COLA compounds after retirement. */
+export function legacySocialSecurityBenefitNominal(
+  retirementYear: number,
+  year: number,
+  assumptions: ModelAssumptions,
+  entitlementDesign: EntitlementDesign = 'reform',
+): number {
+  const awardYear = Math.max(assumptions.reformYear, retirementYear)
+  const preAwardInflationYears = Math.max(0, Math.min(year, awardYear) - assumptions.reformYear)
   return assumptions.currentLawSSBenefit2026 *
     (1 + assumptions.currentLawSSBenefitRealGrowth) ** Math.max(0, retirementYear - assumptions.reformYear) *
-    (1 + assumptions.inflation) ** (year - assumptions.reformYear)
+    (1 + assumptions.inflation) ** preAwardInflationYears *
+    postAwardCOLAFactor(awardYear, year, assumptions, entitlementDesign)
 }
 
 export function firstPrefundedSSRetirementYear(
@@ -109,9 +159,6 @@ function rawSocialSecurityForYear(
     )
   }
   const cohorts: SSCohortAudit[] = []
-  const inflationFactor =
-    (1 + assumptions.inflation) ** (year - assumptions.reformYear)
-  const flatBenefit = flatBenefitReal(year, assumptions) * inflationFactor
   const beneficiaryGrowthAdjustment = retiredWorkerGrowthAdjustment(year)
 
   for (
@@ -128,13 +175,22 @@ function rawSocialSecurityForYear(
     const retirementYear = birthYear + (entitlementDesign === 'currentLaw' || alreadyRetired
       ? currentLawRetirementAge : assumptions.fullRetirementAge)
     const claimYear = birthYear + retirementAge
-    const currentLawBenefit = legacySocialSecurityBenefitNominal(birthYear + 67, year, assumptions) *
-      currentLawClaimFactor(retirementAge)
+    const currentLawBenefit = legacySocialSecurityBenefitNominal(
+      birthYear + 67,
+      year,
+      assumptions,
+      entitlementDesign,
+    ) * currentLawClaimFactor(retirementAge)
     const survivalFraction = projectedSurvival(retirementAge, age, birthYear)
     const survivingBeneficiariesMillions =
       populationMillions(year, age, assumptions) * ssParticipation * beneficiaryGrowthAdjustment
     const initialCohortMillions = survivalFraction > 0 ? survivingBeneficiariesMillions / survivalFraction : 0
-    const individualFlatBenefit = flatBenefit * actuarialClaimFactor(birthYear, retirementAge, assumptions) *
+    const individualFlatBenefit = flatBenefitNominal(
+      claimYear,
+      year,
+      assumptions,
+      entitlementDesign,
+    ) * actuarialClaimFactor(birthYear, retirementAge, assumptions) *
       workCreditFraction(representativeWorkCredits(assumptions), assumptions)
     const { legacyShare, flatShare } =
       entitlementDesign === 'currentLaw'
