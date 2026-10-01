@@ -118,3 +118,86 @@ describe('flat transition replacement-saving experiment', () => {
     expect(report.length).toBe(designs.length * years.length)
   }, 30_000)
 })
+
+
+import { calculateHousehold } from '../src/tax/model/household'
+import { defaultCombinedPolicy } from '../src/model/combined'
+import { realWageGrowthFactor } from '../src/model/taxProjection'
+
+function accumulatedTaxGain(retirementYear: number, wage2026: number): number {
+  let fv = 0
+  for (let year = a.reformYear; year < retirementYear; year += 1) {
+    const wage = wage2026 * realWageGrowthFactor(year, a)
+    const gain = calculateHousehold(
+      { filingStatus: 'single', cashWage: wage, children: 0 },
+      defaultCombinedPolicy.tax,
+      defaultCombinedPolicy.health.employerFicaPassThroughRate,
+    ).dollarChange
+    fv += gain * (1 + a.realEndowmentYield) ** (retirementYear - year - 1)
+  }
+  return fv
+}
+
+function workerRow(
+  label: string,
+  retirementYear: number,
+  wage2026: number,
+  relativeBenefit: number,
+) {
+  const transitionYears = 20
+  const alpha = Math.max(0, Math.min(1, (retirementYear - a.reformYear) / transitionYears))
+  const birthYear = retirementYear - 67
+  const realAwardGrowth = (1 + a.currentLawSSBenefitRealGrowth) ** Math.max(0, retirementYear - a.reformYear)
+  const current = a.currentLawSSBenefit2026 * relativeBenefit * realAwardGrowth
+  const flat = a.individualFPL2026 * 2
+  const reform = (1 - alpha) * current + alpha * flat
+  const annualLoss = Math.max(0, current - reform)
+  const pvLoss = annualLoss * annuityFactorAt67(birthYear)
+  const accumWages = (() => {
+    let fv = 0
+    for (let year = a.reformYear; year < retirementYear; year += 1) {
+      const wage = wage2026 * realWageGrowthFactor(year, a)
+      fv += wage * (1 + a.realEndowmentYield) ** (retirementYear - year - 1)
+    }
+    return fv
+  })()
+  const saveRate = accumWages > 0 ? pvLoss / accumWages : 0
+  const taxFV = accumulatedTaxGain(retirementYear, wage2026)
+  const taxCoverage = pvLoss > 0 ? taxFV / pvLoss : null
+  const taxGain2026 = calculateHousehold(
+    { filingStatus: 'single', cashWage: wage2026, children: 0 },
+    defaultCombinedPolicy.tax,
+    defaultCombinedPolicy.health.employerFicaPassThroughRate,
+  ).dollarChange
+  return {
+    label,
+    retirementYear,
+    yearsToRetirement: retirementYear - a.reformYear,
+    wage2026,
+    currentBenefit: current,
+    reformBenefit: reform,
+    benefitChange: reform / current - 1,
+    saveRate,
+    taxGain2026,
+    taxGainShareWage2026: taxGain2026 / wage2026,
+    taxCoverage,
+    residualSaveRateApprox: saveRate - Math.max(0, taxGain2026 / wage2026),
+  }
+}
+
+describe('200 percent FPL transition cohort table', () => {
+  it('prints worker distribution across retirement cohorts', () => {
+    const workers = [
+      ['P10', annualEarningsAtPercentile(0.10), 750 / 2071.30],
+      ['P50', annualEarningsAtPercentile(0.50), 1550 / 2071.30],
+      ['P75', annualEarningsAtPercentile(0.75), 2150 / 2071.30],
+      ['P90', annualEarningsAtPercentile(0.90), 2650 / 2071.30],
+      ['Maximum', 184500, (4152 * 12) / a.currentLawSSBenefit2026],
+    ] as const
+    const years = [2035, 2045, 2055, 2065, 2075]
+    const report = years.flatMap(year =>
+      workers.map(([label, wage, relative]) => workerRow(label, year, wage, relative)))
+    console.log('FLAT_200_20_COHORT_TABLE=' + JSON.stringify(report))
+    expect(report).toHaveLength(25)
+  }, 30_000)
+})
