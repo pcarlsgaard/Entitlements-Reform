@@ -96,6 +96,11 @@ export function simulate(
     assumptions.fundingStrategy !== 'paygo' && selection?.socialSecurityReform) {
     throw new Error('The retiree benefit cap requires PAYGO financing.')
   }
+  if (selection?.socialSecurityReform &&
+    assumptions.socialSecurityInitialBenefitMode !== 'flatTransition' &&
+    assumptions.fundingStrategy !== 'paygo') {
+    throw new Error('PPI and current-formula Social Security modules require PAYGO financing in the current cohort engine.')
+  }
   const years: SimulationYear[] = []
   const socialSecurityByYear = new Map()
   const medicareByYear = new Map()
