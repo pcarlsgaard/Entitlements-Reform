@@ -75,6 +75,37 @@ describe('modular Social Security benefit reforms', () => {
     )
   })
 
+  it('starts post-award COLA reform at the actual claiming year, not the age-67 reference year', () => {
+    const a = {
+      ...defaultAssumptions,
+      inflation: 0.02,
+      currentLawSSBenefitRealGrowth: 0.01,
+      socialSecurityCOLAIndex: 'chainedCPI' as const,
+      socialSecurityCOLAStartYear: 2027,
+    }
+    const referenceYear = 2031
+    const delayedClaimYear = 2034
+    const atClaim = legacySocialSecurityBenefitNominal(
+      referenceYear,
+      delayedClaimYear,
+      a,
+      true,
+      delayedClaimYear,
+    )
+    const expectedAtClaim =
+      a.currentLawSSBenefit2026 *
+      1.01 ** (referenceYear - 2026) *
+      1.02 ** (delayedClaimYear - 2026)
+    expect(atClaim).toBeCloseTo(expectedAtClaim, 8)
+    expect(legacySocialSecurityBenefitNominal(
+      referenceYear,
+      2035,
+      a,
+      true,
+      delayedClaimYear,
+    )).toBeCloseTo(expectedAtClaim * 1.017, 8)
+  })
+
   it('supports CRFB-style benefit-cap indexing alternatives', () => {
     const cpi = {
       ...defaultAssumptions,
