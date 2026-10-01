@@ -79,8 +79,17 @@ function annualSocialSecurity(simulation: SimulationResult, year: number, age: n
     : { legacyShare: 1, flatShare: 0 }
   const inflation = (1 + a.inflation) ** (year - a.reformYear)
   const delivery = currentLawDeliveryShares(year, a, mode).socialSecurity
-  const legacy = legacySocialSecurityBenefitNominal(birthYear + 67, year, a) *
-    currentLawClaimFactor(chosenAge) * shares.legacyShare * factor * delivery
+  const claimYear = birthYear + chosenAge
+  const claimAgeForAdjustment = reform && !grandfathered
+    ? chosenAge - (a.socialSecurityReformFRA - 67)
+    : chosenAge
+  const legacy = legacySocialSecurityBenefitNominal(
+    birthYear + 67,
+    claimYear,
+    year,
+    a,
+    reform ? 'reform' : 'currentLaw',
+  ) * currentLawClaimFactor(claimAgeForAdjustment) * shares.legacyShare * factor * delivery
   const flat = flatBenefitReal(year, a) * inflation * shares.flatShare *
     actuarialClaimFactor(birthYear, chosenAge, a) * workCreditFraction(credits, a)
   const cap = reform && a.socialSecurityBenefitCap2026 !== null ? a.socialSecurityBenefitCap2026 * inflation : Infinity
