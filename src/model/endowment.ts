@@ -1,6 +1,5 @@
 import { medicareForYear, medicarePremiumSupportShare, premiumSupportPerPersonNominal } from './medicare'
 import { projectedSurvival } from './demographics'
-import { actuarialClaimFactor, representativeWorkCredits, workCreditFraction } from './claiming'
 import {
   fullyPrefundsMedicare,
   fullyPrefundsSocialSecurity,
@@ -10,7 +9,7 @@ import {
 } from './fundingStrategy'
 import {
   cohortSizeAtAgeMillions,
-  flatBenefitReal,
+  flatSocialSecurityBenefitNominal,
   ssParticipation,
   socialSecurityBenefitShares,
   socialSecurityForYear,
@@ -47,11 +46,19 @@ export function calculateEndowmentPerPerson(
     const survival = projectedSurvival(fundingAge, age, fundingYear - fundingAge)
     const discount =
       (1 + assumptions.realEndowmentYield) ** (age - fundingAge)
+    const claimYear =
+      fundingYear + assumptions.socialSecurityClaimAge - fundingAge
+    const nominalFlatBenefit = flatSocialSecurityBenefitNominal(
+      fundingYear - fundingAge,
+      claimYear,
+      paymentYear,
+      assumptions,
+    )
+    const realFlatBenefit =
+      nominalFlatBenefit /
+      (1 + assumptions.inflation) ** (paymentYear - assumptions.reformYear)
     socialSecurityPV +=
-      (survival * flatBenefitReal(paymentYear, assumptions) * ssFlatShare *
-        actuarialClaimFactor(fundingYear - fundingAge, assumptions.socialSecurityClaimAge, assumptions) *
-        workCreditFraction(representativeWorkCredits(assumptions), assumptions)) /
-      discount
+      (survival * realFlatBenefit * ssFlatShare) / discount
   }
 
   for (
