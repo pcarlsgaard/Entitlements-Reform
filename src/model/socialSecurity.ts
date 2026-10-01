@@ -192,6 +192,27 @@ export function legacySocialSecurityBenefitNominal(
   entitlementDesign: EntitlementDesign = 'reform',
   claimYear: number = retirementYear,
 ): number {
+  const needsDistribution =
+    entitlementDesign === 'reform' &&
+    (assumptions.socialSecurityInitialBenefitMode === 'progressivePriceIndexing' ||
+      assumptions.socialSecurityCOLADollarCapPercentile !== null)
+
+  if (!needsDistribution) {
+    const policyStartYear = Math.max(assumptions.reformYear, claimYear)
+    const prePolicyInflationYears = Math.max(
+      0,
+      Math.min(year, policyStartYear) - assumptions.reformYear,
+    )
+    const benefitAtPolicyStart = assumptions.currentLawSSBenefit2026 *
+      (1 + assumptions.currentLawSSBenefitRealGrowth) **
+        Math.max(0, retirementYear - assumptions.reformYear) *
+      (1 + assumptions.inflation) ** prePolicyInflationYears
+    if (year <= policyStartYear) return benefitAtPolicyStart
+    return benefitAtPolicyStart *
+      (1 + socialSecurityCOLARate(assumptions, entitlementDesign)) **
+        (year - policyStartYear)
+  }
+
   return socialSecurityPIAQuantiles.reduce(
     (sum, quantile) => sum + quantile.share * legacyBenefitAtQuantileNominal(
       retirementYear,
