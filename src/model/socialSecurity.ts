@@ -48,12 +48,20 @@ export function legacySocialSecurityBenefitNominal(
   year: number,
   assumptions: ModelAssumptions,
   usePolicyCOLA = true,
+  claimYear = retirementYear,
 ): number {
-  const yearsToAward = Math.max(0, retirementYear - assumptions.reformYear)
-  const initialYear = Math.max(retirementYear, assumptions.reformYear)
+  const yearsToReferenceAward = Math.max(
+    0,
+    retirementYear - assumptions.reformYear,
+  )
+  const initialYear = Math.max(claimYear, assumptions.reformYear)
+  const yearsToInitialYear = Math.max(
+    0,
+    initialYear - assumptions.reformYear,
+  )
   const initialBenefit = assumptions.currentLawSSBenefit2026 *
-    (1 + assumptions.currentLawSSBenefitRealGrowth) ** yearsToAward *
-    (1 + assumptions.inflation) ** yearsToAward
+    (1 + assumptions.currentLawSSBenefitRealGrowth) ** yearsToReferenceAward *
+    (1 + assumptions.inflation) ** yearsToInitialYear
   return applySocialSecurityCOLAs(
     initialBenefit,
     initialYear,
@@ -167,6 +175,7 @@ function rawSocialSecurityForYear(
       year,
       assumptions,
       entitlementDesign === 'reform',
+      claimYear,
     ) * currentLawClaimFactor(retirementAge)
     const survivalFraction = projectedSurvival(retirementAge, age, birthYear)
     const survivingBeneficiariesMillions =
