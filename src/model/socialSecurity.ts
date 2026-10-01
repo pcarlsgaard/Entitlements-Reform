@@ -3,6 +3,7 @@ import { actuarialClaimFactor, currentLawClaimFactor, representativeWorkCredits,
 import { cboBaselineEndYear, cboCalibrationNominalGDPBillions, cboCalibrationOtherOASDIGDP, cboSocialSecurityGDP } from '../data/cboBaseline'
 import { ssaOasdiCostGDP, ssaRetiredWorkerMillions } from '../data/trustees2026'
 import { currentLawRetirementAge, defaultAssumptions } from './defaults'
+import { applySocialSecurityCOLAs, socialSecurityBenefitCapNominal } from './socialSecurityPolicy'
 import {
   fullyPrefundsSocialSecurity,
   usesSavingsFundedSequence,
@@ -41,12 +42,48 @@ export function flatBenefitReal(
   )
 }
 
-/** Real growth affects new awards only. Existing awards receive inflation COLAs. */
-export function legacySocialSecurityBenefitNominal(retirementYear: number, year: number,
-  assumptions: ModelAssumptions): number {
-  return assumptions.currentLawSSBenefit2026 *
-    (1 + assumptions.currentLawSSBenefitRealGrowth) ** Math.max(0, retirementYear - assumptions.reformYear) *
-    (1 + assumptions.inflation) ** (year - assumptions.reformYear)
+/** Real growth affects new awards only. Existing awards receive the selected post-award COLA. */
+export function legacySocialSecurityBenefitNominal(
+  retirementYear: number,
+  year: number,
+  assumptions: ModelAssumptions,
+  usePolicyCOLA = true,
+): number {
+  const yearsToAward = Math.max(0, retirementYear - assumptions.reformYear)
+  const initialYear = Math.max(retirementYear, assumptions.reformYear)
+  const initialBenefit = assumptions.currentLawSSBenefit2026 *
+    (1 + assumptions.currentLawSSBenefitRealGrowth) ** yearsToAward *
+    (1 + assumptions.inflation) ** yearsToAward
+  return applySocialSecurityCOLAs(
+    initialBenefit,
+    initialYear,
+    year,
+    assumptions,
+    usePolicyCOLA,
+  )
+}
+
+export function flatSocialSecurityBenefitNominal(
+  birthYear: number,
+  claimYear: number,
+  year: number,
+  assumptions: ModelAssumptions,
+  usePolicyCOLA = true,
+  creditedYears = representativeWorkCredits(assumptions),
+): number {
+  const yearsToClaim = Math.max(0, claimYear - assumptions.reformYear)
+  const initialBenefit =
+    flatBenefitReal(claimYear, assumptions) *
+    (1 + assumptions.inflation) ** yearsToClaim *
+    actuarialClaimFactor(birthYear, claimYear - birthYear, assumptions) *
+    workCreditFraction(creditedYears, assumptions)
+  return applySocialSecurityCOLAs(
+    initialBenefit,
+    Math.max(claimYear, assumptions.reformYear),
+    year,
+    assumptions,
+    usePolicyCOLA,
+  )
 }
 
 export function firstPrefundedSSRetirementYear(
@@ -109,9 +146,6 @@ function rawSocialSecurityForYear(
     )
   }
   const cohorts: SSCohortAudit[] = []
-  const inflationFactor =
-    (1 + assumptions.inflation) ** (year - assumptions.reformYear)
-  const flatBenefit = flatBenefitReal(year, assumptions) * inflationFactor
   const beneficiaryGrowthAdjustment = retiredWorkerGrowthAdjustment(year)
 
   for (
@@ -128,14 +162,23 @@ function rawSocialSecurityForYear(
     const retirementYear = birthYear + (entitlementDesign === 'currentLaw' || alreadyRetired
       ? currentLawRetirementAge : assumptions.fullRetirementAge)
     const claimYear = birthYear + retirementAge
-    const currentLawBenefit = legacySocialSecurityBenefitNominal(birthYear + 67, year, assumptions) *
-      currentLawClaimFactor(retirementAge)
+    const currentLawBenefit = legacySocialSecurityBenefitNominal(
+      birthYear + 67,
+      year,
+      assumptions,
+      entitlementDesign === 'reform',
+    ) * currentLawClaimFactor(retirementAge)
     const survivalFraction = projectedSurvival(retirementAge, age, birthYear)
     const survivingBeneficiariesMillions =
       populationMillions(year, age, assumptions) * ssParticipation * beneficiaryGrowthAdjustment
     const initialCohortMillions = survivalFraction > 0 ? survivingBeneficiariesMillions / survivalFraction : 0
-    const individualFlatBenefit = flatBenefit * actuarialClaimFactor(birthYear, retirementAge, assumptions) *
-      workCreditFraction(representativeWorkCredits(assumptions), assumptions)
+    const individualFlatBenefit = flatSocialSecurityBenefitNominal(
+      birthYear,
+      claimYear,
+      year,
+      assumptions,
+      entitlementDesign === 'reform',
+    )
     const { legacyShare, flatShare } =
       entitlementDesign === 'currentLaw'
         ? { legacyShare: 1, flatShare: 0 }
@@ -254,9 +297,11 @@ export function socialSecurityForYear(
   const cohorts = result.cohorts.map((cohort) => {
     const uncappedLegacy = cohort.legacyPaygoBillions * legacyScale
     const uncappedTotal = uncappedLegacy + cohort.flatBenefitBillions
-    const capBillions = entitlementDesign === 'reform' && assumptions.socialSecurityBenefitCap2026 !== null
-      ? assumptions.socialSecurityBenefitCap2026 *
-        (1 + assumptions.inflation) ** (year - assumptions.reformYear) *
+    const capPerPerson = entitlementDesign === 'reform'
+      ? socialSecurityBenefitCapNominal(year, assumptions)
+      : null
+    const capBillions = capPerPerson !== null
+      ? capPerPerson * currentLawClaimFactor(cohort.claimAge) *
         cohort.survivingBeneficiariesMillions / 1_000
       : Number.POSITIVE_INFINITY
     const capScale = uncappedTotal > 0 ? Math.min(1, capBillions / uncappedTotal) : 1
