@@ -150,7 +150,7 @@ export const sources: readonly SourceRecord[] = [
   },
   {
     id: 'ssa-chained-cpi-2026',
-    kind: 'policy scoring source',
+    kind: 'modeling assumption',
     agency: 'Social Security Administration, Office of the Chief Actuary',
     datasetOrReport: 'Long Range Solvency Provisions — COLA, 2026 Trustees assumptions',
     publicationDate: '2026',
