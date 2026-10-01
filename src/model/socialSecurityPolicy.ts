@@ -84,20 +84,47 @@ export function applySocialSecurityCOLAs(
   applyDollarCap = true,
 ): number {
   if (throughYear <= initialYear) return initialAnnualBenefit
-  let benefit = initialAnnualBenefit
+  const hasDollarCap =
+    usePolicy &&
+    applyDollarCap &&
+    assumptions.socialSecurityCOLACapProtectedBenefit2026 !== null
 
-  for (let year = initialYear + 1; year <= throughYear; year += 1) {
-    const cola = socialSecurityCOLARate(year, assumptions, usePolicy)
-    let increase = benefit * cola
-    if (usePolicy && applyDollarCap) {
-      const protectedBenefit = socialSecurityCOLAProtectedBenefitNominal(
-        year - 1,
-        assumptions,
-      )
-      if (protectedBenefit !== null) {
-        increase = Math.min(increase, protectedBenefit * cola)
-      }
+  // Without a nonlinear dollar cap, the model has at most two constant COLA
+  // regimes: current-law CPI-W before the policy start year and the selected
+  // index afterward. Compound them directly; the cohort engine calls this
+  // helper many thousands of times inside fiscal solvers.
+  if (!hasDollarCap) {
+    const totalYears = throughYear - initialYear
+    if (!usePolicy) {
+      return initialAnnualBenefit *
+        (1 + currentLawCOLARate(assumptions)) ** totalYears
     }
+    const prePolicyThrough = Math.min(
+      throughYear,
+      assumptions.socialSecurityCOLAStartYear - 1,
+    )
+    const currentLawYears = Math.max(0, prePolicyThrough - initialYear)
+    const policyYears = totalYears - currentLawYears
+    const policyRate = socialSecurityCOLARate(
+      Math.max(initialYear + 1, assumptions.socialSecurityCOLAStartYear),
+      assumptions,
+      true,
+    )
+    return initialAnnualBenefit *
+      (1 + currentLawCOLARate(assumptions)) ** currentLawYears *
+      (1 + policyRate) ** policyYears
+  }
+
+  let benefit = initialAnnualBenefit
+  for (let year = initialYear + 1; year <= throughYear; year += 1) {
+    const cola = socialSecurityCOLARate(year, assumptions, true)
+    const protectedBenefit = socialSecurityCOLAProtectedBenefitNominal(
+      year - 1,
+      assumptions,
+    )
+    const increase = protectedBenefit === null
+      ? benefit * cola
+      : Math.min(benefit * cola, protectedBenefit * cola)
     benefit += increase
   }
   return benefit
