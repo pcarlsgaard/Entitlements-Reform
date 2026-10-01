@@ -12,6 +12,8 @@ const numericKeys = [
   'maxModeledAge',
   'benefitPhaseInYears',
   'flatBenefitFPLMultiple',
+  'socialSecurityPPIThresholdPercentile',
+  'socialSecurityPPIStartYear',
   'individualFPL2026',
   'realFPLGrowth',
   'fullRetirementAge',
@@ -73,8 +75,17 @@ export function validateModelAssumptions(
   if (assumptions.actuarialDiscountRate < 0 || assumptions.actuarialDiscountRate > 0.1) add('actuarialDiscountRate', 'Use a real discount rate from 0% to 10%.')
   if (assumptions.medicareSupportGDPShare < 0 || assumptions.medicareSupportGDPShare > 0.15) add('medicareSupportGDPShare', 'Support pool must be 0%–15% of GDP.')
   if (!['gdpShare', 'perPerson'].includes(assumptions.medicareFundingMode)) add('medicareFundingMode', 'Choose a recognized support rule.')
+  if (!['currentLaw', 'flatTransition', 'progressivePriceIndexing'].includes(assumptions.socialSecurityInitialBenefitMode))
+    add('socialSecurityInitialBenefitMode', 'Choose a recognized Social Security initial-benefit rule.')
   if (!['current', 'chainedCpi', 'cap', 'custom'].includes(assumptions.socialSecurityCOLAMode))
     add('socialSecurityCOLAMode', 'Choose a recognized Social Security COLA rule.')
+  if (assumptions.socialSecurityPPIThresholdPercentile < 0.30 || assumptions.socialSecurityPPIThresholdPercentile > 0.95)
+    add('socialSecurityPPIThresholdPercentile', 'Use a PPI threshold from the 30th to 95th percentile.')
+  if (!Number.isInteger(assumptions.socialSecurityPPIStartYear) || assumptions.socialSecurityPPIStartYear < assumptions.reformYear || assumptions.socialSecurityPPIStartYear > assumptions.endYear)
+    add('socialSecurityPPIStartYear', 'PPI start year must be a whole year within the simulation.')
+  if (assumptions.socialSecurityCOLADollarCapPercentile !== null &&
+      (assumptions.socialSecurityCOLADollarCapPercentile < 0.50 || assumptions.socialSecurityCOLADollarCapPercentile > 0.95))
+    add('socialSecurityCOLADollarCapPercentile', 'Use a dollar COLA cap percentile from 50th to 95th.')
   if (assumptions.socialSecurityCOLACap < 0 || assumptions.socialSecurityCOLACap > 0.10)
     add('socialSecurityCOLACap', 'Use a COLA cap from 0% to 10%.')
   if (assumptions.socialSecurityCOLAAdjustment < -0.05 || assumptions.socialSecurityCOLAAdjustment > 0.05)
