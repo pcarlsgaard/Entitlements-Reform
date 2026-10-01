@@ -79,7 +79,9 @@ export function parseConfiguration(json: string): SavedConfiguration {
     delete a.realWageGrowth
     const additions = ['qualifyingEarnings2026', 'averageWorkingYears', 'averageAnnualEarnings2026',
       'actuarialDiscountRate', 'medicareFundingMode', 'realWageGrowthDeviation', 'debtPaydownTargetGDP',
-      'debtPaydownSurplusCapGDP'] as const
+      'debtPaydownSurplusCapGDP', 'socialSecurityCOLAIndex', 'socialSecurityCOLAStartYear',
+      'socialSecurityCOLACapProtectedBenefit2026', 'socialSecurityCOLACapIndexing',
+      'socialSecurityBenefitCapIndexing'] as const
     for (const key of additions) if (a[key] === undefined) a[key] = defaultAssumptions[key]
     // Pre-split configurations carried the old 0.5% stylized SS award-growth default.
     // Move that untouched legacy default to the 2026 Trustees wage-growth central value.
@@ -121,6 +123,9 @@ export function parseConfiguration(json: string): SavedConfiguration {
     throw new Error('The configuration has incompatible horizon or transition settings.')
   oneOf(policy.assumptions.medicareFundingMode, ['gdpShare', 'perPerson'], 'Medicare funding rule')
   oneOf(policy.assumptions.nonDefenseDiscretionaryMode, ['cbo', 'growth'], 'NDD rule')
+  oneOf(policy.assumptions.socialSecurityCOLAIndex, ['cpiW', 'chainedCPI', 'cpiE'], 'Social Security COLA index')
+  oneOf(policy.assumptions.socialSecurityCOLACapIndexing, ['wage', 'cpi'], 'Social Security COLA-cap indexing')
+  oneOf(policy.assumptions.socialSecurityBenefitCapIndexing, ['cpi', 'chainedCPI', 'fixed20Wage', 'fixed30Wage'], 'Social Security benefit-cap indexing')
   for (const key of ['fullRetirementAge', 'socialSecurityClaimAge', 'medicareEligibilityAge', 'medicareYearA', 'medicareYearB'] as const)
     if (!Number.isInteger(policy.assumptions[key])) throw new Error(`${key} requires whole years.`)
   within(policy.assumptions.socialSecurityClaimAge, 62, 80, 'claim age')
@@ -133,11 +138,14 @@ export function parseConfiguration(json: string): SavedConfiguration {
   within(policy.assumptions.fullRetirementAge, 62, 80, 'retirement age')
   within(policy.assumptions.medicareEligibilityAge, 60, 80, 'Medicare eligibility age')
   within(policy.assumptions.benefitPhaseInYears, 1, 70, 'benefit phase-in')
+  within(policy.assumptions.socialSecurityCOLAStartYear, 2026, 2095, 'COLA reform start year')
   within(policy.assumptions.realGDPGrowth, -0.02, 0.06, 'real GDP growth')
   within(policy.assumptions.inflation, 0, 0.08, 'inflation')
   within(policy.tax.rate, 0, 0.7, 'tax rate')
   within(policy.dynamic.phaseInYears, 1, 30, 'labor phase-in')
   within(policy.dynamic.capitalPhaseInYears, 1, 30, 'capital phase-in')
+  if (policy.assumptions.socialSecurityCOLACapProtectedBenefit2026 !== null)
+    within(policy.assumptions.socialSecurityCOLACapProtectedBenefit2026, 1000, 200000, 'Social Security COLA protected benefit')
   if (policy.assumptions.socialSecurityBenefitCap2026 !== null)
     within(policy.assumptions.socialSecurityBenefitCap2026, 1000, 200000, 'Social Security cap')
   if (!Array.isArray(scenario.householdProfiles) || scenario.householdProfiles.length !== exampleHouseholds.length)
