@@ -4,6 +4,8 @@ export type EntitlementDesign = 'reform' | 'currentLaw'
 
 export type CurrentLawBaselineMode = 'scheduled' | 'payable'
 
+export type SocialSecurityInitialBenefitMode = 'currentLaw' | 'flatTransition' | 'progressivePriceIndexing'
+
 export type SocialSecurityCOLAMode = 'current' | 'chainedCpi' | 'cap' | 'custom'
 
 export type FundingStrategy =
@@ -18,8 +20,14 @@ export interface ModelAssumptions {
   reformYear: number
   endYear: number
   maxModeledAge: number
+  /** Initial-benefit formula used when Social Security policy changes are enabled. */
+  socialSecurityInitialBenefitMode: SocialSecurityInitialBenefitMode
   benefitPhaseInYears: number
   flatBenefitFPLMultiple: number
+  /** AIME percentile protected from progressive price indexing (0-1). */
+  socialSecurityPPIThresholdPercentile: number
+  /** First OASDI eligibility year subject to progressive price indexing. */
+  socialSecurityPPIStartYear: number
   individualFPL2026: number
   realFPLGrowth: number
   fullRetirementAge: number
@@ -27,8 +35,10 @@ export interface ModelAssumptions {
   socialSecurityBenefitCap2026: number | null
   /** Post-award COLA rule for the reformed OASI retired-worker stream. */
   socialSecurityCOLAMode: SocialSecurityCOLAMode
-  /** Maximum annual COLA when socialSecurityCOLAMode is 'cap'. */
+  /** Maximum annual percentage COLA when socialSecurityCOLAMode is 'cap'. */
   socialSecurityCOLACap: number
+  /** Optional CRFB-style dollar COLA cap, set from the selected PIA percentile. */
+  socialSecurityCOLADollarCapPercentile: number | null
   /** Additive annual percentage-point change from CPI when mode is 'custom'. */
   socialSecurityCOLAAdjustment: number
   /** Full-benefit credited years; shorter records receive proportional flat benefits. */
