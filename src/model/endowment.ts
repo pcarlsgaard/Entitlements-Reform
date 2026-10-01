@@ -39,58 +39,68 @@ export function calculateEndowmentPerPerson(
   const ssClaimYear =
     fundingYear + assumptions.socialSecurityClaimAge - fundingAge
   const ssInitialYear = Math.max(ssClaimYear, assumptions.reformYear)
-  const initialLegacyBenefit = legacySocialSecurityBenefitNominal(
-    ssBirthYear + 67,
-    ssInitialYear,
-    assumptions,
-    true,
-    ssClaimYear,
-    false,
-  ) * currentLawClaimFactor(assumptions.socialSecurityClaimAge)
-  const initialFlatBenefit = flatSocialSecurityBenefitNominal(
-    ssBirthYear,
-    ssClaimYear,
-    ssInitialYear,
-    assumptions,
-    true,
-    undefined,
-    false,
-  )
-  const initialBlendedBenefit =
-    ssLegacyShare * initialLegacyBenefit + ssFlatShare * initialFlatBenefit
-  let socialSecurityPV = 0
-  let medicarePV = 0
-
-  for (
-    let age = assumptions.socialSecurityClaimAge;
-    age <= assumptions.maxModeledAge;
-    age += 1
-  ) {
-    const paymentYear = fundingYear + age - fundingAge
-    const survival = projectedSurvival(fundingAge, age, ssBirthYear)
-    const discount =
-      (1 + assumptions.realEndowmentYield) ** (age - fundingAge)
-    const nominalFlatBenefitUncappedCOLA = flatSocialSecurityBenefitNominal(
+  const hasCOLADollarCap =
+    ssFlatShare > 0 &&
+    assumptions.socialSecurityCOLACapProtectedBenefit2026 !== null
+  let initialBlendedBenefit = 0
+  if (hasCOLADollarCap) {
+    const initialLegacyBenefit = legacySocialSecurityBenefitNominal(
+      ssBirthYear + 67,
+      ssInitialYear,
+      assumptions,
+      true,
+      ssClaimYear,
+      false,
+    ) * currentLawClaimFactor(assumptions.socialSecurityClaimAge)
+    const initialFlatBenefit = flatSocialSecurityBenefitNominal(
       ssBirthYear,
       ssClaimYear,
-      paymentYear,
+      ssInitialYear,
       assumptions,
       true,
       undefined,
       false,
     )
-    const colaCapScale = socialSecurityCombinedCOLACapScale(
-      initialBlendedBenefit,
-      ssInitialYear,
-      paymentYear,
-      assumptions,
-      true,
-    )
-    const realFlatBenefit =
-      nominalFlatBenefitUncappedCOLA * colaCapScale /
-      (1 + assumptions.inflation) ** (paymentYear - assumptions.reformYear)
-    socialSecurityPV +=
-      (survival * realFlatBenefit * ssFlatShare) / discount
+    initialBlendedBenefit =
+      ssLegacyShare * initialLegacyBenefit + ssFlatShare * initialFlatBenefit
+  }
+  let socialSecurityPV = 0
+  let medicarePV = 0
+
+  if (ssFlatShare > 0) {
+    for (
+      let age = assumptions.socialSecurityClaimAge;
+      age <= assumptions.maxModeledAge;
+      age += 1
+    ) {
+      const paymentYear = fundingYear + age - fundingAge
+      const survival = projectedSurvival(fundingAge, age, ssBirthYear)
+      const discount =
+        (1 + assumptions.realEndowmentYield) ** (age - fundingAge)
+      const nominalFlatBenefitUncappedCOLA = flatSocialSecurityBenefitNominal(
+        ssBirthYear,
+        ssClaimYear,
+        paymentYear,
+        assumptions,
+        true,
+        undefined,
+        false,
+      )
+      const colaCapScale = hasCOLADollarCap
+        ? socialSecurityCombinedCOLACapScale(
+            initialBlendedBenefit,
+            ssInitialYear,
+            paymentYear,
+            assumptions,
+            true,
+          )
+        : 1
+      const realFlatBenefit =
+        nominalFlatBenefitUncappedCOLA * colaCapScale /
+        (1 + assumptions.inflation) ** (paymentYear - assumptions.reformYear)
+      socialSecurityPV +=
+        (survival * realFlatBenefit * ssFlatShare) / discount
+    }
   }
 
   for (
