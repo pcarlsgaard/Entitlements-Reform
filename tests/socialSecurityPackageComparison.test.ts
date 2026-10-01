@@ -40,6 +40,8 @@ function flatScenario(label: string, fplMultiple: number, phaseInYears: number):
         socialSecurityCOLAMode: 'current',
         socialSecurityDollarCOLACapPercentile: null,
         socialSecurityBenefitCap2026: null,
+        fullRetirementAge: 67,
+        socialSecurityClaimAge: 67,
       },
     },
   }
@@ -55,7 +57,7 @@ function ppi(protectedPercentile: 0.50 | 0.75): CombinedPolicy {
       fundingStrategy: 'paygo',
       socialSecurityInitialBenefitMode: 'progressivePriceIndexing',
       socialSecurityPPIProtectedPercentile: protectedPercentile,
-      socialSecurityReformFRA: 68,
+      socialSecurityReformFRA: 67,
       socialSecurityClaimAge: 67,
       socialSecurityCOLAMode: 'chainedCpi',
       socialSecurityDollarCOLACapPercentile: 0.75,
@@ -112,10 +114,10 @@ describe('Social Security package comparison report', () => {
     const report = [
       summarize('Current law', currentLaw),
       ...flatScenarios.map(item => summarize(item.label, item.policy)),
-      summarize('PPI50 + FRA68 + chained CPI + 75th dollar COLA cap', ppi(0.50)),
-      summarize('PPI75 + FRA68 + chained CPI + 75th dollar COLA cap', ppi(0.75)),
+      summarize('PPI50 + chained CPI + 75th dollar COLA cap', ppi(0.50)),
+      summarize('PPI75 + chained CPI + 75th dollar COLA cap', ppi(0.75)),
     ]
     console.log('SS_PACKAGE_COMPARISON=' + JSON.stringify(report))
-    expect(report).toHaveLength(4)
+    expect(report).toHaveLength(10)
   }, 30_000)
 })
