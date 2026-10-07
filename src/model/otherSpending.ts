@@ -1,5 +1,6 @@
 import { defaultAssumptions } from './defaults'
 import { nominalGDPBillionsForYear } from './budget'
+import type { ModelAssumptions } from './types'
 
 export type DiscretionaryPolicyMode =
   | 'currentLaw'
@@ -119,6 +120,16 @@ export function discretionaryNominalGrowth(
   customGrowth: number,
 ): number | null {
   return mode === 'customNominal' ? customGrowth : null
+}
+
+export function discretionaryPolicyBillions(
+  year: number,
+  startingGDPShare: number,
+  nominalGrowth: number,
+  assumptions: ModelAssumptions,
+): number {
+  const startingBillions = startingGDPShare * assumptions.startingNominalGDPBillions
+  return startingBillions * (1 + nominalGrowth) ** (year - assumptions.reformYear)
 }
 
 /**
