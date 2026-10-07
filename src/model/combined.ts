@@ -12,7 +12,16 @@ import type { TransferReplacementSettings } from '../tax/model/types'
 import type { HouseholdInput, ReformSettings } from '../tax/model/types'
 import { currentLawRetirementAge, defaultAssumptions } from './defaults'
 import { simulate } from './simulate'
-import type { BenefitPolicySelection } from './simulate'
+import type { BenefitPolicySelection, FiscalBridge } from './simulate'
+import {
+  defaultOtherSpendingPolicy,
+  discretionaryNominalGrowth,
+  discretionaryPolicySavingsGDP,
+  otherMandatoryPolicySavingsGDP,
+  targetedReferenceScoreBillions,
+  totalReferenceScoreBillions,
+} from './otherSpending'
+import type { OtherSpendingPolicy } from './otherSpending'
 import type { CurrentLawBaselineMode, ModelAssumptions, SimulationResult } from './types'
 
 export interface CombinedPolicy {
@@ -21,6 +30,8 @@ export interface CombinedPolicy {
   health: HealthPolicySettings
   transfers: TransferReplacementSettings
   benefits: BenefitPolicySelection
+  spendingEnabled: boolean
+  otherSpending: OtherSpendingPolicy
   assumptions: ModelAssumptions
   baselineMode: CurrentLawBaselineMode
   dynamic: {
@@ -60,6 +71,8 @@ export const defaultCombinedPolicy: CombinedPolicy = {
   health: { ...defaultHealthPolicySettings, adultHealthCredit: 3000, childHealthCredit: 1500, replaceAcaAptc: true },
   transfers: defaultTransferReplacementSettings,
   benefits: { socialSecurityReform: false, medicareReform: false },
+  spendingEnabled: false,
+  otherSpending: { ...defaultOtherSpendingPolicy },
   // A zero debt-risk premium keeps the unsolved 70-year debt paths interpretable;
   // the entitlement solver's separate default still uses its 2 bp sensitivity.
   assumptions: { ...defaultAssumptions, fundingStrategy: 'paygo', endYear: 2095, debtSensitivity: 0 },
@@ -148,10 +161,43 @@ export function scoreCombined(policy: CombinedPolicy, taxIndexingMode: TaxIndexi
     (annualTaxDelta.get(year) ?? 0) - replacedRevenueDriftGDP(year, policy.tax) : 0
   const outlaySavingsGDP = policy.taxEnabled
     ? tax.totalFederalSavings / tax.gdp : 0
-  const fiscalBridge = {
+  const taxFiscalBridge: FiscalBridge = {
     savingsScaleForYear: (year: number) => 1 / realGDPPerCapitaGrowthFactor(year, assumptions),
     otherMandatorySavingsGDP: policy.taxEnabled ? (tax.refundableTaxCreditOutlaySavings + programSavingsBillions) / tax.gdp : 0,
     medicaidMarketplaceSavingsGDP: policy.taxEnabled ? health.estimatedExistingAptcSavingsBillions / tax.gdp : 0,
+  }
+  const defenseNominalGrowth = policy.spendingEnabled
+    ? discretionaryNominalGrowth(policy.otherSpending.defenseMode, policy.otherSpending.defenseCustomNominalGrowth)
+    : null
+  const nonDefenseNominalGrowth = policy.spendingEnabled
+    ? discretionaryNominalGrowth(policy.otherSpending.nonDefenseMode, policy.otherSpending.nonDefenseCustomNominalGrowth)
+    : null
+  const defenseSavingsForYear = policy.spendingEnabled &&
+    ['onePercentNominal', 'nominalFreeze'].includes(policy.otherSpending.defenseMode)
+      ? (year: number) => discretionaryPolicySavingsGDP(policy.otherSpending.defenseMode, 'defense', year)
+      : undefined
+  const nonDefenseSavingsForYear = policy.spendingEnabled &&
+    ['onePercentNominal', 'nominalFreeze'].includes(policy.otherSpending.nonDefenseMode)
+      ? (year: number) => discretionaryPolicySavingsGDP(policy.otherSpending.nonDefenseMode, 'nonDefense', year)
+      : undefined
+  const otherSpendingPolicySavingsGDP = policy.spendingEnabled
+    ? otherMandatoryPolicySavingsGDP(policy.otherSpending)
+    : 0
+  const spendingFiscalBridge: FiscalBridge = {
+    otherMandatorySavingsGDP: 0,
+    otherMandatoryPolicySavingsGDP: otherSpendingPolicySavingsGDP,
+    ...(defenseSavingsForYear ? { defenseDiscretionarySavingsGDPForYear: defenseSavingsForYear } : {}),
+    ...(nonDefenseSavingsForYear ? { nonDefenseDiscretionarySavingsGDPForYear: nonDefenseSavingsForYear } : {}),
+    ...(defenseNominalGrowth === null ? {} : { defenseDiscretionaryNominalGrowth: defenseNominalGrowth }),
+    ...(nonDefenseNominalGrowth === null ? {} : { nonDefenseDiscretionaryNominalGrowth: nonDefenseNominalGrowth }),
+  }
+  const combinedFiscalBridge: FiscalBridge = {
+    ...taxFiscalBridge,
+    otherMandatoryPolicySavingsGDP: spendingFiscalBridge.otherMandatoryPolicySavingsGDP,
+    defenseDiscretionarySavingsGDPForYear: spendingFiscalBridge.defenseDiscretionarySavingsGDPForYear,
+    nonDefenseDiscretionarySavingsGDPForYear: spendingFiscalBridge.nonDefenseDiscretionarySavingsGDPForYear,
+    defenseDiscretionaryNominalGrowth: spendingFiscalBridge.defenseDiscretionaryNominalGrowth,
+    nonDefenseDiscretionaryNominalGrowth: spendingFiscalBridge.nonDefenseDiscretionaryNominalGrowth,
   }
   const laborResponse = policy.taxEnabled && policy.dynamic.enabled
     ? calculateLaborResponse(policy.tax, policy.health.employerFicaPassThroughRate)
@@ -180,24 +226,30 @@ export function scoreCombined(policy: CombinedPolicy, taxIndexingMode: TaxIndexi
     comparatorAssumptions,
     (year) => currentLawRevenueGDP(year) + revenueDelta(year),
     {}, policy.baselineMode, undefined,
-    fiscalBridge, dynamicGDP,
+    taxFiscalBridge, dynamicGDP,
   )
   const benefitsOnly = simulate(assumptions, (year) => currentLawRevenueGDP(year), {}, policy.baselineMode, policy.benefits)
+  const spendingOnly = simulate(
+    comparatorAssumptions,
+    (year) => currentLawRevenueGDP(year),
+    {}, policy.baselineMode, undefined,
+    spendingFiscalBridge,
+  )
   const staticCombined = simulate(
     assumptions,
     (year) => currentLawRevenueGDP(year) + revenueDelta(year),
     {}, policy.baselineMode, policy.benefits,
-    fiscalBridge,
+    combinedFiscalBridge,
   )
   const combined = dynamicGDP ? simulate(
     assumptions,
     (year) => currentLawRevenueGDP(year) + revenueDelta(year),
-    {}, policy.baselineMode, policy.benefits, fiscalBridge, dynamicGDP,
+    {}, policy.baselineMode, policy.benefits, combinedFiscalBridge, dynamicGDP,
   ) : staticCombined
   const goal = (extraRevenueGDP: number) => simulate(
     assumptions,
     (year) => currentLawRevenueGDP(year) + revenueDelta(year) + extraRevenueGDP,
-    {}, policy.baselineMode, policy.benefits, fiscalBridge, dynamicGDP,
+    {}, policy.baselineMode, policy.benefits, combinedFiscalBridge, dynamicGDP,
   )
   // Minimum permanent fiscal adjustment that satisfies both debt constraints.
   // This is an equivalent revenue rate; spending cuts could supply the same amount.
@@ -221,6 +273,7 @@ export function scoreCombined(policy: CombinedPolicy, taxIndexingMode: TaxIndexi
     baseline,
     taxOnly,
     benefitsOnly,
+    spendingOnly,
     combined,
     staticCombined,
     laborResponse,
@@ -234,9 +287,16 @@ export function scoreCombined(policy: CombinedPolicy, taxIndexingMode: TaxIndexi
     netTaxRevenueChangeGDP,
     annualTaxDelta,
     outlaySavingsGDP,
+    otherSpendingPolicySavingsGDP,
+    targetedOtherSpendingReferenceScoreBillions: policy.spendingEnabled
+      ? targetedReferenceScoreBillions(policy.otherSpending)
+      : 0,
+    totalOtherSpendingReferenceScoreBillions: policy.spendingEnabled
+      ? totalReferenceScoreBillions(policy.otherSpending)
+      : 0,
     household,
     combinedOpeningRevenueGDP: cbo2026RevenueGDP + netTaxRevenueChangeGDP,
-    openingFiscalImprovementGDP: netTaxRevenueChangeGDP + outlaySavingsGDP,
+    openingFiscalImprovementGDP: netTaxRevenueChangeGDP + outlaySavingsGDP + otherSpendingPolicySavingsGDP,
     additionalFiscalAdjustmentGDP,
   }
 }

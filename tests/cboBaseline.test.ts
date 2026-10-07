@@ -33,6 +33,21 @@ describe('CBO February 2026 baseline calibration', () => {
     expect(cboPrimarySpendingGDP(2026)).toBeCloseTo(0.2009197, 10)
   })
 
+  it('uses the CBO NDD share path by default and derives the post-2036 split from total discretionary spending', () => {
+    expect(defaultAssumptions.nonDefenseDiscretionaryMode).toBe('cbo')
+    expect(cboNondefenseDiscretionaryGDP(2036)).toBeCloseTo(0.02449, 10)
+    expect(cboDiscretionaryGDP(2040)).toBeCloseTo(0.04641, 10)
+    const defenseShare2036 = cboDefenseDiscretionaryGDP(2036) / cboDiscretionaryGDP(2036)
+    expect(cboNondefenseDiscretionaryGDP(2040)).toBeCloseTo(
+      cboDiscretionaryGDP(2040) * (1 - defenseShare2036),
+      10,
+    )
+    expect(cboNondefenseDiscretionaryGDP(2056)).toBeCloseTo(
+      cboNondefenseDiscretionaryGDP(2040),
+      10,
+    )
+  })
+
   it('keeps Social Security components separate while matching CBO total Social Security', () => {
     const row = simulateCurrentLawConstantRevenue(
       defaultAssumptions,

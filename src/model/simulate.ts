@@ -18,6 +18,8 @@ import {
 } from './debt'
 import { medicareForYear } from './medicare'
 import { socialSecurityForYear } from './socialSecurity'
+import { cboDefenseDiscretionaryGDP } from '../data/cboBaseline'
+import { discretionaryPolicyBillions } from './otherSpending'
 import type {
   AnnualFundingPlan,
   CurrentLawBaselineMode,
@@ -57,6 +59,16 @@ export interface FiscalBridge {
   savingsScaleForYear?: (year: number) => number
   otherMandatorySavingsGDP: number
   medicaidMarketplaceSavingsGDP?: number
+  /** Independent policy savings in other mandatory programs, held as a baseline-GDP share. */
+  otherMandatoryPolicySavingsGDP?: number
+  /** Optional CRFB-calibrated savings against baseline defense outlays, as a share of baseline GDP. */
+  defenseDiscretionarySavingsGDPForYear?: (year: number) => number
+  /** Optional CRFB-calibrated savings against baseline NDD outlays, as a share of baseline GDP. */
+  nonDefenseDiscretionarySavingsGDPForYear?: (year: number) => number
+  /** Undefined preserves the comparator spending path; otherwise this is custom annual nominal outlay growth. */
+  defenseDiscretionaryNominalGrowth?: number
+  /** Undefined preserves the comparator spending path; otherwise this is custom annual nominal outlay growth. */
+  nonDefenseDiscretionaryNominalGrowth?: number
 }
 
 export function primaryComponentSum(components: PrimaryComponents): number {
@@ -201,12 +213,34 @@ export function simulate(
         assumptions,
       ) - (fiscalBridge?.medicaidMarketplaceSavingsGDP ?? 0) * baselineNominalGDP * (fiscalBridge?.savingsScaleForYear?.(year) ?? 1),
       otherMandatory: otherMandatoryBillions(year, assumptions) -
-        (fiscalBridge?.otherMandatorySavingsGDP ?? 0) * baselineNominalGDP * (fiscalBridge?.savingsScaleForYear?.(year) ?? 1),
-      defenseDiscretionary: defenseDiscretionaryBillions(year, assumptions),
-      nonDefenseDiscretionary: nonDefenseDiscretionaryBillions(
-        year,
-        assumptions,
-      ),
+        (fiscalBridge?.otherMandatorySavingsGDP ?? 0) * baselineNominalGDP * (fiscalBridge?.savingsScaleForYear?.(year) ?? 1) -
+        (fiscalBridge?.otherMandatoryPolicySavingsGDP ?? 0) * baselineNominalGDP,
+      defenseDiscretionary:
+        fiscalBridge?.defenseDiscretionaryNominalGrowth !== undefined
+          ? discretionaryPolicyBillions(
+              year,
+              cboDefenseDiscretionaryGDP(assumptions.reformYear),
+              fiscalBridge.defenseDiscretionaryNominalGrowth,
+              assumptions,
+            )
+          : Math.max(
+              0,
+              defenseDiscretionaryBillions(year, assumptions) -
+                (fiscalBridge?.defenseDiscretionarySavingsGDPForYear?.(year) ?? 0) * baselineNominalGDP,
+            ),
+      nonDefenseDiscretionary:
+        fiscalBridge?.nonDefenseDiscretionaryNominalGrowth !== undefined
+          ? discretionaryPolicyBillions(
+              year,
+              assumptions.nonDefenseDiscretionaryGDP2026,
+              fiscalBridge.nonDefenseDiscretionaryNominalGrowth,
+              assumptions,
+            )
+          : Math.max(
+              0,
+              nonDefenseDiscretionaryBillions(year, assumptions) -
+                (fiscalBridge?.nonDefenseDiscretionarySavingsGDPForYear?.(year) ?? 0) * baselineNominalGDP,
+            ),
       newCohortPrefunding: funding.totalPrefunding,
     }
     const totalPrimarySpending = primaryComponentSum(components)

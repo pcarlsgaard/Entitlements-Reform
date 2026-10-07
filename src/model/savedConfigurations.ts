@@ -6,6 +6,7 @@ import { exampleHouseholds } from './householdScenario'
 import type { ExampleHousehold } from './householdScenario'
 import { transferProgramIds } from '../tax/model/transfers'
 import { SSA_TRUSTEES_LONG_RUN_REAL_COVERED_WAGE_GROWTH } from '../data/trustees2026'
+import { defaultOtherSpendingPolicy } from './otherSpending'
 
 export const configurationStorageKey = 'entitlements-reform.configurations.v1'
 
@@ -68,6 +69,11 @@ export function parseConfiguration(json: string): SavedConfiguration {
   const scenario = raw.scenario
   // Additive v1 migration: preserve existing choices; new GDP-pool generosity
   // matches the saved 2026 per-person grant. The original JSON remains untouched.
+  if (record(scenario.policy)) {
+    if (scenario.policy.spendingEnabled === undefined) scenario.policy.spendingEnabled = false
+    if (scenario.policy.otherSpending === undefined)
+      scenario.policy.otherSpending = structuredClone(defaultOtherSpendingPolicy)
+  }
   if (record(scenario.policy) && record(scenario.policy.assumptions)) {
     const a = scenario.policy.assumptions
     const lackedAnyWageControl = a.realWageGrowth === undefined && a.realWageGrowthDeviation === undefined
@@ -125,6 +131,11 @@ export function parseConfiguration(json: string): SavedConfiguration {
   oneOf(policy.assumptions.socialSecurityInitialBenefitMode, ['current', 'flatTransition', 'progressivePriceIndexing'], 'Social Security initial benefit formula')
   oneOf(policy.assumptions.socialSecurityCOLAMode, ['current', 'chainedCpi', 'cap', 'custom'], 'Social Security COLA rule')
   oneOf(policy.assumptions.nonDefenseDiscretionaryMode, ['cbo', 'growth'], 'NDD rule')
+  oneOf(policy.otherSpending.defenseMode, ['currentLaw', 'onePercentNominal', 'nominalFreeze', 'customNominal'], 'defense spending rule')
+  oneOf(policy.otherSpending.nonDefenseMode, ['currentLaw', 'onePercentNominal', 'nominalFreeze', 'customNominal'], 'nondefense spending rule')
+  oneOf(policy.otherSpending.farmSubsidyPolicy, ['currentLaw', 'reverse2025Expansion', 'eliminateAll'], 'farm subsidy rule')
+  within(policy.otherSpending.defenseCustomNominalGrowth, -0.10, 0.15, 'custom defense nominal growth')
+  within(policy.otherSpending.nonDefenseCustomNominalGrowth, -0.10, 0.15, 'custom nondefense nominal growth')
   for (const key of ['fullRetirementAge', 'socialSecurityReformFRA', 'socialSecurityClaimAge', 'medicareEligibilityAge', 'medicareYearA', 'medicareYearB'] as const)
     if (!Number.isInteger(policy.assumptions[key])) throw new Error(`${key} requires whole years.`)
   within(policy.assumptions.socialSecurityClaimAge, 62, 80, 'claim age')
