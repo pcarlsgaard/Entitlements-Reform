@@ -196,7 +196,7 @@ export const sources: readonly SourceRecord[] = [
     publicationDate: '2026',
     relevantTable: 'Farm subsidies and federal-worker retirement options',
     url: 'https://www.crfb.org/debtfixer',
-    notes: 'Reference scores used by the other-spending module: defense appropriations growth limited to 1 percent saves about $680 billion through 2036 and a defense freeze about $1.15 trillion; the comparable nondefense figures are about $540 billion and $940 billion. Reversing the 2025 farm-subsidy expansion saves about $100 billion, eliminating federal farm subsidies about $410 billion, and reducing federal-worker retirement benefits about $190 billion. CRFB does not provide the simulator's post-2036 extrapolations.',
+    notes: 'Reference scores used by the other-spending module: defense appropriations growth limited to 1 percent saves about $680 billion through 2036 and a defense freeze about $1.15 trillion; the comparable nondefense figures are about $540 billion and $940 billion. Reversing the 2025 farm-subsidy expansion saves about $100 billion, eliminating federal farm subsidies about $410 billion, and reducing federal-worker retirement benefits about $190 billion. CRFB does not provide the simulator’s post-2036 extrapolations.',
   },
   {
     id: 'crfb-appropriations-2026',
