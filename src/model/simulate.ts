@@ -18,10 +18,7 @@ import {
 } from './debt'
 import { medicareForYear } from './medicare'
 import { socialSecurityForYear } from './socialSecurity'
-import {
-  cboDefenseDiscretionaryGDP,
-  cboNondefenseDiscretionaryGDP,
-} from '../data/cboBaseline'
+import { cboDefenseDiscretionaryGDP } from '../data/cboBaseline'
 import { discretionaryPolicyBillions } from './otherSpending'
 import type {
   AnnualFundingPlan,
