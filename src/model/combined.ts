@@ -16,8 +16,10 @@ import type { BenefitPolicySelection, FiscalBridge } from './simulate'
 import {
   defaultOtherSpendingPolicy,
   discretionaryNominalGrowth,
+  discretionaryPolicySavingsGDP,
   otherMandatoryPolicySavingsGDP,
   targetedReferenceScoreBillions,
+  totalReferenceScoreBillions,
 } from './otherSpending'
 import type { OtherSpendingPolicy } from './otherSpending'
 import type { CurrentLawBaselineMode, ModelAssumptions, SimulationResult } from './types'
@@ -170,18 +172,30 @@ export function scoreCombined(policy: CombinedPolicy, taxIndexingMode: TaxIndexi
   const nonDefenseNominalGrowth = policy.spendingEnabled
     ? discretionaryNominalGrowth(policy.otherSpending.nonDefenseMode, policy.otherSpending.nonDefenseCustomNominalGrowth)
     : null
+  const defenseSavingsForYear = policy.spendingEnabled &&
+    ['onePercentNominal', 'nominalFreeze'].includes(policy.otherSpending.defenseMode)
+      ? (year: number) => discretionaryPolicySavingsGDP(policy.otherSpending.defenseMode, 'defense', year)
+      : undefined
+  const nonDefenseSavingsForYear = policy.spendingEnabled &&
+    ['onePercentNominal', 'nominalFreeze'].includes(policy.otherSpending.nonDefenseMode)
+      ? (year: number) => discretionaryPolicySavingsGDP(policy.otherSpending.nonDefenseMode, 'nonDefense', year)
+      : undefined
   const otherSpendingPolicySavingsGDP = policy.spendingEnabled
     ? otherMandatoryPolicySavingsGDP(policy.otherSpending)
     : 0
   const spendingFiscalBridge: FiscalBridge = {
     otherMandatorySavingsGDP: 0,
     otherMandatoryPolicySavingsGDP: otherSpendingPolicySavingsGDP,
+    ...(defenseSavingsForYear ? { defenseDiscretionarySavingsGDPForYear: defenseSavingsForYear } : {}),
+    ...(nonDefenseSavingsForYear ? { nonDefenseDiscretionarySavingsGDPForYear: nonDefenseSavingsForYear } : {}),
     ...(defenseNominalGrowth === null ? {} : { defenseDiscretionaryNominalGrowth: defenseNominalGrowth }),
     ...(nonDefenseNominalGrowth === null ? {} : { nonDefenseDiscretionaryNominalGrowth: nonDefenseNominalGrowth }),
   }
   const combinedFiscalBridge: FiscalBridge = {
     ...taxFiscalBridge,
     otherMandatoryPolicySavingsGDP: spendingFiscalBridge.otherMandatoryPolicySavingsGDP,
+    defenseDiscretionarySavingsGDPForYear: spendingFiscalBridge.defenseDiscretionarySavingsGDPForYear,
+    nonDefenseDiscretionarySavingsGDPForYear: spendingFiscalBridge.nonDefenseDiscretionarySavingsGDPForYear,
     defenseDiscretionaryNominalGrowth: spendingFiscalBridge.defenseDiscretionaryNominalGrowth,
     nonDefenseDiscretionaryNominalGrowth: spendingFiscalBridge.nonDefenseDiscretionaryNominalGrowth,
   }
@@ -276,6 +290,9 @@ export function scoreCombined(policy: CombinedPolicy, taxIndexingMode: TaxIndexi
     otherSpendingPolicySavingsGDP,
     targetedOtherSpendingReferenceScoreBillions: policy.spendingEnabled
       ? targetedReferenceScoreBillions(policy.otherSpending)
+      : 0,
+    totalOtherSpendingReferenceScoreBillions: policy.spendingEnabled
+      ? totalReferenceScoreBillions(policy.otherSpending)
       : 0,
     household,
     combinedOpeningRevenueGDP: cbo2026RevenueGDP + netTaxRevenueChangeGDP,
