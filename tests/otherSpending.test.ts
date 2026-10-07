@@ -2,6 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { defaultCombinedPolicy, scoreCombined } from '../src/model/combined'
 import { defaultOtherSpendingPolicy } from '../src/model/otherSpending'
 
+function primarySavingsThrough2036(result: ReturnType<typeof scoreCombined>): number {
+  return result.baseline.years
+    .filter(row => row.year <= 2036)
+    .reduce((sum, row, index) =>
+      sum + row.totalPrimarySpending - result.spendingOnly.years[index]!.totalPrimarySpending, 0)
+}
+
 describe('other spending policy module', () => {
   it('is neutral when the spending module is disabled', () => {
     const result = scoreCombined({ ...defaultCombinedPolicy, taxEnabled: false, spendingEnabled: false })
@@ -17,7 +24,7 @@ describe('other spending policy module', () => {
     }
   })
 
-  it('applies one-percent nominal defense and NDD caps from the 2026 baseline levels', () => {
+  it('reproduces the CRFB 1-percent defense and NDD scores through 2036', () => {
     const result = scoreCombined({
       ...defaultCombinedPolicy,
       taxEnabled: false,
@@ -28,19 +35,11 @@ describe('other spending policy module', () => {
         nonDefenseMode: 'onePercentNominal',
       },
     })
-    const base2026 = result.baseline.years[0]!
-    const policy2036 = result.spendingOnly.years.find(row => row.year === 2036)!
-    expect(policy2036.defenseDiscretionary).toBeCloseTo(
-      base2026.defenseDiscretionary * 1.01 ** 10,
-      8,
-    )
-    expect(policy2036.nonDefenseDiscretionary).toBeCloseTo(
-      base2026.nonDefenseDiscretionary * 1.01 ** 10,
-      8,
-    )
+    expect(result.totalOtherSpendingReferenceScoreBillions).toBe(1_220)
+    expect(primarySavingsThrough2036(result)).toBeCloseTo(1_220, 6)
   })
 
-  it('keeps nominal appropriations flat under the freeze option', () => {
+  it('reproduces the CRFB nominal-freeze defense and NDD scores through 2036', () => {
     const result = scoreCombined({
       ...defaultCombinedPolicy,
       taxEnabled: false,
@@ -51,10 +50,27 @@ describe('other spending policy module', () => {
         nonDefenseMode: 'nominalFreeze',
       },
     })
+    expect(result.totalOtherSpendingReferenceScoreBillions).toBe(2_090)
+    expect(primarySavingsThrough2036(result)).toBeCloseTo(2_090, 6)
+  })
+
+  it('keeps custom nominal outlay growth as a direct model primitive', () => {
+    const result = scoreCombined({
+      ...defaultCombinedPolicy,
+      taxEnabled: false,
+      spendingEnabled: true,
+      otherSpending: {
+        ...defaultOtherSpendingPolicy,
+        nonDefenseMode: 'customNominal',
+        nonDefenseCustomNominalGrowth: 0.01,
+      },
+    })
     const base2026 = result.baseline.years[0]!
     const policy2036 = result.spendingOnly.years.find(row => row.year === 2036)!
-    expect(policy2036.defenseDiscretionary).toBeCloseTo(base2026.defenseDiscretionary, 8)
-    expect(policy2036.nonDefenseDiscretionary).toBeCloseTo(base2026.nonDefenseDiscretionary, 8)
+    expect(policy2036.nonDefenseDiscretionary).toBeCloseTo(
+      base2026.nonDefenseDiscretionary * 1.01 ** 10,
+      8,
+    )
   })
 
   it('reproduces selected CRFB targeted scores through 2036 on the default GDP path', () => {
@@ -68,14 +84,9 @@ describe('other spending policy module', () => {
         federalRetirementReform: true,
       },
     })
-    const through2036 = result.baseline.years
-      .filter(row => row.year <= 2036)
-      .reduce((sum, row, index) => {
-        const policyRow = result.spendingOnly.years[index]!
-        return sum + row.totalPrimarySpending - policyRow.totalPrimarySpending
-      }, 0)
     expect(result.targetedOtherSpendingReferenceScoreBillions).toBe(600)
-    expect(through2036).toBeCloseTo(600, 6)
+    expect(result.totalOtherSpendingReferenceScoreBillions).toBe(600)
+    expect(primarySavingsThrough2036(result)).toBeCloseTo(600, 6)
   })
 
   it('keeps spending-only effects separate from tax-only and benefit-only paths', () => {
