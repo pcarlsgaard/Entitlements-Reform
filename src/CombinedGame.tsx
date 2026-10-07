@@ -16,11 +16,11 @@ import type { HealthPolicySettings } from './tax/model/health'
 import type { ModelAssumptions } from './model/types'
 import './combined.css'
 
-type Tab = 'economic' | 'tax' | 'entitlements' | 'households' | 'results'
+type Tab = 'economic' | 'tax' | 'entitlements' | 'spending' | 'households' | 'results'
 const tabs: { id: Tab; label: string }[] = [
   { id: 'economic', label: 'Economic assumptions' }, { id: 'tax', label: 'Tax reform' },
-  { id: 'entitlements', label: 'Entitlement reform' }, { id: 'households', label: 'Households' },
-  { id: 'results', label: 'Detailed results' },
+  { id: 'entitlements', label: 'Entitlement reform' }, { id: 'spending', label: 'Other spending' },
+  { id: 'households', label: 'Households' }, { id: 'results', label: 'Detailed results' },
 ]
 const pct = (n: number, digits = 1) => Number.isFinite(n) && Math.abs(n) < 100 ? `${(n * 100).toFixed(digits)}%` : '>10,000%'
 const pp = (n: number) => !Number.isFinite(n) ? 'unstable' : `${n >= 0 ? '+' : '−'}${Math.abs(n * 100).toFixed(2)} pp`
@@ -75,6 +75,8 @@ export default function CombinedGame() {
   const setA = (patch: Partial<ModelAssumptions>) => setPolicy(p => ({ ...p, assumptions: { ...p.assumptions, ...patch } }))
   const setDynamic = (patch: Partial<CombinedPolicy['dynamic']>) => setPolicy(p => ({ ...p, dynamic: { ...p.dynamic, ...patch } }))
   const setBenefits = (patch: Partial<CombinedPolicy['benefits']>) => setPolicy(p => ({ ...p, benefits: { ...p.benefits, ...patch } }))
+  const setOtherSpending = (patch: Partial<CombinedPolicy['otherSpending']>) =>
+    setPolicy(p => ({ ...p, otherSpending: { ...p.otherSpending, ...patch } }))
   const applySSPackage = (protectedPercentile: 0.50 | 0.75) => setPolicy(p => ({
     ...p,
     benefits: { ...p.benefits, socialSecurityReform: true },
@@ -97,7 +99,7 @@ export default function CombinedGame() {
     setHouseholdYear(Math.min(scenario.householdYear, lastHouseholdYear(selected, scenario.policy)))
     setHouseholdSelectedId(scenario.householdSelectedId)
   }
-  const a = policy.assumptions, t = policy.tax, h = policy.health
+  const a = policy.assumptions, t = policy.tax, h = policy.health, s = policy.otherSpending
   const numA = (key: keyof ModelAssumptions, label: string, multiplier = 1, min = 0, max?: number, step = 0.1, suffix?: string, note?: string) =>
     <NumberField key={key} label={label} value={Math.round(Number(a[key]) * multiplier * 1000) / 1000} onChange={n => setA({ [key]: n / multiplier })} min={min} max={max} step={step} suffix={suffix} note={note} />
   const numT = (key: keyof ReformSettings, label: string, multiplier = 1, min = 0, max?: number, step = 1, suffix?: string) =>
@@ -123,13 +125,19 @@ export default function CombinedGame() {
   const taxBillionsGDP = (billions: number, sign: ''|'+'|'−' = '') =>
     `${sign}${Math.abs(billions).toFixed(0)}B · ${pct(Math.abs(billions) / score.tax.gdp, 2)} GDP`
   const dynamicReady = deferred.dynamic.enabled && deferred.taxEnabled
+  const spendingDecadePrimarySavings = score.baseline.years.slice(0, 10).reduce(
+    (sum, row, index) => sum + row.totalPrimarySpending - score.spendingOnly.years[index]!.totalPrimarySpending,
+    0,
+  )
+  const spending2036 = score.spendingOnly.years.find(row => row.year === 2036)!
+  const baseline2036 = score.baseline.years.find(row => row.year === 2036)!
   const staticDecadeDeficit = score.staticCombined.years.slice(0, 10).reduce((sum, row) => sum + row.overallDeficit, 0)
   const dynamicDecadeDeficit = score.combined.years.slice(0, 10).reduce((sum, row) => sum + row.overallDeficit, 0)
   const sampled = score.combined.years.filter(row => row.year === 2026 || row.year % 5 === 0 || row.year === 2056 || row.year === 2095)
   const graph = sampled.map(row => {
-    const index = row.year - a.reformYear, b = score.baseline.years[index]!, tx = score.taxOnly.years[index]!, en = score.benefitsOnly.years[index]!
+    const index = row.year - a.reformYear, b = score.baseline.years[index]!, tx = score.taxOnly.years[index]!, en = score.benefitsOnly.years[index]!, sp = score.spendingOnly.years[index]!
     const gdp = row.nominalGDP
-    return { year: row.year, ...(showCBO && row.year <= 2056 ? { 'Official CBO': cboOfficial.rows.find(c => c.year === row.year)!.lt_debt_held_by_public_gdp_share } : {}), 'Current law': safe(b.endingDebtGDP), 'Tax only': safe(tx.endingDebtGDP), 'Benefits only': safe(en.endingDebtGDP), 'Combined': safe(row.endingDebtGDP),
+    return { year: row.year, ...(showCBO && row.year <= 2056 ? { 'Official CBO': cboOfficial.rows.find(c => c.year === row.year)!.lt_debt_held_by_public_gdp_share } : {}), 'Current law': safe(b.endingDebtGDP), 'Tax only': safe(tx.endingDebtGDP), 'Benefits only': safe(en.endingDebtGDP), 'Spending only': safe(sp.endingDebtGDP), 'Combined': safe(row.endingDebtGDP),
       Receipts: row.revenue / gdp * 100, 'Primary spending': row.totalPrimarySpending / gdp * 100, Interest: row.netInterest / gdp * 100,
       'Social Security': (row.legacySocialSecurity + row.flatSocialSecurityPaygo + row.otherOASDI) / gdp * 100,
       Medicare: (row.legacySeniorMedicare + row.premiumSupportPaygo + row.under65Medicare) / gdp * 100,
@@ -147,9 +155,10 @@ export default function CombinedGame() {
       'Scored deficit': row.overallDeficit / gdp * 100,
     }
   })
-  const baselinePreset = (choice: 'baseline'|'tax'|'benefits'|'both') => setPolicy(p => ({ ...p,
-    taxEnabled: choice === 'tax' || choice === 'both',
-    benefits: { socialSecurityReform: choice === 'benefits' || choice === 'both', medicareReform: choice === 'benefits' || choice === 'both' },
+  const baselinePreset = (choice: 'baseline'|'tax'|'benefits'|'spending'|'all') => setPolicy(p => ({ ...p,
+    taxEnabled: choice === 'tax' || choice === 'all',
+    spendingEnabled: choice === 'spending' || choice === 'all',
+    benefits: { socialSecurityReform: choice === 'benefits' || choice === 'all', medicareReform: choice === 'benefits' || choice === 'all' },
   }))
   const fundingAllowed = policy.benefits.socialSecurityReform && policy.benefits.medicareReform && a.socialSecurityInitialBenefitMode === 'flatTransition' && a.socialSecurityBenefitCap2026 === null
 
@@ -159,12 +168,12 @@ export default function CombinedGame() {
     <main className="game-main"><div className="game-title"><div><h1>Design a fiscal scenario</h1><p>Set assumptions and policy, then compare the decade and the 70-year path against the same current-law economy.</p></div><button className="game-reset" onClick={() => setPolicy(defaultCombinedPolicy)}>Reset scenario</button></div>
       <SavedConfigurationsPanel scenario={{ policy, householdProfiles, householdYear, householdSelectedId }} onLoad={loadScenario} />
       <nav className="game-tabs" aria-label="Simulator tabs">{tabs.map(item => <button key={item.id} className={tab === item.id ? 'active' : ''} aria-current={tab === item.id ? 'page' : undefined} onClick={() => setTab(item.id)}>{item.label}</button>)}</nav>
-      <div className="game-presets" aria-label="Scenario presets"><span>Quick scenarios</span>{(['baseline','tax','benefits','both'] as const).map((choice, i) => <button key={choice} onClick={() => baselinePreset(choice)}>{['Current law', 'Tax only', 'Benefits only', 'Both reforms'][i]}</button>)}</div>
+      <div className="game-presets" aria-label="Scenario presets"><span>Quick scenarios</span>{(['baseline','tax','benefits','spending','all'] as const).map((choice, i) => <button key={choice} onClick={() => baselinePreset(choice)}>{['Current law', 'Tax only', 'Benefits only', 'Spending only', 'All reforms'][i]}</button>)}</div>
       {tab === 'economic' && <div className="game-two-col">
         <section className="game-card"><h2>Growth and demographics</h2><p>Economic paths apply to both the scenario and its current-law comparator. Move a lever to see its full fiscal effect.</p>
           {numA('realGDPGrowth','Real GDP growth',100,-2,6,.1,'%')}{numA('realWageGrowthDeviation','Real wage growth deviation',100,-3,3,.1,'pp', 'Adds this many percentage points to each year of the 2026 SSA Trustees intermediate real covered-wage path. Zero uses the Trustees path directly.')}{numA('inflation','Inflation',100,0,8,.1,'%')}{numA('cohortSizeGrowth','Population growth adjustment',100,-2,4,.1,'%', '0.2% reproduces SSA central population; deviations shift its annual growth. Survival uses SSA projected age-specific mortality.')}
           {numA('currentLawSSBenefitRealGrowth','Real growth of new legacy SS awards',100,-1,5,.1,'%', 'Sensitivity around the official current-law spending calibration; 1.14% is the Trustees long-run real covered-wage assumption.')}{numA('legacyMedicareRealGrowth','Real Medicare benefit growth',100,-2,8,.1,'%', 'Per enrollee, above inflation. A sensitivity around the CBO/Trustees-calibrated current-law path.')}
-          <Select label="Nondefense spending path" value={a.nonDefenseDiscretionaryMode} options={[{value:'cbo',label:'CBO shares'},{value:'growth',label:'Own real growth'}]} onChange={v=>setA({nonDefenseDiscretionaryMode:v as ModelAssumptions['nonDefenseDiscretionaryMode']})} />{a.nonDefenseDiscretionaryMode === 'growth' && numA('nonDefenseDiscretionaryRealGrowth','Real nondefense discretionary growth',100,-2,8,.1,'%')}</section>
+          <Select label="Comparator NDD baseline" value={a.nonDefenseDiscretionaryMode} options={[{value:'cbo',label:'CBO published/derived shares'},{value:'growth',label:'Own real growth'}]} onChange={v=>setA({nonDefenseDiscretionaryMode:v as ModelAssumptions['nonDefenseDiscretionaryMode']})} />{a.nonDefenseDiscretionaryMode === 'growth' && numA('nonDefenseDiscretionaryRealGrowth','Real nondefense discretionary growth',100,-2,8,.1,'%')}<small>This is an economic baseline assumption applied to both the scenario and comparator, so it is not scored as a spending reform. The Other spending tab applies policy caps only to the reform scenario.</small></section>
         <div className="game-column"><section className="game-card"><h2>Interest and debt</h2>
           {numA('baselineRealMarketRate','Real market interest rate',100,0,10,.1,'%')}{numA('debtSensitivity','Debt premium sensitivity',100,0,2,.1,'%')}{numA('debtRatePassThrough','Debt refinancing pass-through',100,0,100,1,'%')}
           {numA('policyHorizonDebtTargetGDP','2095 debt target',100,0,300,1,'% GDP')}{numA('debtPaydownSurplusCapGDP','Debt-paydown surplus cap',100,0,10,.1,'% GDP','Maximum annual overall surplus used to retire debt after the total deficit first closes. At 0%, the budget balances and GDP growth alone reduces debt/GDP.')}{numA('debtPaydownTargetGDP','Long-run debt paydown target',100,0,100,1,'% GDP','Debt-reduction surpluses stop at this ratio; thereafter receipts equal total outlays.')}{numA('peakDebtCeilingGDP','Peak debt ceiling',100,20,500,1,'% GDP')}</section>
@@ -268,12 +277,39 @@ export default function CombinedGame() {
           <fieldset disabled={!fundingAllowed}><Select label="Benefit financing" value={fundingAllowed?a.fundingStrategy:'paygo'} options={[{value:'paygo',label:'PAYGO'},{value:'socialSecurityOnly',label:'Prefund Social Security'},{value:'medicareOnly',label:'Prefund Medicare'},{value:'both',label:'Prefund both'},{value:'socialSecurityFirst',label:'Social Security first'},{value:'savingsFundedSequential',label:'Savings-funded sequence'}]} onChange={v=>setA({fundingStrategy:v as ModelAssumptions['fundingStrategy']})} />
           <Select label="Prefunding starts at age" value={String(a.prefundingStartAge)} options={[{value:'0',label:'Birth'},{value:'18',label:'18'}]} onChange={v=>setA({prefundingStartAge:Number(v) as 0|18})} />{numA('realEndowmentYield','Real endowment yield',100,0,12,.1,'%')}</fieldset><small>Financing strategies activate when both benefit reforms are enabled and the benefit cap is off. Otherwise PAYGO is used in the calculation.</small></section>
         <section className="game-card"><h2>Who is affected?</h2><p>Compare working families and retirees in a selected year. Edit wages, ages, children, benefit levels, and program participation to see how the current policy changes their annual resources.</p><button className="game-reset" onClick={() => setTab('households')}>Open household examples</button></section></div></div>}
+      {tab === 'spending' && <div className="game-two-col">
+        <div className="game-column">
+          <section className="game-card"><h2>Other federal spending</h2><Toggle label="Apply other-spending reforms" checked={policy.spendingEnabled} onChange={spendingEnabled => setPolicy(p => ({ ...p, spendingEnabled }))} note="Scored independently from the tax and old-age entitlement reforms." />
+            <fieldset disabled={!policy.spendingEnabled}>
+              <Select label="Defense appropriations path" value={s.defenseMode} options={[{value:'currentLaw',label:'Current-law / CBO path'},{value:'onePercentNominal',label:'Grow 1% nominal per year'},{value:'nominalFreeze',label:'Nominal freeze'},{value:'customNominal',label:'Custom nominal growth'}]} onChange={v=>setOtherSpending({defenseMode:v as CombinedPolicy['otherSpending']['defenseMode']})} />
+              {s.defenseMode === 'customNominal' && <NumberField label="Defense nominal growth" value={Math.round(s.defenseCustomNominalGrowth*1000)/10} min={-10} max={15} step={0.1} suffix="%" onChange={n=>setOtherSpending({defenseCustomNominalGrowth:n/100})} />}
+              <Select label="Nondefense appropriations path" value={s.nonDefenseMode} options={[{value:'currentLaw',label:'Current-law comparator path'},{value:'onePercentNominal',label:'Grow 1% nominal per year'},{value:'nominalFreeze',label:'Nominal freeze'},{value:'customNominal',label:'Custom nominal growth'}]} onChange={v=>setOtherSpending({nonDefenseMode:v as CombinedPolicy['otherSpending']['nonDefenseMode']})} />
+              {s.nonDefenseMode === 'customNominal' && <NumberField label="Nondefense nominal growth" value={Math.round(s.nonDefenseCustomNominalGrowth*1000)/10} min={-10} max={15} step={0.1} suffix="%" onChange={n=>setOtherSpending({nonDefenseCustomNominalGrowth:n/100})} />}
+            </fieldset>
+            <small>Appropriations caps start from the 2026 CBO component level and then follow the selected nominal growth rule. Detailed workforce, force-structure, procurement, and agency choices are treated as ways to live within the cap rather than additive savings, avoiding double counting.</small></section>
+          <section className="game-card"><h2>Targeted mandatory programs</h2><fieldset disabled={!policy.spendingEnabled}>
+            <Select label="Farm subsidies" value={s.farmSubsidyPolicy} options={[{value:'currentLaw',label:'Current law'},{value:'reverse2025Expansion',label:'Reverse 2025 expansion'},{value:'eliminateAll',label:'Eliminate federal farm subsidies'}]} onChange={v=>setOtherSpending({farmSubsidyPolicy:v as CombinedPolicy['otherSpending']['farmSubsidyPolicy']})} />
+            <Toggle label="Reduce federal-worker retirement benefits" checked={s.federalRetirementReform} onChange={federalRetirementReform=>setOtherSpending({federalRetirementReform})} />
+          </fieldset>
+          <small>CRFB's current Debt Fixer scores these targeted policies through 2036. The simulator converts the selected score to a constant share of baseline GDP that reproduces the reference score under the default GDP path, then holds that share after 2036. That long-run extension is a model assumption, not a CRFB score.</small></section>
+        </div>
+        <div className="game-column">
+          <section className="game-card"><h2>Independent spending score</h2><dl className="game-ledger">
+            <div><dt>2026–2035 primary savings</dt><dd>{dollars(spendingDecadePrimarySavings)}</dd></div>
+            <div><dt>Selected CRFB targeted score through 2036</dt><dd>{score.targetedOtherSpendingReferenceScoreBillions ? `+$${score.targetedOtherSpendingReferenceScoreBillions.toFixed(0)}B` : '—'}</dd></div>
+            <div><dt>2036 defense · baseline → policy</dt><dd>{pct(baseline2036.defenseDiscretionary/baseline2036.nominalGDP,2)} → {pct(spending2036.defenseDiscretionary/spending2036.nominalGDP,2)}</dd></div>
+            <div><dt>2036 NDD · baseline → policy</dt><dd>{pct(baseline2036.nonDefenseDiscretionary/baseline2036.nominalGDP,2)} → {pct(spending2036.nonDefenseDiscretionary/spending2036.nominalGDP,2)}</dd></div>
+            <div className="game-total"><dt>2036 total discretionary</dt><dd>{pct((spending2036.defenseDiscretionary+spending2036.nonDefenseDiscretionary)/spending2036.nominalGDP,2)}</dd></div>
+          </dl></section>
+          <section className="game-card"><h2>How to read the caps</h2><p>The broad defense and nondefense rules determine the scored appropriations envelope. Specific CRFB options such as civilian attrition, federal pay changes, military end-strength reductions, or weapons cancellations are not stacked on top; they are examples of policy choices that could achieve a lower envelope.</p><p>Farm subsidies and federal retirement benefits are scored separately because they are classified outside the discretionary appropriations envelope in this model.</p><p><a href="https://www.crfb.org/debtfixer" target="_blank" rel="noreferrer">CRFB Debt Fixer</a> provides the reference targeted-policy scores.</p></section>
+        </div>
+      </div>}
       {tab === 'households' && <HouseholdsTab policy={deferred} score={score} year={householdYear} setYear={setHouseholdYear}
         profiles={householdProfiles} setProfiles={setHouseholdProfiles} selectedId={householdSelectedId} setSelectedId={setHouseholdSelectedId} />}
       {tab === 'results' && <div className="game-results"><div className="game-score-grid"><article className="game-card game-score"><span>2026–2035 budget improvement</span><strong className={decade.fiscalImprovementBillions>=0?'good':'bad'}>{dollars(decade.fiscalImprovementBillions)}</strong><small>Nominal sum versus current law</small></article><article className="game-card game-score"><span>2035 debt / GDP</span><strong>{ratio(decade.terminalDebtGDP)}</strong><small>Current law {ratio(decade.baselineTerminalDebtGDP)}</small></article><article className="game-card game-score"><span>2095 debt / GDP</span><strong>{ratio(horizon.terminalDebtGDP)}</strong><small>Current law {ratio(horizon.baselineTerminalDebtGDP)}</small></article><article className="game-card game-score"><span>70-year budget improvement</span><strong>{pp(horizon.fiscalImprovementGDP)}</strong><small>GDP-weighted annual average, includes interest</small></article></div>
         <section className="game-card game-goal"><div><span>Debt challenge · {pct(a.policyHorizonDebtTargetGDP,0)} in 2095 and peak under {pct(a.peakDebtCeilingGDP,0)}</span><strong>{!Number.isFinite(score.additionalFiscalAdjustmentGDP) ? 'Debt goal outside the modeled adjustment range' : score.additionalFiscalAdjustmentGDP>0.00001?`${pp(score.additionalFiscalAdjustmentGDP)} GDP more annual fiscal adjustment needed`:`Goal met · ${pp(-score.additionalFiscalAdjustmentGDP)} GDP headroom`}</strong></div><small>Equivalent permanent revenue or spending adjustment from 2026.</small></section>
         {dynamicReady && <section className="game-card game-goal"><div><span>Dynamic feedback · CPS-weighted labor + illustrative capital response</span><strong>GDP level {pct(score.steadyGDPLevelChange+score.steadyCapitalGDPLevelChange,2)} · 10-year deficit feedback {dollars(staticDecadeDeficit-dynamicDecadeDeficit)}</strong></div><small>Labor {pct(score.steadyGDPLevelChange,2)} + capital {pct(score.steadyCapitalGDPLevelChange,2)} versus static. Program spending stays on its baseline dollar path; receipts follow the changed GDP.</small></section>}
-        <Toggle label="Show official CBO reference (2026–2056)" checked={showCBO} onChange={setShowCBO} note="February 2026 published debt path, with CBO's own economic assumptions. It is independent of these controls and is not extrapolated to 2095." /><div className="game-plots"><Chart title="Debt / GDP" note={dynamicReady ? 'Static combined is shown for comparison with the scored dynamic path.' : 'Four policy combinations against a common economic path.'} data={graph} lines={[...(showCBO ? [{key:'Official CBO',color:'#8a4dab'}] : []),{key:'Current law',color:'#8292a6'},{key:'Tax only',color:'#477fb8'},{key:'Benefits only',color:'#c58a3d'},...(dynamicReady ? [{key:'Static combined',color:'#96a7a0'}] : []),{key:'Combined',color:'#168565'}]} />
+        <Toggle label="Show official CBO reference (2026–2056)" checked={showCBO} onChange={setShowCBO} note="February 2026 published debt path, with CBO's own economic assumptions. It is independent of these controls and is not extrapolated to 2095." /><div className="game-plots"><Chart title="Debt / GDP" note={dynamicReady ? 'Static combined is shown for comparison with the scored dynamic path.' : 'Tax, benefit, and other-spending reforms are shown independently against a common economic path.'} data={graph} lines={[...(showCBO ? [{key:'Official CBO',color:'#8a4dab'}] : []),{key:'Current law',color:'#8292a6'},{key:'Tax only',color:'#477fb8'},{key:'Benefits only',color:'#c58a3d'},{key:'Spending only',color:'#b06a8f'},...(dynamicReady ? [{key:'Static combined',color:'#96a7a0'}] : []),{key:'Combined',color:'#168565'}]} />
           {dynamicReady && <Chart title="GDP level effect" unit="Difference from static GDP" data={graph} lines={[{key:'GDP level effect',color:'#168565'}]} />}
           {dynamicReady && <Chart title="Deficit path" data={graph} lines={[{key:'Static deficit',color:'#96a7a0'},{key:'Scored deficit',color:'#168565'}]} />}
           <Chart title="Receipts and spending" data={graph} lines={[{key:'Receipts',color:'#168565'},{key:'Primary spending',color:'#c58a3d'},{key:'Interest',color:'#6678aa'}]} />
