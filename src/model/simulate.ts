@@ -228,7 +228,7 @@ export function simulate(
           ? nonDefenseDiscretionaryBillions(year, assumptions)
           : discretionaryPolicyBillions(
               year,
-              cboNondefenseDiscretionaryGDP(assumptions.reformYear),
+              assumptions.nonDefenseDiscretionaryGDP2026,
               fiscalBridge.nonDefenseDiscretionaryNominalGrowth,
               assumptions,
             ),
