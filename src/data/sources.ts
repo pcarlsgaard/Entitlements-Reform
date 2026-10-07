@@ -190,7 +190,7 @@ export const sources: readonly SourceRecord[] = [
   },
   {
     id: 'crfb-debt-fixer-2026-spending',
-    kind: 'policy score',
+    kind: 'policy assumption',
     agency: 'Committee for a Responsible Federal Budget',
     datasetOrReport: 'Debt Fixer — 2026 spending options',
     publicationDate: '2026',
@@ -200,7 +200,7 @@ export const sources: readonly SourceRecord[] = [
   },
   {
     id: 'crfb-appropriations-2026',
-    kind: 'policy design',
+    kind: 'modeling assumption',
     agency: 'Committee for a Responsible Federal Budget',
     datasetOrReport: 'Assessing FY 2026 Appropriations',
     publicationDate: '2026-01-15',
