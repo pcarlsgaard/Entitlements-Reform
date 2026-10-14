@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { reconciliationErrors } from '../src/model/audit'
 import {
+  currentLawSocialSecurityComparison,
   hiPayableShare,
   oasiPayableShare,
   seniorMedicarePayableShare,
@@ -15,6 +16,19 @@ describe('2026 Trustees payable-benefit paths', () => {
     expect(oasiPayableShare(2033)).toBe(0.78)
     expect(oasiPayableShare(2100)).toBe(0.62)
     expect(oasiPayableShare(2160)).toBe(0.62)
+  })
+
+  it('recovers scheduled and payable current-law OASI benefits from either selected comparison mode', () => {
+    for (const year of [2026, 2032, 2033, 2050, 2100]) {
+      const scheduled = 1000
+      const payable = scheduled * oasiPayableShare(year)
+      const fromScheduled = currentLawSocialSecurityComparison(year, scheduled, 'scheduled')
+      const fromPayable = currentLawSocialSecurityComparison(year, payable, 'payable')
+      expect(fromScheduled.scheduled).toBeCloseTo(scheduled, 10)
+      expect(fromScheduled.payable).toBeCloseTo(payable, 10)
+      expect(fromPayable.scheduled).toBeCloseTo(scheduled, 10)
+      expect(fromPayable.payable).toBeCloseTo(payable, 10)
+    }
   })
 
   it('uses the HI depletion, 2050, and 2100 endpoints', () => {

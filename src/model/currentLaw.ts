@@ -95,3 +95,18 @@ export function currentLawDeliveryShares(
     seniorMedicare: seniorMedicarePayableShare(year, assumptions),
   }
 }
+
+/**
+ * Restore both reference amounts from a simulated current-law OASI payment.
+ * The simulator's baseline is already multiplied by the payable share when
+ * mode === 'payable'. Both outputs use the same scheduled benefit formula.
+ */
+export function currentLawSocialSecurityComparison(
+  year: number,
+  baselineLegacyAmount: number,
+  mode: CurrentLawBaselineMode,
+): { scheduled: number; payable: number } {
+  const share = oasiPayableShare(year)
+  const scheduled = mode === 'payable' ? baselineLegacyAmount / share : baselineLegacyAmount
+  return { scheduled, payable: scheduled * share }
+}
