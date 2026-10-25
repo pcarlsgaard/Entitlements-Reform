@@ -21,6 +21,10 @@ export function indexedTaxSettings(
   const bracketDollar = (value: number) => value / (wageIndexBrackets ? 1 : realWageFactor)
   const creditDollar = (value: number) => value / (wageIndexCredits ? 1 : realWageFactor)
   return { ...tax,
+    progressiveWageBrackets: tax.progressiveWageBrackets?.map(band => ({
+      ...band,
+      upperPerAdult: band.upperPerAdult === null ? null : bracketDollar(band.upperPerAdult),
+    })) ?? null,
     progressiveZeroBracketPerAdult: bracketDollar(tax.progressiveZeroBracketPerAdult),
     progressiveTopBracketPerAdult: bracketDollar(tax.progressiveTopBracketPerAdult),
     progressiveIntermediateStartPerAdult: tax.progressiveIntermediateStartPerAdult === null ? null : bracketDollar(tax.progressiveIntermediateStartPerAdult),

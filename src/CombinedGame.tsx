@@ -13,6 +13,7 @@ import type { ExampleHousehold } from './model/householdScenario'
 import type { CombinedPolicy } from './model/combined'
 import { transferPrograms } from './tax/model/transfers'
 import type { ReformSettings } from './tax/model/types'
+import { marginalProtectionPresets } from './tax/model/wageBrackets'
 import type { HealthPolicySettings } from './tax/model/health'
 import type { ModelAssumptions } from './model/types'
 import './combined.css'
@@ -51,6 +52,54 @@ function Toggle({ label, checked, onChange, note }: { label: string; checked: bo
 function Select({ label, value, options, onChange }: { label: string; value: string; options: { value: string; label: string }[]; onChange: (v: string) => void }) {
   return <label className="game-field"><span>{label}</span><select value={value} onChange={e => onChange(e.target.value)}>{options.map(o => <option value={o.value} key={o.value}>{o.label}</option>)}</select></label>
 }
+function WageBracketEditor({ tax, update }: {
+  tax: ReformSettings; update: (patch: Partial<ReformSettings>) => void
+}) {
+  const bands = tax.progressiveWageBrackets
+  const preset = bands ? String(bands.length) : 'legacy'
+  const changeBand = (index: number, key: 'rate'|'upperPerAdult', value: number) => {
+    if (!bands) return
+    update({ progressiveWageBrackets: bands.map((band, i) =>
+      i === index ? { ...band, [key]: value } : band) })
+  }
+  return <>
+    <Select label="Wage rate bands" value={preset} options={[
+      {value:'3',label:'3 rates · simple'},
+      {value:'4',label:'4 rates · marginal-rate protection'},
+      {value:'5',label:'5 rates · distinct introductory rate'},
+      {value:'legacy',label:'Original schedule (saved configurations)'},
+    ]} onChange={value => update({
+      progressiveWageBrackets: value === 'legacy' ? null :
+        marginalProtectionPresets[Number(value) as 3|4|5].map(band => ({ ...band })),
+    })} />
+    {bands ? <>
+      <small>Wage rates: <strong>{bands.map(band => pct(band.rate,1)).join(' / ')}</strong>.
+        Boundaries: {bands.slice(0,-1).map(band => '$' + (band.upperPerAdult ?? 0).toLocaleString()).join(' · ')} per adult.
+        The top business cash-flow rate is controlled separately. The earned adult-credit phase-in
+        reduces the effective initial marginal rate by its phase-in rate while active.
+        {bands.length === 5 ? ' At a 7.5% wage rate and 10% credit phase-in, the initial effective marginal rate is −2.5%.' : ''}
+      </small>
+      <details className="game-more"><summary>Customize statutory wage rates and thresholds</summary>
+        {bands.map((band,i) => {
+          const last = i === bands.length - 1
+          const priorCeiling = i === 0 ? 0 : bands[i-1]!.upperPerAdult ?? 0
+          const nextCeiling = i < bands.length-2 ? bands[i+1]!.upperPerAdult ?? 1_000_000 : 1_000_000
+          return <div key={i}>
+            <NumberField label={`Wage rate · band ${i+1}`} value={Math.round(band.rate * 1000)/10}
+              min={i === 0 ? 0 : bands[i-1]!.rate*100}
+              max={last ? 70 : bands[i+1]!.rate*100} step={0.5} suffix="%"
+              onChange={rate => changeBand(i,'rate',rate/100)} />
+            {!last && <NumberField label={`Upper wage boundary · band ${i+1} / adult`}
+              value={band.upperPerAdult ?? 0} min={priorCeiling+1000}
+              max={Math.max(priorCeiling+1000,nextCeiling-1000)} step={1000} suffix="$"
+              onChange={upperPerAdult => changeBand(i,'upperPerAdult',upperPerAdult)} />}
+          </div>
+        })}
+      </details>
+    </> : <small>Legacy schedule preserved for previously saved configurations.</small>}
+  </>
+}
+
 function Chart({ title, data, lines, stacked = false, note, unit = '% of GDP' }: { title: string; data: Record<string, number | undefined>[]; lines: { key: string; color: string }[]; stacked?: boolean; note?: string; unit?: string }) {
   const Graph = stacked ? ComposedChart : LineChart
   return <section className="game-card game-chart"><div className="game-chart-heading"><div><h2>{title}</h2>{note && <p>{note}</p>}</div><span>{unit}</span></div>
@@ -190,18 +239,30 @@ export default function CombinedGame() {
               <NumberField label="Cash-flow capital GDP at 21%" value={Math.round(policy.dynamic.capitalGDPLevelAtReference*1000)/10} min={0} max={3} step={0.1} suffix="%" onChange={n => setDynamic({capitalGDPLevelAtReference:n/100})} />
               <NumberField label="Capital effect sensitivity to rate" value={Math.round(policy.dynamic.capitalRateSensitivity*100)} min={0} max={50} step={5} suffix="%" onChange={n => setDynamic({capitalRateSensitivity:n/100})} />
               <NumberField label="Capital GDP phase-in" value={policy.dynamic.capitalPhaseInYears} min={1} max={30} step={1} suffix="years" onChange={capitalPhaseInYears => setDynamic({capitalPhaseInYears})} /></fieldset>
-            {dynamicReady && <dl className="game-ledger"><div><dt>CPS-weighted MTR · current → reform</dt><dd>{score.laborResponse ? `${pct(score.laborResponse.weightedCurrentMarginalRate,2)} → ${pct(score.laborResponse.weightedReformMarginalRate,2)}` : '—'}</dd></div><div><dt>Net-of-tax wage change (log)</dt><dd>{pct(score.netWageLogChange,2)}</dd></div><div><dt>Primary / secondary-earner response</dt><dd>{score.laborResponse ? `${pct(score.laborResponse.primaryNetWageLogChange,2)} / ${pct(score.laborResponse.secondaryNetWageLogChange,2)}` : '—'}</dd></div><div><dt>Long-run labor GDP level</dt><dd>{pct(score.steadyGDPLevelChange,2)}</dd></div><div><dt>Long-run capital GDP level</dt><dd>{pct(score.steadyCapitalGDPLevelChange,2)}</dd></div><div><dt>Implied capital stock / wage level</dt><dd>{pct(score.steadyCapitalStockChange,2)} / {pct(score.steadyCapitalWageChange,2)}</dd></div><div className="game-total"><dt>10-year deficit feedback versus static</dt><dd>{dollars(staticDecadeDeficit-dynamicDecadeDeficit)}</dd></div></dl>}
-            <small>{score.laborResponse ? `Labor wedges use ${score.laborResponse.compressedCells.toLocaleString()} compressed cells representing ${score.laborResponse.sourceTaxUnits.toLocaleString()} CPS tax units, weighted by marginal employer compensation. Employer health insurance is fixed at the margin; pension/other-retirement compensation moves with earnings; employer FICA uses the statutory wage cap. Current-law wedges are cached; selected-reform wedges are recomputed from the actual brackets, payroll replacement, compensation exemptions, and adult/child credit phase-ins. Flat health credits do not change the local MTR. The ±5% guardrail applies only to the resulting labor GDP-level effect, not to the assumed MTR change. ` : ''}Capital channel activates when both corporate and individual income taxes are replaced. The 21% reference is Tax Foundation's separate DBCFT estimate; the rate adjustment here is deliberately small. These are additive long-run GDP level effects, not permanent changes to growth rates or a general equilibrium solution.</small></section>
+            {dynamicReady && <dl className="game-ledger"><div><dt>Employer-cost tax wedge · current → reform</dt><dd>{score.laborResponse ? `${pct(score.laborResponse.weightedCurrentMarginalRate,2)} → ${pct(score.laborResponse.weightedReformMarginalRate,2)}` : '—'}</dd></div><div><dt>Personal cash-pay MTR · current → reform</dt><dd>{score.laborResponse ? `${pct(score.laborResponse.weightedCurrentPersonalMarginalRate,2)} → ${pct(score.laborResponse.weightedReformPersonalMarginalRate,2)}` : '—'}</dd></div><div><dt>Workers facing higher MTR · wedge / personal</dt><dd>{score.laborResponse ? `${pct(score.laborResponse.workerShareHigherWedge,1)} / ${pct(score.laborResponse.workerShareHigherPersonalRate,1)}` : '—'}</dd></div><div><dt>Net-of-tax wage change (log)</dt><dd>{pct(score.netWageLogChange,2)}</dd></div><div><dt>Primary / secondary-earner response</dt><dd>{score.laborResponse ? `${pct(score.laborResponse.primaryNetWageLogChange,2)} / ${pct(score.laborResponse.secondaryNetWageLogChange,2)}` : '—'}</dd></div><div><dt>Long-run labor GDP level</dt><dd>{pct(score.steadyGDPLevelChange,2)}</dd></div><div><dt>Long-run capital GDP level</dt><dd>{pct(score.steadyCapitalGDPLevelChange,2)}</dd></div><div><dt>Implied capital stock / wage level</dt><dd>{pct(score.steadyCapitalStockChange,2)} / {pct(score.steadyCapitalWageChange,2)}</dd></div><div className="game-total"><dt>10-year deficit feedback versus static</dt><dd>{dollars(staticDecadeDeficit-dynamicDecadeDeficit)}</dd></div></dl>}
+            <small>{score.laborResponse ? `Labor wedges use ${score.laborResponse.compressedCells.toLocaleString()} compressed cells representing ${score.laborResponse.sourceTaxUnits.toLocaleString()} CPS tax units, weighted by marginal employer compensation. Employer health insurance is fixed at the margin; pension/other-retirement compensation moves with earnings; employer FICA uses the statutory wage cap. Current-law wedges are cached; selected-reform wedges are recomputed from the actual brackets, payroll replacement, compensation exemptions, and adult/child credit phase-ins. Personal rates exclude employer payroll tax and divide by incremental gross cash pay including passed-through employer FICA. Dynamic labor GDP uses only the employer-cost wedge to avoid double counting the same tax change. Flat health credits do not change the local MTR. The ±5% guardrail applies only to the resulting labor GDP-level effect, not to the assumed MTR change. ` : ''}Capital channel activates when both corporate and individual income taxes are replaced. The 21% reference is Tax Foundation's separate DBCFT estimate; the rate adjustment here is deliberately small. These are additive long-run GDP level effects, not permanent changes to growth rates or a general equilibrium solution.</small></section>
           <section className="game-card"><h2>Source and interpretation</h2><p>Federal budget anchors and published category projections use the <a href="https://www.cbo.gov/publication/62105" target="_blank" rel="noreferrer">CBO Budget and Economic Outlook (2026–2036)</a> and February 2026 long-term data. Age-specific population and projected survival use SSA’s 2026 Trustees Alternative II files. Current-law Social Security and Medicare match CBO program shares through 2056; after that horizon their central paths follow the 2026 Social Security and Medicare Trustees projections through 2100.</p><p>The real-wage baseline follows the 2026 OASDI Trustees intermediate annual covered-wage path, normalized to the simulator's 2026 opening year; the wage control is an additive annual percentage-point deviation. It is separate from real GDP growth: progressive wage-tax brackets are rescored against wages, while the flat X-tax gross base remains tied to the aggregate macro base. The editable Medicare and legacy-benefit growth controls are sensitivities around the official central calibration. Official CBO debt remains a separate reference through 2056 in Detailed results.</p></section></div>
       </div>}
       {tab === 'tax' && <div className="game-two-col">
         <div className="game-column"><section className="game-card"><h2>Consumption tax and wage schedule</h2><Toggle label="Apply X tax" checked={policy.taxEnabled} onChange={v => setPolicy(p => ({ ...p, taxEnabled: v }))} />
           <fieldset disabled={!policy.taxEnabled}><Select label="Wage tax schedule" value={t.wageTaxMode} options={[{value:'progressive',label:'Progressive'},{value:'flat',label:'Flat'}]} onChange={v => setTax({ wageTaxMode: v as ReformSettings['wageTaxMode'] })} />
-          {numT('rate','Business and top wage rate',100,0,70,.5,'%')}{t.wageTaxMode === 'progressive' && <>
-            {numT('progressiveZeroBracketPerAdult','Middle bracket starts / adult',1,0,250000,1000,'$')}{numT('progressiveMiddleRate','Middle wage rate',100,0,70,.5,'%')}
-            <Toggle label="Use intermediate bracket" checked={t.progressiveIntermediateStartPerAdult !== null} onChange={v => setTax({ progressiveIntermediateStartPerAdult: v ? 75000 : null })} />
-            {t.progressiveIntermediateStartPerAdult !== null && <><NumberField label="Intermediate bracket starts / adult" value={t.progressiveIntermediateStartPerAdult} min={t.progressiveZeroBracketPerAdult} max={t.progressiveTopBracketPerAdult} step={1000} suffix="$" onChange={n => setTax({progressiveIntermediateStartPerAdult:n})} />{numT('progressiveIntermediateRate','Intermediate rate',100,0,70,.5,'%')}</>}
-            {numT('progressiveTopBracketPerAdult','Top bracket starts / adult',1,t.progressiveIntermediateStartPerAdult ?? t.progressiveZeroBracketPerAdult,1000000,5000,'$')}
+          {numT('rate',t.wageTaxMode === 'progressive' && t.progressiveWageBrackets
+              ? 'Business cash-flow rate' : 'Business and top wage rate',100,0,70,.5,'%')}
+          {t.wageTaxMode === 'progressive' && <>
+            <WageBracketEditor tax={t} update={setTax} />
+            {!t.progressiveWageBrackets && <>
+              {numT('progressiveZeroBracketPerAdult','Middle bracket starts / adult',1,0,250000,1000,'$')}
+              {numT('progressiveMiddleRate','Middle wage rate',100,0,70,.5,'%')}
+              <Toggle label="Use intermediate bracket" checked={t.progressiveIntermediateStartPerAdult !== null} onChange={v => setTax({ progressiveIntermediateStartPerAdult: v ? 75000 : null })} />
+              {t.progressiveIntermediateStartPerAdult !== null && <>
+                <NumberField label="Intermediate bracket starts / adult" value={t.progressiveIntermediateStartPerAdult}
+                  min={t.progressiveZeroBracketPerAdult} max={t.progressiveTopBracketPerAdult} step={1000} suffix="$"
+                  onChange={n => setTax({progressiveIntermediateStartPerAdult:n})} />
+                {numT('progressiveIntermediateRate','Intermediate rate',100,0,70,.5,'%')}
+              </>}
+              {numT('progressiveTopBracketPerAdult','Top bracket starts / adult',1,
+                t.progressiveIntermediateStartPerAdult ?? t.progressiveZeroBracketPerAdult,1000000,5000,'$')}
+            </>}
           </>}{numT('noncomplianceRate','Noncompliance',100,0,70,.5,'%')}{numT('exemptionShare','Broad exemption',100,0,95,1,'%')}
           <details className="game-more"><summary>Compensation exemptions</summary>{(['cashWageExemptionShare','employerSocialInsuranceExemptionShare','employerHealthInsuranceExemptionShare','employerPensionOtherInsuranceExemptionShare'] as const).map((key,i) => numT(key,(['Cash wages','Employer social insurance','Employer health insurance','Employer pensions / other insurance'][i] ?? 'Compensation'),100,0,100,1,'%'))}</details></fieldset></section>
         <section className="game-card"><h2>Credits</h2><fieldset disabled={!policy.taxEnabled}>

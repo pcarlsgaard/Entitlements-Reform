@@ -1,5 +1,6 @@
 import parameters from '../data/current_law_2025.json';
 import { calculateChildCredit } from './childCredits';
+import { wageBracketTax } from './wageBrackets';
 import type {
   FilingStatus,
   HouseholdInput,
@@ -102,6 +103,7 @@ export function calculateAdultCredit(wageBase: number, adults: number, settings:
 export function calculateReformWageTax(wageBase: number, filingStatus: FilingStatus, settings: ReformSettings): number {
   if (settings.wageTaxMode === 'flat') return wageBase * settings.rate;
   const adults = filingStatus === 'married' ? 2 : 1;
+  if (settings.progressiveWageBrackets?.length) return wageBracketTax(wageBase, adults, settings.progressiveWageBrackets);
   const zeroCeiling = adults * settings.progressiveZeroBracketPerAdult;
   const topThreshold = Math.max(zeroCeiling, adults * settings.progressiveTopBracketPerAdult);
   const intermediateStart = settings.progressiveIntermediateStartPerAdult === null
@@ -214,6 +216,16 @@ export function calculateHousehold(input: HouseholdInput, settings: ReformSettin
   const baseTaxes = totalTaxAtWage(downInput, settings, normalizedEmployerFicaPassThroughRate);
   const upTaxes = totalTaxAtWage(upInput, settings, normalizedEmployerFicaPassThroughRate);
   const deltaComp = upTaxes.employerComp - baseTaxes.employerComp;
+  const deltaCashWages = upInput.cashWage - downInput.cashWage;
+  const oldEmployerTaxDelta = calculateCurrentLaw(upInput).employerPayrollTax
+    - calculateCurrentLaw(downInput).employerPayrollTax;
+  const deltaReformCashWages = deltaCashWages
+    + (payrollIsReplaced ? normalizedEmployerFicaPassThroughRate * oldEmployerTaxDelta : 0);
+  const currentPersonalMarginalRate = deltaCashWages > 0
+    ? (upTaxes.current - baseTaxes.current - oldEmployerTaxDelta) / deltaCashWages : 0;
+  const reformPersonalMarginalRate = deltaReformCashWages > 0
+    ? (upTaxes.reform - baseTaxes.reform - (payrollIsReplaced ? 0 : oldEmployerTaxDelta))
+      / deltaReformCashWages : 0;
 
   return {
     input: normalized,
@@ -246,6 +258,8 @@ export function calculateHousehold(input: HouseholdInput, settings: ReformSettin
     reformAverageRate: employerCompensation > 0 ? reformTaxAfterCredits / employerCompensation : 0,
     currentMarginalRate: deltaComp > 0 ? (upTaxes.current - baseTaxes.current) / deltaComp : 0,
     reformMarginalRate: deltaComp > 0 ? (upTaxes.reform - baseTaxes.reform) / deltaComp : 0,
+    currentPersonalMarginalRate,
+    reformPersonalMarginalRate,
   };
 }
 

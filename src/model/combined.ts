@@ -5,6 +5,7 @@ import { cbo2026RevenueGDP } from '../data/cboBaseline'
 import { calculateMacro, defaultSettings } from '../tax/model/macro'
 import { calculateHousehold } from '../tax/model/household'
 import { calculateLaborResponse } from '../tax/model/laborResponse'
+import { marginalProtectionPresets } from '../tax/model/wageBrackets'
 import { calculateHealthAnalysis, defaultHealthPolicySettings } from '../tax/model/health'
 import type { HealthPolicySettings } from '../tax/model/health'
 import { calculateFederalProgramSavings, defaultTransferReplacementSettings } from '../tax/model/transfers'
@@ -56,6 +57,7 @@ export const defaultCombinedPolicy: CombinedPolicy = {
     ...defaultSettings,
     rate: 0.35,
     wageTaxMode: 'progressive',
+    progressiveWageBrackets: marginalProtectionPresets[4].map(band => ({ ...band })),
     progressiveZeroBracketPerAdult: 0,
     progressiveMiddleRate: 0.25,
     progressiveIntermediateStartPerAdult: 75_000,

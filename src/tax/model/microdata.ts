@@ -1,5 +1,6 @@
 import baseline from '../data/baseline_2025.json';
 import microdataJson from '../data/microdata_2025.json';
+import { wageBracketTax } from './wageBrackets';
 import type {
   AdultCreditAudit,
   AdultCreditAuditBucket,
@@ -159,23 +160,31 @@ export function calculateMicrodataScore(settings: ReformSettings): MicrodataScor
       + employerSocialInsurance * socialTaxableShare
       + employerHealthInsurance * healthTaxableShare
       + employerPensionOtherInsurance * pensionOtherTaxableShare;
-    const [progressiveMiddleBase, progressiveIntermediateBase, progressiveTopBase] = progressiveBases(
-      taxableCompensation,
-      scheduleAdults,
-      settings,
-    );
-    const middleRateShare = settings.rate > 0
-      ? Math.min(1, Math.max(0, settings.progressiveMiddleRate / settings.rate))
-      : 0;
-    const intermediateRateShare = settings.rate > 0
-      ? Math.min(1, Math.max(middleRateShare, settings.progressiveIntermediateRate / settings.rate))
-      : 0;
-    progressiveMiddleBaseDollars += taxUnitWeight * progressiveMiddleBase;
-    progressiveIntermediateBaseDollars += taxUnitWeight * progressiveIntermediateBase;
-    progressiveTopBaseDollars += taxUnitWeight * progressiveTopBase;
-    progressiveBaseDollars += taxUnitWeight
-      * (progressiveMiddleBase * middleRateShare
-        + progressiveIntermediateBase * intermediateRateShare + progressiveTopBase);
+    if (settings.wageTaxMode === 'progressive' && settings.progressiveWageBrackets?.length) {
+      // Score the wage side at its actual bracket rates, then normalize
+      // by the headline business rate for the existing revenue audit.
+      progressiveBaseDollars += taxUnitWeight * wageBracketTax(
+        taxableCompensation, scheduleAdults, settings.progressiveWageBrackets,
+      ) / Math.max(settings.rate, 1e-12);
+    } else {
+      const [progressiveMiddleBase, progressiveIntermediateBase, progressiveTopBase] = progressiveBases(
+        taxableCompensation,
+        scheduleAdults,
+        settings,
+      );
+      const middleRateShare = settings.rate > 0
+        ? Math.min(1, Math.max(0, settings.progressiveMiddleRate / settings.rate))
+        : 0;
+      const intermediateRateShare = settings.rate > 0
+        ? Math.min(1, Math.max(middleRateShare, settings.progressiveIntermediateRate / settings.rate))
+        : 0;
+      progressiveMiddleBaseDollars += taxUnitWeight * progressiveMiddleBase;
+      progressiveIntermediateBaseDollars += taxUnitWeight * progressiveIntermediateBase;
+      progressiveTopBaseDollars += taxUnitWeight * progressiveTopBase;
+      progressiveBaseDollars += taxUnitWeight
+        * (progressiveMiddleBase * middleRateShare
+          + progressiveIntermediateBase * intermediateRateShare + progressiveTopBase);
+    }
     const creditEarnings = settings.adultCreditEarningsBase === 'cash'
       ? projectedCashWage + employerSocialInsurance : grossCompensation;
     const creditCalculation = adultCredit(creditEarnings, creditAdults, settings);

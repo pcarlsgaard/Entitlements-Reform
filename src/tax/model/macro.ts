@@ -60,6 +60,12 @@ export function calculateMacro(settings: ReformSettings, adjustment: MacroAdjust
     if (settings.wageTaxMode === 'flat') {
       return taxableBase > 0 ? requiredGross / taxableBase : Number.POSITIVE_INFINITY;
     }
+    if (settings.progressiveWageBrackets?.length) {
+      // Wage rates are fixed independently of the business headline rate.
+      const wageRevenue = rateAdjustedWageBase * settings.rate;
+      return businessTaxableBase > 0
+        ? (requiredGross - wageRevenue) / businessTaxableBase : Number.POSITIVE_INFINITY;
+    }
     const allHeadlineBase = businessTaxableBase + progressiveMiddleBase + progressiveIntermediateBase + progressiveTopBase;
     const rateBeforeMiddleBinds = allHeadlineBase > 0 ? requiredGross / allHeadlineBase : Number.POSITIVE_INFINITY;
     const middleRate = Math.max(0, settings.progressiveMiddleRate);
