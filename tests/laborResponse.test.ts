@@ -15,20 +15,37 @@ describe('CPS-weighted labor response', () => {
     expect(response.boundedLaborWeightShare).toBeLessThanOrEqual(1)
   })
 
-  it('responds to the actual selected wage-tax rates rather than a fixed MTR assumption', () => {
+  it('responds to active configurable wage bands rather than a fixed MTR assumption', () => {
+    const baseBands = defaultCombinedPolicy.tax.progressiveWageBrackets!
     const low = calculateLaborResponse({
       ...defaultCombinedPolicy.tax,
-      rate: 0.25,
-      progressiveMiddleRate: 0.15,
-      progressiveIntermediateRate: 0.20,
+      progressiveWageBrackets: baseBands.map((band, i) => ({
+        ...band, rate: [.10, .15, .20, .25][i]!,
+      })),
     }, 1)
     const high = calculateLaborResponse({
       ...defaultCombinedPolicy.tax,
-      rate: 0.45,
-      progressiveMiddleRate: 0.35,
-      progressiveIntermediateRate: 0.40,
+      progressiveWageBrackets: baseBands.map((band, i) => ({
+        ...band, rate: [.25, .35, .40, .45][i]!,
+      })),
     }, 1)
     expect(low.weightedCurrentMarginalRate).toBeCloseTo(high.weightedCurrentMarginalRate, 12)
+    expect(high.weightedReformMarginalRate).toBeGreaterThan(low.weightedReformMarginalRate)
+    expect(high.netWageLogChange).toBeLessThan(low.netWageLogChange)
+    expect(high.weightedReformPersonalMarginalRate).toBeGreaterThan(low.weightedReformPersonalMarginalRate)
+  })
+
+  it('also responds to the legacy wage schedule in older saved policies', () => {
+    const low = calculateLaborResponse({
+      ...defaultCombinedPolicy.tax,
+      progressiveWageBrackets: null,
+      rate: .25, progressiveMiddleRate: .15, progressiveIntermediateRate: .20,
+    }, 1)
+    const high = calculateLaborResponse({
+      ...defaultCombinedPolicy.tax,
+      progressiveWageBrackets: null,
+      rate: .45, progressiveMiddleRate: .35, progressiveIntermediateRate: .40,
+    }, 1)
     expect(high.weightedReformMarginalRate).toBeGreaterThan(low.weightedReformMarginalRate)
     expect(high.netWageLogChange).toBeLessThan(low.netWageLogChange)
   })
