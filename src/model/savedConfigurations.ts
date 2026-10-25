@@ -31,6 +31,9 @@ const record = (value: unknown): value is Record<string, unknown> =>
 
 function assertShape(reference: unknown, value: unknown, path: string): void {
   if (path === 'policy.tax.progressiveIntermediateStartPerAdult' && value === null) return
+  // Legacy saved policies have no flexible schedule. The final band has no ceiling.
+  if (path === 'policy.tax.progressiveWageBrackets' && value === null) return
+  if (path === 'policy.tax.progressiveWageBrackets[].upperPerAdult' && value === null) return
   if (reference === null) {
     if (value !== null && (typeof value !== 'number' || !Number.isFinite(value)))
       throw new Error(`${path} must be a number or null.`)
@@ -70,6 +73,9 @@ export function parseConfiguration(json: string): SavedConfiguration {
   // Additive v1 migration: preserve existing choices; new GDP-pool generosity
   // matches the saved 2026 per-person grant. The original JSON remains untouched.
   if (record(scenario.policy)) {
+    if (record(scenario.policy.tax) &&
+        scenario.policy.tax.progressiveWageBrackets === undefined)
+      scenario.policy.tax.progressiveWageBrackets = null
     if (scenario.policy.spendingEnabled === undefined) scenario.policy.spendingEnabled = false
     if (scenario.policy.otherSpending === undefined)
       scenario.policy.otherSpending = structuredClone(defaultOtherSpendingPolicy)
@@ -157,6 +163,26 @@ export function parseConfiguration(json: string): SavedConfiguration {
   within(policy.assumptions.realGDPGrowth, -0.02, 0.06, 'real GDP growth')
   within(policy.assumptions.inflation, 0, 0.08, 'inflation')
   within(policy.tax.rate, 0, 0.7, 'tax rate')
+  if (policy.tax.progressiveWageBrackets !== null) {
+    const bands = policy.tax.progressiveWageBrackets
+    if (!Array.isArray(bands) || bands.length < 3 || bands.length > 5)
+      throw new Error('The custom wage schedule requires 3–5 brackets.')
+    let previousUpper = 0
+    let previousRate = 0
+    for (const [i, band] of bands.entries()) {
+      if (!record(band) || typeof band.rate !== 'number' ||
+          !Number.isFinite(band.rate) || band.rate < previousRate || band.rate > 0.7)
+        throw new Error('Wage tax rates must increase monotonically and stay within 0–70%.')
+      const isLast = i === bands.length - 1
+      if (isLast ? band.upperPerAdult !== null
+        : typeof band.upperPerAdult !== 'number' ||
+          !Number.isFinite(band.upperPerAdult) ||
+          band.upperPerAdult <= previousUpper || band.upperPerAdult > 1_000_000)
+        throw new Error('Wage bracket thresholds must rise and end with an unlimited band.')
+      if (!isLast) previousUpper = band.upperPerAdult as number
+      previousRate = band.rate
+    }
+  }
   within(policy.dynamic.phaseInYears, 1, 30, 'labor phase-in')
   within(policy.dynamic.capitalPhaseInYears, 1, 30, 'capital phase-in')
   if (policy.assumptions.socialSecurityBenefitCap2026 !== null)
