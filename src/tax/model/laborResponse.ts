@@ -36,6 +36,7 @@ interface EarnerPrepared {
   down: CurrentPoint
   up: CurrentPoint
   currentMarginalRate: number
+  currentPersonalMarginalRate: number
   laborWeight: number
 }
 
@@ -57,6 +58,15 @@ export interface LaborResponseResult {
   positiveEarnerObservations: number
   weightedCurrentMarginalRate: number
   weightedReformMarginalRate: number
+  /** Employee-facing tax on the next dollar of cash pay; excludes employer FICA from numerator. */
+  weightedCurrentPersonalMarginalRate: number
+  weightedReformPersonalMarginalRate: number
+  /** Survey-weighted worker shares with a higher marginal rate; no participation effects. */
+  workerShareHigherWedge: number
+  workerShareHigherPersonalRate: number
+  /** Shares of marginal labor compensation associated with increased rates. */
+  compensationShareHigherWedge: number
+  compensationShareHigherPersonalRate: number
   netWageLogChange: number
   primaryNetWageLogChange: number
   secondaryNetWageLogChange: number
@@ -160,6 +170,10 @@ function prepareEarner(
     down,
     up,
     currentMarginalRate: (up.totalFederalTax - down.totalFederalTax) / deltaCompensation,
+    currentPersonalMarginalRate: (
+      up.totalFederalTax - down.totalFederalTax
+      - (up.employerPayrollTax - down.employerPayrollTax)
+    ) / (up.totalCashWage - down.totalCashWage),
     laborWeight: taxUnitWeight * marginalEmployerCompensationForEarner(earnerWage),
   }
 }
@@ -247,13 +261,23 @@ interface Accumulator {
   weight: number
   currentMtr: number
   reformMtr: number
+  currentPersonal: number
+  reformPersonal: number
+  workerWeight: number
+  higherWedgeWorkerWeight: number
+  higherPersonalWorkerWeight: number
+  higherWedgeLaborWeight: number
+  higherPersonalLaborWeight: number
   logChange: number
   boundedWeight: number
   observations: number
 }
 
 function emptyAccumulator(): Accumulator {
-  return { weight: 0, currentMtr: 0, reformMtr: 0, logChange: 0, boundedWeight: 0, observations: 0 }
+  return { weight: 0, currentMtr: 0, reformMtr: 0, currentPersonal: 0, reformPersonal: 0,
+    workerWeight: 0, higherWedgeWorkerWeight: 0, higherPersonalWorkerWeight: 0,
+    higherWedgeLaborWeight: 0, higherPersonalLaborWeight: 0,
+    logChange: 0, boundedWeight: 0, observations: 0 }
 }
 
 function addEarner(
@@ -270,12 +294,32 @@ function addEarner(
     (reformTax(earner.up, cell, settings, employerFicaPassThroughRate)
       - reformTax(earner.down, cell, settings, employerFicaPassThroughRate))
     / deltaCompensation
+  const deltaGrossCash = earner.up.totalCashWage - earner.down.totalCashWage
+  const deltaEmployerPayroll = earner.up.employerPayrollTax - earner.down.employerPayrollTax
+  const passThrough = settings.replacedTaxes.payroll ? clampShare(employerFicaPassThroughRate) : 0
+  const deltaReformCash = deltaGrossCash + passThrough * deltaEmployerPayroll
+  const reformEmployerPayroll = settings.replacedTaxes.payroll ? 0 : deltaEmployerPayroll
+  const reformPersonalRate = deltaReformCash > 0
+    ? (reformTax(earner.up, cell, settings, employerFicaPassThroughRate)
+      - reformTax(earner.down, cell, settings, employerFicaPassThroughRate)
+      - reformEmployerPayroll) / deltaReformCash : 0
   const currentNet = safeNetOfTaxRate(earner.currentMarginalRate)
   const reformNet = safeNetOfTaxRate(reformMarginalRate)
   const weight = earner.laborWeight
   accumulator.weight += weight
   accumulator.currentMtr += weight * earner.currentMarginalRate
   accumulator.reformMtr += weight * reformMarginalRate
+  accumulator.currentPersonal += weight * earner.currentPersonalMarginalRate
+  accumulator.reformPersonal += weight * reformPersonalRate
+  accumulator.workerWeight += cell.taxUnitWeight
+  if (reformMarginalRate > earner.currentMarginalRate + 1e-7) {
+    accumulator.higherWedgeWorkerWeight += cell.taxUnitWeight
+    accumulator.higherWedgeLaborWeight += weight
+  }
+  if (reformPersonalRate > earner.currentPersonalMarginalRate + 1e-7) {
+    accumulator.higherPersonalWorkerWeight += cell.taxUnitWeight
+    accumulator.higherPersonalLaborWeight += weight
+  }
   accumulator.logChange += weight * Math.log(reformNet.value / currentNet.value)
   if (currentNet.bounded || reformNet.bounded) accumulator.boundedWeight += weight
   accumulator.observations += 1
@@ -319,6 +363,12 @@ export function calculateLaborResponse(
     positiveEarnerObservations: all.observations,
     weightedCurrentMarginalRate: average(all.currentMtr, all.weight),
     weightedReformMarginalRate: average(all.reformMtr, all.weight),
+    weightedCurrentPersonalMarginalRate: average(all.currentPersonal, all.weight),
+    weightedReformPersonalMarginalRate: average(all.reformPersonal, all.weight),
+    workerShareHigherWedge: average(all.higherWedgeWorkerWeight, all.workerWeight),
+    workerShareHigherPersonalRate: average(all.higherPersonalWorkerWeight, all.workerWeight),
+    compensationShareHigherWedge: average(all.higherWedgeLaborWeight, all.weight),
+    compensationShareHigherPersonalRate: average(all.higherPersonalLaborWeight, all.weight),
     netWageLogChange: average(all.logChange, all.weight),
     primaryNetWageLogChange: average(primary.logChange, primary.weight),
     secondaryNetWageLogChange: average(secondary.logChange, secondary.weight),
