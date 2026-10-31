@@ -21,6 +21,12 @@ const revenue=(year:number)=>currentLawRevenueGDP(year)
 const baseline=simulate(assumptions,revenue,{},'scheduled')
 const flat=simulate(flatAssumptions,revenue,{},undefined,
   {socialSecurityReform:true,medicareReform:false})
+const flatPrefunded25=simulate({...flatAssumptions,fundingStrategy:'socialSecurityOnly',realEndowmentYield:.025},
+  revenue,{},undefined,{socialSecurityReform:true,medicareReform:false})
+const flatPrefunded40=simulate({...flatAssumptions,fundingStrategy:'socialSecurityOnly',realEndowmentYield:.04},
+  revenue,{},undefined,{socialSecurityReform:true,medicareReform:false})
+const flatFundedCost=(row:typeof flatPrefunded25.years[number])=>
+  row.legacySocialSecurity+row.flatSocialSecurityPaygo+row.socialSecurityPrefunding
 const years=[2026,2035,2050,2075,2095]
 const d=(n:number)=>Number(n.toFixed(4))
 function realPV(billions:number,year:number){
@@ -43,13 +49,17 @@ function runAccounts(policy:PersonalAccountsPolicy){
 const central=runAccounts(defaultPersonalAccountsPolicy)
 const snapshots=years.map(year=>{
   const i=year-2026
-  const b=baseline.years[i]!, f=flat.years[i]!, p=central.sim.years[i]!
+  const b=baseline.years[i]!, f=flat.years[i]!, pf=flatPrefunded25.years[i]!,
+    pf4=flatPrefunded40.years[i]!, p=central.sim.years[i]!
   const r=central.accountMap.get(year)!
   const g=b.nominalGDP
   if(Math.abs(g-r.nominalGDPBillions)>1e-6*g)throw Error('GDP mismatch in accounts')
   return {year,
     scheduledOASI:d(100*b.legacySocialSecurity/g),
     flat150OASI:d(100*(f.legacySocialSecurity+f.flatSocialSecurityPaygo)/g),
+    flat150Prefunded25Cost:d(100*flatFundedCost(pf)/g),
+    flat150Prefunded40Cost:d(100*flatFundedCost(pf4)/g),
+    flatPrefundingDeposit25:d(100*pf.socialSecurityPrefunding/g),
     accountCostOASI:d(100*r.federalCostBillions/g),
     accountDiversion:d(100*r.redirectedBillions/g),
     accountTopup:d(100*r.governmentTopupBillions/g),
@@ -59,6 +69,8 @@ const snapshots=years.map(year=>{
     savingsAccountsGDP:d(100*r.fiscalSavingsBillions/g),
     baselineDebtGDP:d(100*b.endingDebtGDP),
     flatDebtGDP:d(100*f.endingDebtGDP),
+    flatPrefunded25DebtGDP:d(100*pf.endingDebtGDP),
+    flatPrefunded40DebtGDP:d(100*pf4.endingDebtGDP),
     accountDebtGDP:d(100*p.endingDebtGDP),
     baselineTotalSpendingGDP:d(100*b.totalFederalSpending/g),
     flatTotalSpendingGDP:d(100*f.totalFederalSpending/g),
@@ -77,6 +89,8 @@ function summary(sim:typeof baseline, cost:(year:number)=>number){
 const totals={
   baseline:summary(baseline,row=>baseline.years[row-2026]!.legacySocialSecurity),
   flat150:summary(flat,year=>{const r=flat.years[year-2026]!;return r.legacySocialSecurity+r.flatSocialSecurityPaygo}),
+  flat150Prefunded25:summary(flatPrefunded25,year=>flatFundedCost(flatPrefunded25.years[year-2026]!)),
+  flat150Prefunded40:summary(flatPrefunded40,year=>flatFundedCost(flatPrefunded40.years[year-2026]!)),
   personalAccounts:summary(central.sim,year=>central.accountMap.get(year)!.federalCostBillions),
 }
 const sensitivity: {case:string,year:number,retirementCostGDP:number,topupGDP:number,redirectGDP:number,privateCoverage:number}[]=[]
