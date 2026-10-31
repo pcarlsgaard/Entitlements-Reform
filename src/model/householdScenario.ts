@@ -1,5 +1,6 @@
 import { currentLawDeliveryShares } from './currentLaw'
 import { defaultAssumptions } from './defaults'
+import { accountAnnuityFactor, accountBalanceAtClaim, personalAccountYearlyMatch } from './personalAccountReform'
 import { flatBenefitReal, legacySocialSecurityBenefitNominal, socialSecurityBenefitShares } from './socialSecurity'
 import { annualWorkCredit, actuarialClaimFactor, currentLawClaimFactor, workCreditFraction } from './claiming'
 import { premiumSupportPerPersonNominal } from './medicare'
@@ -136,6 +137,10 @@ export interface HouseholdYearScore {
   taxCashChange: number
   cashTransferChange: number
   socialSecurityChange: number
+  mandatoryAccountSaving: number
+  federalAccountMatch: number
+  privateAccountRetirementIncome: number
+  publicRetirementTopup: number
   baselineSocialSecurity: number
   reformSocialSecurity: number
   inKindTransferChange: number
@@ -146,7 +151,10 @@ export interface HouseholdYearScore {
   reformMedicarePayment: number
   medicarePaymentChange: number
   programs: TransferProgramResult[]
-  adults: { age: number; baselineSS: number; reformSS: number; baselineMedicare: number; reformMedicare: number }[]
+  adults: { age: number; baselineSS: number; reformSS: number; scheduledReformSS: number;
+    privateAccountAnnuity: number; publicTopup: number; annualContribution: number;
+    governmentMatch: number; accountBalanceAtClaim: number;
+    baselineMedicare: number; reformMedicare: number }[]
 }
 
 export function lastHouseholdYear(profile: ExampleHousehold, policy: CombinedPolicy): number {
@@ -192,16 +200,50 @@ export function scoreExampleHousehold(profile: ExampleHousehold, year: number, p
   const baselineInKindTransferValue = inKindTransfers.reduce((total, row) => total + row.resourceEquivalentValue, 0) * inflationFactor
   const inKindTransferLoss = inKindTransfers.reduce((total, row) => total + (replaced(row) ? row.resourceEquivalentValue : 0), 0) * inflationFactor
   const inKindTransferChange = inKindTransferLoss ? -inKindTransferLoss : 0
+
+  const privatePolicy = policy.personalAccounts
+  const annualCashWage=(worker:number,at:number)=>{
+    const age2026=worker===0?profile.primaryAge2026:profile.spouseAge2026
+    const w=worker===0?profile.primaryWage2026:profile.spouseWage2026
+    const age=age2026+at-policy.assumptions.reformYear
+    return age>=18 && age<=profile.workThroughAge
+      ? w*realWageGrowthFactor(at,policy.assumptions)*
+          (1+policy.assumptions.inflation)**(at-policy.assumptions.reformYear) : 0
+  }
+  const contributionFor=(worker:number,at:number,age:number)=>{
+    if(!privatePolicy.enabled||age<18)return 0
+    // Illustrative taxable ceiling, indexed with real wages and CPI.
+    const ceiling=184_500*realWageGrowthFactor(at,policy.assumptions)*
+      (1+policy.assumptions.inflation)**(at-policy.assumptions.reformYear)
+    return Math.min(ceiling,annualCashWage(worker,at))*privatePolicy.requiredContributionRate
+  }
   const adults = ages.map((age, index) => {
     const chosen = index === 0 ? profile.primaryClaimAge : profile.spouseClaimAge
     const claim = chosen ?? combined.assumptions.socialSecurityClaimAge
     const credits = householdWorkCredits(profile, index, claim, policy)
+    const birthYear=policy.assumptions.reformYear-(index===0?profile.primaryAge2026:profile.spouseAge2026)
+    const accountBalance=privatePolicy.enabled
+      ? accountBalanceAtClaim(birthYear,claim,policy.assumptions,privatePolicy,(at,workingAge)=>{
+          const personal=contributionFor(index,at,workingAge)
+          return personal+personalAccountYearlyMatch(personal,at,policy.assumptions,privatePolicy)
+        }) : 0
+    const annuityFactor=accountAnnuityFactor(birthYear,claim,policy.assumptions)
+    const privateAnnuity=privatePolicy.enabled && age>=claim && annuityFactor>0
+      ? accountBalance/annuityFactor*(1+policy.assumptions.inflation)**(age-claim):0
+    const scheduledReformSS=annualSocialSecurity(combined, year, age, profile.legacyBenefitMultiplier,
+      policy.baselineMode, claim, credits, policy.benefits.socialSecurityReform)
+    const workingPersonal=age<claim ? contributionFor(index,year,age):0
     return {
       age,
       baselineSS: annualSocialSecurity(baseline, year, age, profile.legacyBenefitMultiplier, policy.baselineMode,
         chosen ?? 67, credits, false),
-      reformSS: annualSocialSecurity(combined, year, age, profile.legacyBenefitMultiplier, policy.baselineMode,
-        claim, credits, policy.benefits.socialSecurityReform),
+      reformSS: privatePolicy.enabled ? Math.max(scheduledReformSS,privateAnnuity):scheduledReformSS,
+      scheduledReformSS,
+      privateAccountAnnuity:privateAnnuity,
+      publicTopup:privatePolicy.enabled?Math.max(0,scheduledReformSS-privateAnnuity):scheduledReformSS,
+      annualContribution:workingPersonal,
+      governmentMatch:personalAccountYearlyMatch(workingPersonal,year,policy.assumptions,privatePolicy),
+      accountBalanceAtClaim:accountBalance,
       baselineMedicare: annualMedicarePayment(baseline, year, age, policy.baselineMode),
       reformMedicare: annualMedicarePayment(combined, year, age, policy.baselineMode),
     }
@@ -211,10 +253,14 @@ export function scoreExampleHousehold(profile: ExampleHousehold, year: number, p
   const baselineMedicarePayment = adults.reduce((sum, adult) => sum + adult.baselineMedicare, 0)
   const reformMedicarePayment = adults.reduce((sum, adult) => sum + adult.reformMedicare, 0)
   const socialSecurityChange = reformSocialSecurity - baselineSocialSecurity
+  const mandatoryAccountSaving=adults.reduce((sum,adult)=>sum+adult.annualContribution,0)
+  const federalAccountMatch=adults.reduce((sum,adult)=>sum+adult.governmentMatch,0)
+  const privateAccountRetirementIncome=adults.reduce((sum,adult)=>sum+adult.privateAccountAnnuity,0)
+  const publicRetirementTopup=adults.reduce((sum,adult)=>sum+adult.publicTopup,0)
   const baselineAfterTaxWages = (analysis.currentGrossResources - analysis.currentPreCreditTaxLiability +
     analysis.currentTaxCredits) * inflationFactor
   const currentCash = baselineAfterTaxWages + baselineCashTransfers + baselineSocialSecurity
-  const cashChange = taxCashChange + cashTransferChange + socialSecurityChange
+  const cashChange = taxCashChange + cashTransferChange + socialSecurityChange - mandatoryAccountSaving
   // Imported health snapshot scores under-65 coverage; do not credit someone
   // who already receives Medicare under an earlier policy eligibility age.
   const healthUpperAge = Math.min(defaultAssumptions.medicareEligibilityAge,
@@ -228,7 +274,8 @@ export function scoreExampleHousehold(profile: ExampleHousehold, year: number, p
   return {
     year, ages, childAges, annualWages: (wages[0]! + wages[1]!) * inflationFactor,
     currentCash, reformCash: currentCash + cashChange, cashChange, taxCashChange, cashTransferChange,
-    socialSecurityChange, baselineSocialSecurity, reformSocialSecurity,
+    socialSecurityChange, mandatoryAccountSaving, federalAccountMatch,privateAccountRetirementIncome,
+    publicRetirementTopup, baselineSocialSecurity, reformSocialSecurity,
     inKindTransferChange, baselineInKindTransferValue,
     reformInKindTransferValue: baselineInKindTransferValue + inKindTransferChange,
     healthCreditGross: eligiblePeople.length ? healthCreditGross : 0,
