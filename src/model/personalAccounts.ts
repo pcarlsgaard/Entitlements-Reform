@@ -1,10 +1,13 @@
 /**
- * Research-only scheduled-benefit personal accounts. Not yet part of the GUI score.
+ * Research-only mandatory private retirement savings with a public benefit-floor
+ * guarantee. Not yet part of the GUI score. Qualified account deposits go
+ * directly from workers/employers to privately owned retirement assets.
  *
- * Federal cost = account contributions redirected from payroll receipts
- * + scheduled benefit guarantee topups + taxes lost on displaced SS benefits.
- * The diverted payroll receipts are counted ONCE as equivalent gross deposits;
- * do not also subtract these same receipts from federal revenue.
+ * The standalone "federalCostBillions" is a DEFICIT-EQUIVALENT measure:
+ * public guarantee payments + federal payroll receipts displaced by private
+ * saving + income tax receipts lost on displaced Social Security payments.
+ * It is not government spending. The full debt model posts private saving as
+ * FORGONE REVENUE and top-ups as OUTLAYS, never as a federal deposit.
  */
 import { currentLawRetirementAge } from './defaults'
 import { ssaTaxablePayrollGDP2026 } from '../data/ssaTaxablePayrollGDP2026'
