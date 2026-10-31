@@ -40,7 +40,7 @@ Account withdrawals are **Roth-like**: no deduction for contributions and no inc
 - `src/model/personalAccounts.ts`: pure standalone accumulation, annuitization, group guarantee and federal cash-flow decomposition.
 - `src/model/personalAccountsSensitivity.ts`: `personalAccountSensitivityGrid(assumptions, options)`, returning selected calendar-year GDP shares and income-group topups for all scenario combinations.
 - `tests/personalAccounts.test.ts`: contribution ramps, non-retroactivity, exact benefit-floor reconciliation, zero-account baseline, return monotonicity and market shock.
-- Run `npm test -- tests/personalAccounts.test.ts` and `npm run typecheck` in the repo.
+- Run `npm run analyze:personal-accounts` to print the baseline, p10–p90 public top-ups, and a 144-row sensitivity matrix to the console; run `npm test -- tests/personalAccounts.test.ts` and `npm run typecheck` for checks.
 
 This experimental module does not touch the fiscal simulator, benefit controls, tax controls, or UI; the subsequent integration must update full government receipts/outlays **once**, test cross-policy reconciliation, and display the account's private wealth and the public contingent guarantee separately.
 
