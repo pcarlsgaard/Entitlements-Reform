@@ -153,7 +153,7 @@ export interface HouseholdYearScore {
   programs: TransferProgramResult[]
   adults: { age: number; baselineSS: number; reformSS: number; scheduledReformSS: number;
     privateAccountAnnuity: number; publicTopup: number; annualContribution: number;
-    governmentMatch: number; accountBalanceAtClaim: number;
+    governmentMatch: number; accountBalanceAtClaim: number; accountClaimYear:number;
     baselineMedicare: number; reformMedicare: number }[]
 }
 
@@ -244,6 +244,7 @@ export function scoreExampleHousehold(profile: ExampleHousehold, year: number, p
       annualContribution:workingPersonal,
       governmentMatch:personalAccountYearlyMatch(workingPersonal,year,policy.assumptions,privatePolicy),
       accountBalanceAtClaim:accountBalance,
+      accountClaimYear:birthYear+claim,
       baselineMedicare: annualMedicarePayment(baseline, year, age, policy.baselineMode),
       reformMedicare: annualMedicarePayment(combined, year, age, policy.baselineMode),
     }
