@@ -19,6 +19,7 @@ export function simulatePrivateAccounts(options = {}) {
   const p = {
     startYear: 2027, endYear: 2100, rampYears: 5,
     realReturn: 0.045, fee: 0.0025, annuityRate: 0.023,
+    equityWeight: 0.65,
     retirementAge: 67, workingStartAge: 22, realWageGrowth: 0.0114,
     // Redirect OASI's 10.6 points, PRESERVING the separate 1.8-point DI tax.
     accountContributionRate: 0.106, retirementBenefitShare: 0.85,
@@ -29,7 +30,8 @@ export function simulatePrivateAccounts(options = {}) {
   if (p.endYear < p.startYear || p.endYear > 2160)
     throw new Error('Invalid endYear');
   if (p.realReturn - p.fee <= -1 || p.accountContributionRate < 0 ||
-      p.accountContributionRate > 0.106 || p.retirementBenefitShare < 0 ||
+      p.accountContributionRate > 0.106 || p.equityWeight < 0 || p.equityWeight > 1 ||
+      p.retirementBenefitShare < 0 ||
       p.retirementBenefitShare > 1)
     throw new Error('Invalid policy assumptions');
   const groups = [
@@ -86,10 +88,20 @@ export function simulatePrivateAccounts(options = {}) {
           p.accountContributionRate*rampFraction(year);
         // Optional annually varying real returns; repeats if shorter than the
         // simulation. This option allows externally supplied historic sequences.
-        const realReturn=Array.isArray(p.annualRealReturns)&&p.annualRealReturns.length
-          ?p.annualRealReturns[((year-p.startYear)%p.annualRealReturns.length+
-              p.annualRealReturns.length)%p.annualRealReturns.length]
-          :p.realReturn;
+        const selectYear=(series)=>series[((year-p.startYear)%series.length+
+          series.length)%series.length];
+        const hasAssetReturns=Array.isArray(p.equityRealReturns)&&
+          p.equityRealReturns.length>0 && Array.isArray(p.bondRealReturns)&&
+          p.bondRealReturns.length>0;
+        // A diversified, annually rebalanced portfolio is possible when both
+        // asset-class return series are provided. Otherwise, the caller's
+        // blended realReturn is the explicit assumed portfolio return.
+        const realReturn=hasAssetReturns
+          ?p.equityWeight*selectYear(p.equityRealReturns)+
+            (1-p.equityWeight)*selectYear(p.bondRealReturns)
+          :Array.isArray(p.annualRealReturns)&&p.annualRealReturns.length
+            ?selectYear(p.annualRealReturns)
+            :p.realReturn;
         if (!Number.isFinite(realReturn)||realReturn-p.fee<=-1)
           throw new Error('Invalid annual portfolio return');
         balance=(balance+deposit)*(1+realReturn-p.fee);
