@@ -164,6 +164,8 @@ export interface AnnualFundingPlan {
 }
 
 export interface PrimaryComponents {
+  /** Federal 1:1 annual matching grants into privately held retirement accounts. */
+  personalAccountMatching?: number
   legacySocialSecurity: number
   flatSocialSecurityPaygo: number
   otherOASDI: number
