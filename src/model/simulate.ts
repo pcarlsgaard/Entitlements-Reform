@@ -55,6 +55,12 @@ export interface BenefitPolicySelection {
 }
 
 export interface FiscalBridge {
+  /** Private mandatory saving: remaining public retirement top-up expenditure. */
+  socialSecurityRetirementPublicTopupBillionsForYear?: (year: number) => number
+  /** Payroll tax receipts displaced by legally mandated contributions directly into private accounts. */
+  mandatoryPrivateSavingsPayrollReceiptsLostBillionsForYear?: (year: number) => number
+  /** Benefit-income tax receipts lost when scheduled Social Security checks are displaced by Roth-type private payments. */
+  privateAnnuityBenefitTaxReceiptsLostBillionsForYear?: (year: number) => number
   /** Savings classified in other mandatory spending, as a share of GDP. */
   savingsScaleForYear?: (year: number) => number
   otherMandatorySavingsGDP: number
@@ -100,9 +106,15 @@ export function simulate(
   if (selection ? !selection.socialSecurityReform : Boolean(currentLawBaselineMode)) {
     assumptions = { ...assumptions, fullRetirementAge: currentLawRetirementAge, socialSecurityClaimAge: currentLawRetirementAge, socialSecurityBenefitCap2026: null }
   }
-  if (selection && assumptions.fundingStrategy !== 'paygo' &&
-    (!selection.socialSecurityReform || !selection.medicareReform)) {
-    throw new Error('Independent benefit switches require PAYGO financing.')
+  if (selection && assumptions.fundingStrategy !== 'paygo') {
+    // A Social Security-only account/endowment does not require Medicare reform,
+    // and vice versa. Combined/sequential strategies still need both promises.
+    const ssFunding = ['socialSecurityOnly', 'both', 'socialSecurityFirst', 'savingsFundedSequential'].includes(assumptions.fundingStrategy)
+    const medicareFunding = ['medicareOnly', 'both', 'socialSecurityFirst', 'savingsFundedSequential'].includes(assumptions.fundingStrategy)
+    if ((ssFunding && !selection.socialSecurityReform) ||
+        (medicareFunding && !selection.medicareReform)) {
+      throw new Error('Cannot prefund a benefit when its reform switch is disabled.')
+    }
   }
   if (assumptions.socialSecurityBenefitCap2026 !== null &&
     assumptions.fundingStrategy !== 'paygo' && selection?.socialSecurityReform) {
@@ -201,7 +213,8 @@ export function simulate(
 
     const components: PrimaryComponents = {
       legacySocialSecurity:
-        socialSecurity.legacyBillions * deliveryShares.socialSecurity,
+        fiscalBridge?.socialSecurityRetirementPublicTopupBillionsForYear?.(year) ??
+          socialSecurity.legacyBillions * deliveryShares.socialSecurity,
       flatSocialSecurityPaygo: socialSecurity.flatPaygoBillions,
       otherOASDI: assumptions.otherOASDIGDP * baselineNominalGDP,
       legacySeniorMedicare:
@@ -271,7 +284,15 @@ export function simulate(
       netInterest,
       totalFederalSpending,
     })
-    const scheduledRevenue = scheduledRevenueRate * nominalGDP
+    const lostMandatoryPayrollReceipts =
+      fiscalBridge?.mandatoryPrivateSavingsPayrollReceiptsLostBillionsForYear?.(year) ?? 0
+    const lostBenefitTaxReceipts =
+      fiscalBridge?.privateAnnuityBenefitTaxReceiptsLostBillionsForYear?.(year) ?? 0
+    if (lostMandatoryPayrollReceipts < 0 || lostBenefitTaxReceipts < 0) {
+      throw new RangeError('Private-account forgone federal receipts cannot be negative.')
+    }
+    const scheduledRevenue = scheduledRevenueRate * nominalGDP -
+      lostMandatoryPayrollReceipts - lostBenefitTaxReceipts
     // The scheduled tax policy runs until it first closes the overall deficit.
     // From that point onward the budget remains at least balanced. Any additional
     // surplus used for debt reduction is capped explicitly as a share of GDP.
@@ -305,7 +326,8 @@ export function simulate(
       }
     }
     const revenueAdjusted = Math.abs(revenue - scheduledRevenue) > 1e-9
-    const revenueRate = revenueAdjusted ? revenue / nominalGDP : scheduledRevenueRate
+    const revenueRate = revenueAdjusted || lostMandatoryPayrollReceipts + lostBenefitTaxReceipts > 0
+      ? revenue / nominalGDP : scheduledRevenueRate
     const primaryBalance = revenue - totalPrimarySpending
     const primaryDeficit = -primaryBalance
     const overallDeficit = primaryDeficit + netInterest
@@ -316,6 +338,8 @@ export function simulate(
     years.push({
       year,
       nominalGDP,
+      lostMandatoryPayrollReceipts,
+      lostBenefitTaxReceipts,
       socialSecurityPrefunding: funding.socialSecurityPrefunding,
       fullSocialSecurityPrefundingCost:
         funding.fullSocialSecurityPrefundingCost,
