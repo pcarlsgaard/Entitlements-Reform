@@ -55,6 +55,8 @@ export interface BenefitPolicySelection {
 }
 
 export interface FiscalBridge {
+  /** Federal dollars deposited as a 1:1 matching payment into qualified privately owned accounts. */
+  personalAccountMatchingBillionsForYear?: (year:number)=>number
   /** Private mandatory saving: remaining public retirement top-up expenditure. */
   socialSecurityRetirementPublicTopupBillionsForYear?: (year: number) => number
   /** Payroll tax receipts displaced by legally mandated contributions directly into private accounts. */
@@ -89,7 +91,8 @@ export function primaryComponentSum(components: PrimaryComponents): number {
     components.otherMandatory +
     components.defenseDiscretionary +
     components.nonDefenseDiscretionary +
-    components.newCohortPrefunding
+    components.newCohortPrefunding +
+    (components.personalAccountMatching ?? 0)
   )
 }
 
@@ -215,7 +218,7 @@ export function simulate(
       legacySocialSecurity:
         fiscalBridge?.socialSecurityRetirementPublicTopupBillionsForYear?.(year) ??
           socialSecurity.legacyBillions * deliveryShares.socialSecurity,
-      flatSocialSecurityPaygo: socialSecurity.flatPaygoBillions,
+      flatSocialSecurityPaygo: fiscalBridge?.socialSecurityRetirementPublicTopupBillionsForYear ? 0 : socialSecurity.flatPaygoBillions,
       otherOASDI: assumptions.otherOASDIGDP * baselineNominalGDP,
       legacySeniorMedicare:
         medicare.legacyBillions * deliveryShares.seniorMedicare,
@@ -255,6 +258,7 @@ export function simulate(
                 (fiscalBridge?.nonDefenseDiscretionarySavingsGDPForYear?.(year) ?? 0) * baselineNominalGDP,
             ),
       newCohortPrefunding: funding.totalPrefunding,
+      personalAccountMatching: fiscalBridge?.personalAccountMatchingBillionsForYear?.(year) ?? 0,
     }
     const totalPrimarySpending = primaryComponentSum(components)
     const beginningDebtGDP = beginningDebt / nominalGDP
