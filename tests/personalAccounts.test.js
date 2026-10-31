@@ -55,6 +55,26 @@ describe('scheduled-benefit personal accounts prototype', () => {
     expect(s.assumptions.accountContributionRate).toBe(.106)
   })
 
+  it('uses the specified annually rebalanced diversified asset mix', () => {
+    const equity = simulatePrivateAccounts({
+      endYear: 2070, equityWeight: 1,
+      equityRealReturns: [.08], bondRealReturns: [.01]
+    })
+    const diversified = simulatePrivateAccounts({
+      endYear: 2070, equityWeight: .65,
+      equityRealReturns: [.08], bondRealReturns: [.01]
+    })
+    const bonds = simulatePrivateAccounts({
+      endYear: 2070, equityWeight: 0,
+      equityRealReturns: [.08], bondRealReturns: [.01]
+    })
+    const a = equity.years.at(-1).privatelyFinancedGDP
+    const b = diversified.years.at(-1).privatelyFinancedGDP
+    const d = bonds.years.at(-1).privatelyFinancedGDP
+    expect(a).toBeGreaterThanOrEqual(b)
+    expect(b).toBeGreaterThan(d)
+  })
+
   it('accepts an externally supplied annual return series', () => {
     const a = simulatePrivateAccounts({ endYear: 2070, annualRealReturns: [.02,.06] })
     const b = simulatePrivateAccounts({ endYear: 2070, realReturn: .04 })
