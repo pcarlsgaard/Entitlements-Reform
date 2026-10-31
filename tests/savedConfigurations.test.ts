@@ -37,6 +37,18 @@ describe('portable named simulator configurations', () => {
     expect(imported.scenario.policy.assumptions.customRevenueCapBalanceGDP).toBe(0)
   })
 
+  it('converts configurations saved with the briefly deployed replacement revenue modes', () => {
+    const legacy = makeConfiguration('Old primary mode', scenario(), 'old-primary')
+    const p = legacy.scenario.policy as unknown as Record<string, unknown>
+    p.revenuePolicy = { mode: 'primaryBalance', additionalRevenueGDP: 0.015 }
+    delete (legacy.scenario.policy.assumptions as unknown as Record<string, unknown>).revenueCapBasis
+    delete (legacy.scenario.policy.assumptions as unknown as Record<string, unknown>).customRevenueCapBalanceGDP
+    const imported = parseConfiguration(JSON.stringify(legacy))
+    expect(imported.scenario.policy.assumptions.revenueCapBasis).toBe('primaryBalance')
+    expect(imported.scenario.policy.assumptions.debtPaydownSurplusCapGDP).toBeCloseTo(0.015, 10)
+    expect('revenuePolicy' in imported.scenario.policy).toBe(false)
+  })
+
   it('migrates the former constant wage-growth control to a Trustees-path deviation', () => {
     const legacy = makeConfiguration('Legacy wage setting', scenario(), 'legacy-wage')
     const assumptions = legacy.scenario.policy.assumptions as unknown as Record<string, unknown>
