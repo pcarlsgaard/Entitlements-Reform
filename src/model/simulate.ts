@@ -55,6 +55,8 @@ export interface BenefitPolicySelection {
 }
 
 export interface FiscalBridge {
+  /** Experimental: net federal retirement cost of personal accounts minus scheduled OASI; never subtract diverted payroll again from revenue. */
+  socialSecurityRetirementNetAdjustmentBillionsForYear?: (year: number) => number
   /** Savings classified in other mandatory spending, as a share of GDP. */
   savingsScaleForYear?: (year: number) => number
   otherMandatorySavingsGDP: number
@@ -201,7 +203,8 @@ export function simulate(
 
     const components: PrimaryComponents = {
       legacySocialSecurity:
-        socialSecurity.legacyBillions * deliveryShares.socialSecurity,
+        socialSecurity.legacyBillions * deliveryShares.socialSecurity +
+        (fiscalBridge?.socialSecurityRetirementNetAdjustmentBillionsForYear?.(year) ?? 0),
       flatSocialSecurityPaygo: socialSecurity.flatPaygoBillions,
       otherOASDI: assumptions.otherOASDIGDP * baselineNominalGDP,
       legacySeniorMedicare:
