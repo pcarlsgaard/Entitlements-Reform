@@ -28,6 +28,15 @@ describe('portable named simulator configurations', () => {
     expect(parseConfigurationLibrary(JSON.stringify([saved]))).toEqual([saved])
   })
 
+  it('migrates older saved policies without the revenue-target selector', () => {
+    const legacy = makeConfiguration('Legacy financing', scenario(), 'legacy-financing')
+    delete (legacy.scenario.policy as unknown as Record<string, unknown>).revenuePolicy
+    const imported = parseConfiguration(JSON.stringify(legacy))
+    expect(imported.scenario.policy.revenuePolicy).toEqual({
+      mode: 'taxSchedule', additionalRevenueGDP: 0,
+    })
+  })
+
   it('migrates the former constant wage-growth control to a Trustees-path deviation', () => {
     const legacy = makeConfiguration('Legacy wage setting', scenario(), 'legacy-wage')
     const assumptions = legacy.scenario.policy.assumptions as unknown as Record<string, unknown>

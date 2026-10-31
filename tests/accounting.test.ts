@@ -101,6 +101,55 @@ describe('annual federal accounting', () => {
     }
   })
 
+  it('primary balance finances programs while borrowing interest', () => {
+    const a = withAssumptions({ fundingStrategy: 'paygo', endYear: 2060, debtSensitivity: 0 })
+    const result = simulate(a, () => 0.60, {}, undefined, undefined, undefined, undefined,
+      { mode: 'primaryBalance', additionalRevenueGDP: 0, debtTargetGDP: 0.4 })
+    for (const row of result.years) {
+      expect(row.revenue).toBeCloseTo(row.totalPrimarySpending, 8)
+      expect(row.primaryDeficit).toBeCloseTo(0, 8)
+      expect(row.overallDeficit).toBeCloseTo(row.netInterest, 8)
+      expect(row.endingDebt).toBeGreaterThan(row.beginningDebt)
+      for (const error of Object.values(reconciliationErrors(row)))
+        expect(error).toBeCloseTo(0, 7)
+    }
+  })
+
+  it('total balance covers interest and holds nominal debt flat', () => {
+    const a = withAssumptions({ fundingStrategy: 'paygo', endYear: 2060, debtSensitivity: 0 })
+    const result = simulate(a, () => 0.05, {}, undefined, undefined, undefined, undefined,
+      { mode: 'totalBalance', additionalRevenueGDP: 0, debtTargetGDP: 0.4 })
+    for (const row of result.years) {
+      expect(row.revenue).toBeCloseTo(row.totalFederalSpending, 8)
+      expect(row.overallDeficit).toBeCloseTo(0, 8)
+      expect(row.endingDebt).toBeCloseTo(row.beginningDebt, 8)
+    }
+  })
+
+  it('additional receipts repay debt until the debt target then stop', () => {
+    const a = withAssumptions({ fundingStrategy: 'paygo', endYear: 2095, debtSensitivity: 0 })
+    const result = simulate(a, () => 0, {}, undefined, undefined, undefined, undefined,
+      { mode: 'totalBalance', additionalRevenueGDP: 0.05, debtTargetGDP: 0.4 })
+    expect(result.years.some(r => r.endingDebtGDP <= 0.4 + 1e-9)).toBe(true)
+    for (const row of result.years) {
+      expect(row.revenue).toBeGreaterThanOrEqual(row.totalFederalSpending - 1e-8)
+      expect(-row.overallDeficit).toBeLessThanOrEqual(row.nominalGDP * 0.05 + 1e-7)
+      if (row.beginningDebtGDP <= 0.4 + 1e-12) {
+        expect(row.overallDeficit).toBeCloseTo(0, 8)
+      }
+    }
+  })
+
+  it('primary-balance increment offsets interest before retiring debt', () => {
+    const a = withAssumptions({ fundingStrategy: 'paygo', endYear: 2028, debtSensitivity: 0 })
+    const result = simulate(a, () => 0.05, {}, undefined, undefined, undefined, undefined,
+      { mode: 'primaryBalance', additionalRevenueGDP: 0.01, debtTargetGDP: 0 })
+    for (const row of result.years) {
+      expect(row.revenue).toBeCloseTo(row.totalPrimarySpending + row.nominalGDP * 0.01, 8)
+      expect(row.overallDeficit).toBeCloseTo(row.netInterest - row.nominalGDP * 0.01, 8)
+    }
+  })
+
   it('primary components reconcile exactly to total primary spending', () => {
     const row = simulateConstantRevenue(defaultAssumptions, 0.22).years[0]
     expect(row).toBeDefined()
