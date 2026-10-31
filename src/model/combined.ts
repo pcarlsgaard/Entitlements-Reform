@@ -1,7 +1,6 @@
 import { currentLawRevenueGDP, replacedRevenueDriftGDP } from './revenueBaseline'
 import { taxRevenueChangePath, realGDPPerCapitaGrowthFactor } from './taxProjection'
 import type { TaxIndexingMode } from './taxProjection'
-import { cbo2026RevenueGDP } from '../data/cboBaseline'
 import { calculateMacro, defaultSettings } from '../tax/model/macro'
 import { calculateHousehold } from '../tax/model/household'
 import { calculateLaborResponse } from '../tax/model/laborResponse'
