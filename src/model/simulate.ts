@@ -55,8 +55,12 @@ export interface BenefitPolicySelection {
 }
 
 export interface FiscalBridge {
-  /** Experimental: net federal retirement cost of personal accounts minus scheduled OASI; never subtract diverted payroll again from revenue. */
-  socialSecurityRetirementNetAdjustmentBillionsForYear?: (year: number) => number
+  /** Private mandatory saving: remaining public retirement top-up expenditure. */
+  socialSecurityRetirementPublicTopupBillionsForYear?: (year: number) => number
+  /** Payroll tax receipts displaced by legally mandated contributions directly into private accounts. */
+  mandatoryPrivateSavingsPayrollReceiptsLostBillionsForYear?: (year: number) => number
+  /** Benefit-income tax receipts lost when scheduled Social Security checks are displaced by Roth-type private payments. */
+  privateAnnuityBenefitTaxReceiptsLostBillionsForYear?: (year: number) => number
   /** Savings classified in other mandatory spending, as a share of GDP. */
   savingsScaleForYear?: (year: number) => number
   otherMandatorySavingsGDP: number
@@ -209,8 +213,8 @@ export function simulate(
 
     const components: PrimaryComponents = {
       legacySocialSecurity:
-        socialSecurity.legacyBillions * deliveryShares.socialSecurity +
-        (fiscalBridge?.socialSecurityRetirementNetAdjustmentBillionsForYear?.(year) ?? 0),
+        fiscalBridge?.socialSecurityRetirementPublicTopupBillionsForYear?.(year) ??
+          socialSecurity.legacyBillions * deliveryShares.socialSecurity,
       flatSocialSecurityPaygo: socialSecurity.flatPaygoBillions,
       otherOASDI: assumptions.otherOASDIGDP * baselineNominalGDP,
       legacySeniorMedicare:
@@ -280,7 +284,15 @@ export function simulate(
       netInterest,
       totalFederalSpending,
     })
-    const scheduledRevenue = scheduledRevenueRate * nominalGDP
+    const lostMandatoryPayrollReceipts =
+      fiscalBridge?.mandatoryPrivateSavingsPayrollReceiptsLostBillionsForYear?.(year) ?? 0
+    const lostBenefitTaxReceipts =
+      fiscalBridge?.privateAnnuityBenefitTaxReceiptsLostBillionsForYear?.(year) ?? 0
+    if (lostMandatoryPayrollReceipts < 0 || lostBenefitTaxReceipts < 0) {
+      throw new RangeError('Private-account forgone federal receipts cannot be negative.')
+    }
+    const scheduledRevenue = scheduledRevenueRate * nominalGDP -
+      lostMandatoryPayrollReceipts - lostBenefitTaxReceipts
     // The scheduled tax policy runs until it first closes the overall deficit.
     // From that point onward the budget remains at least balanced. Any additional
     // surplus used for debt reduction is capped explicitly as a share of GDP.
@@ -314,7 +326,8 @@ export function simulate(
       }
     }
     const revenueAdjusted = Math.abs(revenue - scheduledRevenue) > 1e-9
-    const revenueRate = revenueAdjusted ? revenue / nominalGDP : scheduledRevenueRate
+    const revenueRate = revenueAdjusted || lostMandatoryPayrollReceipts + lostBenefitTaxReceipts > 0
+      ? revenue / nominalGDP : scheduledRevenueRate
     const primaryBalance = revenue - totalPrimarySpending
     const primaryDeficit = -primaryBalance
     const overallDeficit = primaryDeficit + netInterest
@@ -325,6 +338,8 @@ export function simulate(
     years.push({
       year,
       nominalGDP,
+      lostMandatoryPayrollReceipts,
+      lostBenefitTaxReceipts,
       socialSecurityPrefunding: funding.socialSecurityPrefunding,
       fullSocialSecurityPrefundingCost:
         funding.fullSocialSecurityPrefundingCost,
