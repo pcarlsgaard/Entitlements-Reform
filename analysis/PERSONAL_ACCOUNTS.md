@@ -67,7 +67,7 @@ Sources for the final calibrated build should be registered in
 
 - SSA 2026 Trustees report: https://www.ssa.gov/oact/tr/2026/
 - SSA 2026 PIA bend points: https://www.ssa.gov/oact/cola/bendpoints.html
-- SSA payroll tax allocation, 2026: https://www.ssa.gov/oact/cola/Benefits.html
+- SSA payroll tax allocation, 2026: https://www.ssa.gov/policy/docs/chartbooks/fast_facts/2026/fast_facts26.html
 - SSA 2023 period life table (already in `src/data/ssaLifeTable.ts`)
 - Long-term portfolio return history: https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/histretSP.html
 
