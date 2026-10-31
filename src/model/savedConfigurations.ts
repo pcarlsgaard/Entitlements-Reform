@@ -89,6 +89,19 @@ export function parseConfiguration(json: string): SavedConfiguration {
         : defaultAssumptions.realWageGrowthDeviation
     }
     delete a.realWageGrowth
+    // Briefly deployed financing-policy selector: preserve the user's selected
+    // balance reference and surplus allowance, but stop replacing tax receipts.
+    if (a.revenueCapBasis === undefined && record(scenario.policy) &&
+        record(scenario.policy.revenuePolicy)) {
+      const prior = scenario.policy.revenuePolicy
+      if (prior.mode === 'primaryBalance' || prior.mode === 'totalBalance') {
+        a.revenueCapBasis = prior.mode
+        if (typeof prior.additionalRevenueGDP === 'number' &&
+            Number.isFinite(prior.additionalRevenueGDP))
+          a.debtPaydownSurplusCapGDP = prior.additionalRevenueGDP
+      }
+    }
+    if (record(scenario.policy)) delete scenario.policy.revenuePolicy
     const additions = ['qualifyingEarnings2026', 'averageWorkingYears', 'averageAnnualEarnings2026',
       'actuarialDiscountRate', 'medicareFundingMode', 'realWageGrowthDeviation', 'debtPaydownTargetGDP',
       'debtPaydownSurplusCapGDP', 'revenueCapBasis', 'customRevenueCapBalanceGDP', 'socialSecurityInitialBenefitMode', 'socialSecurityPPIProtectedPercentile',
