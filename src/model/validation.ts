@@ -53,6 +53,7 @@ const numericKeys = [
   'policyHorizonDebtTargetGDP',
   'debtPaydownTargetGDP',
   'debtPaydownSurplusCapGDP',
+  'customRevenueCapBalanceGDP',
   'peakDebtCeilingGDP',
 ] as const satisfies readonly (keyof ModelAssumptions)[]
 
@@ -204,6 +205,12 @@ export function validateModelAssumptions(
       'debtPaydownTargetGDP',
       'The long-run debt target must be between 0% and the starting debt ratio.',
     )
+  }
+  if (!['totalBalance', 'primaryBalance', 'customOverallBalance'].includes(assumptions.revenueCapBasis)) {
+    add('revenueCapBasis', 'Choose total, primary, or custom budget balance.')
+  }
+  if (assumptions.customRevenueCapBalanceGDP < -0.10 || assumptions.customRevenueCapBalanceGDP > 0.10) {
+    add('customRevenueCapBalanceGDP', 'Custom overall balance must be between -10% and +10% of GDP.')
   }
   if (assumptions.debtPaydownSurplusCapGDP < 0 || assumptions.debtPaydownSurplusCapGDP > 0.10) {
     add(

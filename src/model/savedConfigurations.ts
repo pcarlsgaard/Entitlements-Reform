@@ -76,8 +76,6 @@ export function parseConfiguration(json: string): SavedConfiguration {
     if (record(scenario.policy.tax) &&
         scenario.policy.tax.progressiveWageBrackets === undefined)
       scenario.policy.tax.progressiveWageBrackets = null
-    if (scenario.policy.revenuePolicy === undefined)
-      scenario.policy.revenuePolicy = structuredClone(defaultCombinedPolicy.revenuePolicy)
     if (scenario.policy.spendingEnabled === undefined) scenario.policy.spendingEnabled = false
     if (scenario.policy.otherSpending === undefined)
       scenario.policy.otherSpending = structuredClone(defaultOtherSpendingPolicy)
@@ -91,9 +89,22 @@ export function parseConfiguration(json: string): SavedConfiguration {
         : defaultAssumptions.realWageGrowthDeviation
     }
     delete a.realWageGrowth
+    // Briefly deployed financing-policy selector: preserve the user's selected
+    // balance reference and surplus allowance, but stop replacing tax receipts.
+    if (a.revenueCapBasis === undefined && record(scenario.policy) &&
+        record(scenario.policy.revenuePolicy)) {
+      const prior = scenario.policy.revenuePolicy
+      if (prior.mode === 'primaryBalance' || prior.mode === 'totalBalance') {
+        a.revenueCapBasis = prior.mode
+        if (typeof prior.additionalRevenueGDP === 'number' &&
+            Number.isFinite(prior.additionalRevenueGDP))
+          a.debtPaydownSurplusCapGDP = prior.additionalRevenueGDP
+      }
+    }
+    if (record(scenario.policy)) delete scenario.policy.revenuePolicy
     const additions = ['qualifyingEarnings2026', 'averageWorkingYears', 'averageAnnualEarnings2026',
       'actuarialDiscountRate', 'medicareFundingMode', 'realWageGrowthDeviation', 'debtPaydownTargetGDP',
-      'debtPaydownSurplusCapGDP', 'socialSecurityInitialBenefitMode', 'socialSecurityPPIProtectedPercentile',
+      'debtPaydownSurplusCapGDP', 'revenueCapBasis', 'customRevenueCapBalanceGDP', 'socialSecurityInitialBenefitMode', 'socialSecurityPPIProtectedPercentile',
       'socialSecurityReformFRA', 'socialSecurityCOLAMode', 'socialSecurityCOLACap',
       'socialSecurityCOLAAdjustment', 'socialSecurityDollarCOLACapPercentile'] as const
     for (const key of additions) if (a[key] === undefined) a[key] = defaultAssumptions[key]
@@ -123,8 +134,8 @@ export function parseConfiguration(json: string): SavedConfiguration {
   if (!record(scenario.policy)) throw new Error('Missing policy.')
   const policy = scenario.policy as unknown as CombinedPolicy
   oneOf(policy.baselineMode, ['scheduled', 'payable'], 'baseline mode')
-  oneOf(policy.revenuePolicy.mode, ['taxSchedule', 'primaryBalance', 'totalBalance'], 'revenue rule')
-  within(policy.revenuePolicy.additionalRevenueGDP, 0, 0.10, 'additional annual receipts')
+  oneOf(policy.assumptions.revenueCapBasis, ['totalBalance','primaryBalance','customOverallBalance'], 'revenue cap basis')
+  within(policy.assumptions.customRevenueCapBalanceGDP, -0.10, 0.10, 'custom overall budget balance')
   oneOf(policy.tax.wageTaxMode, ['flat', 'progressive'], 'wage tax mode')
   oneOf(policy.tax.adultCreditMode, ['earned', 'universal'], 'adult credit mode')
   oneOf(policy.tax.adultCreditEarningsBase, ['cash', 'compensation'], 'earnings base')
