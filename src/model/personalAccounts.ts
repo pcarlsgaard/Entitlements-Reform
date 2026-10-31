@@ -7,6 +7,7 @@
  * do not also subtract these same receipts from federal revenue.
  */
 import { currentLawRetirementAge } from './defaults'
+import { ssaTaxablePayrollGDP2026 } from '../data/ssaTaxablePayrollGDP2026'
 import { nominalGDPGrowth } from './debt'
 import { populationMillions, projectedSurvival } from './demographics'
 import { socialSecurityForYear } from './socialSecurity'
@@ -36,7 +37,7 @@ export interface PersonalAccountsPolicy {
   redirectShare: number
   /** 12.4% for both employer and employee; 10.6% OASI; 6.2% employee. */
   payrollRate: number
-  /** 2025 Trustees' estimated 2026 taxable payroll/GDP: 0.350. */
+  /** 2026 Trustees' projected 2026 taxable payroll/GDP: 0.342. */
   taxablePayrollGDP: number
   /** Optional year-specific replacement for constant taxable payroll/GDP. */
   payrollGDPByYear?: Readonly<Record<number, number>>
@@ -53,7 +54,7 @@ export interface PersonalAccountsPolicy {
 
 export const defaultPersonalAccountsPolicy: PersonalAccountsPolicy = {
   startYear: 2026, rampYears: 10, redirectShare: 1, payrollRate: .124,
-  taxablePayrollGDP: .350, annualRealReturn: .04, annualAssetFee: .0025,
+  taxablePayrollGDP: .342, payrollGDPByYear: ssaTaxablePayrollGDP2026, annualRealReturn: .04, annualAssetFee: .0025,
   annuityRealYield: .023, displacedBenefitTaxRate: .07,
   groups: defaultEarningsGroups,
 }
