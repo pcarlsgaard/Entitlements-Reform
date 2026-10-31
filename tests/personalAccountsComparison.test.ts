@@ -16,8 +16,8 @@ describe('scheduled benefit / personal account / 150%-FPL flat comparison',()=>{
     expect(late.accountPublicSpendingOASI).toBeLessThan(late.scheduledOASI)
     expect(late.accountCostOASI).toBeCloseTo(
       late.accountPublicSpendingOASI+late.accountFederalReceiptsLost,3)
-    expect(late.accountNetRevenueGDP).toBeLessThan(
-      100*result.inputs.accountPayrollRate)
+    expect(late.baselineNetRevenueGDP-late.accountNetRevenueGDP)
+      .toBeCloseTo(late.accountFederalReceiptsLost,3)
     expect(result.totals.baseline.savingsPV2026Trillions).toBeCloseTo(0,8)
     expect(result.totals.flat150.retirementPV2026Trillions).toBeGreaterThan(0)
     expect(result.totals.flat150Prefunded25.retirementPV2026Trillions).toBeGreaterThan(0)
