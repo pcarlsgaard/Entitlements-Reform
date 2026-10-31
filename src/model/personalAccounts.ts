@@ -108,9 +108,15 @@ export function redirectedPayrollBillions(year: number, a: ModelAssumptions, p: 
   return gdp(year,a) * (p.payrollGDPByYear?.[year] ?? p.taxablePayrollGDP) *
     p.payrollRate * payrollDiversionShare(year,p)
 }
+const populationCache = new WeakMap<ModelAssumptions, Map<number, number>>()
 function workPopulation(year: number, a: ModelAssumptions): number {
+  let cache=populationCache.get(a)
+  if(!cache){cache=new Map();populationCache.set(a,cache)}
+  const cached=cache.get(year)
+  if(cached!==undefined)return cached
   let sum=0
   for(let age=18;age<currentLawRetirementAge;age++) sum += populationMillions(year,age,a)*workWeight(age)
+  cache.set(year,sum)
   return sum
 }
 function normalizedIndices(p: PersonalAccountsPolicy): {share:number[], wage:number[], benefit:number[]} {
@@ -128,14 +134,15 @@ export function accountAnnualAnnuityAtRetirement(retireYear:number, wageIndex:nu
   a:ModelAssumptions, p:PersonalAccountsPolicy): number {
   if(retireYear<=p.startYear||wageIndex===0)return 0
   let balance=0
-  for(let year=Math.max(p.startYear,retireYear-(currentLawRetirementAge-18));year<retireYear;year++){
+  let compound=1
+  const earliest=Math.max(p.startYear,retireYear-(currentLawRetirementAge-18))
+  for(let year=retireYear-1;year>=earliest;year--){
     const age=currentLawRetirementAge-retireYear+year
     const participants=workPopulation(year,a)
     const deposit=participants>0 ? 1000*redirectedPayrollBillions(year,a,p)/
       participants*workWeight(age)*wageIndex : 0
-    let compound=1
-    for(let t=year;t<retireYear;t++) compound*=(1+a.inflation)*
-      (1+(p.realReturnByYear?.[t]??p.annualRealReturn))*(1-p.annualAssetFee)
+    compound*=(1+a.inflation)*(1+(p.realReturnByYear?.[year]??p.annualRealReturn))*
+      (1-p.annualAssetFee)
     balance+=deposit*compound
   }
   let annuityFactor=0
