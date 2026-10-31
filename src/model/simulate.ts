@@ -102,9 +102,15 @@ export function simulate(
   if (selection ? !selection.socialSecurityReform : Boolean(currentLawBaselineMode)) {
     assumptions = { ...assumptions, fullRetirementAge: currentLawRetirementAge, socialSecurityClaimAge: currentLawRetirementAge, socialSecurityBenefitCap2026: null }
   }
-  if (selection && assumptions.fundingStrategy !== 'paygo' &&
-    (!selection.socialSecurityReform || !selection.medicareReform)) {
-    throw new Error('Independent benefit switches require PAYGO financing.')
+  if (selection && assumptions.fundingStrategy !== 'paygo') {
+    // A Social Security-only account/endowment does not require Medicare reform,
+    // and vice versa. Combined/sequential strategies still need both promises.
+    const ssFunding = ['socialSecurityOnly', 'both', 'socialSecurityFirst', 'savingsFundedSequential'].includes(assumptions.fundingStrategy)
+    const medicareFunding = ['medicareOnly', 'both', 'socialSecurityFirst', 'savingsFundedSequential'].includes(assumptions.fundingStrategy)
+    if ((ssFunding && !selection.socialSecurityReform) ||
+        (medicareFunding && !selection.medicareReform)) {
+      throw new Error('Cannot prefund a benefit when its reform switch is disabled.')
+    }
   }
   if (assumptions.socialSecurityBenefitCap2026 !== null &&
     assumptions.fundingStrategy !== 'paygo' && selection?.socialSecurityReform) {
