@@ -8,6 +8,16 @@ describe('scheduled benefit / personal account / 150%-FPL flat comparison',()=>{
     expect(opening.accountPrivateCoveragePct).toBe(0)
     expect(opening.accountTopup).toBeCloseTo(opening.scheduledOASI,2)
     expect(opening.accountCostOASI).toBeGreaterThan(opening.scheduledOASI)
+    expect(opening.accountPublicSpendingOASI).toBeCloseTo(opening.scheduledOASI,3)
+    expect(opening.accountFederalReceiptsLost).toBeCloseTo(opening.accountDiversion,3)
+    const late=result.snapshots.at(-1)!
+    // Mandated contributions are private savings, not federal spending;
+    // deficit-equivalent cost equals topups plus forgone tax receipts.
+    expect(late.accountPublicSpendingOASI).toBeLessThan(late.scheduledOASI)
+    expect(late.accountCostOASI).toBeCloseTo(
+      late.accountPublicSpendingOASI+late.accountFederalReceiptsLost,3)
+    expect(late.accountNetRevenueGDP).toBeLessThan(
+      100*result.inputs.accountPayrollRate)
     expect(result.totals.baseline.savingsPV2026Trillions).toBeCloseTo(0,8)
     expect(result.totals.flat150.retirementPV2026Trillions).toBeGreaterThan(0)
     expect(result.totals.flat150Prefunded25.retirementPV2026Trillions).toBeGreaterThan(0)
