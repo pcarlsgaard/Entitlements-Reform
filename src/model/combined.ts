@@ -13,6 +13,8 @@ import type { TransferReplacementSettings } from '../tax/model/types'
 import type { HouseholdInput, ReformSettings } from '../tax/model/types'
 import { currentLawRetirementAge, defaultAssumptions } from './defaults'
 import { simulate } from './simulate'
+import { defaultPersonalAccountSettings, projectAccountReform } from './personalAccountReform'
+import type { PersonalAccountSettings } from './personalAccountReform'
 import type { BenefitPolicySelection, FiscalBridge } from './simulate'
 import {
   defaultOtherSpendingPolicy,
@@ -31,6 +33,7 @@ export interface CombinedPolicy {
   health: HealthPolicySettings
   transfers: TransferReplacementSettings
   benefits: BenefitPolicySelection
+  personalAccounts: PersonalAccountSettings
   spendingEnabled: boolean
   otherSpending: OtherSpendingPolicy
   assumptions: ModelAssumptions
@@ -73,6 +76,7 @@ export const defaultCombinedPolicy: CombinedPolicy = {
   health: { ...defaultHealthPolicySettings, adultHealthCredit: 3000, childHealthCredit: 1500, replaceAcaAptc: true },
   transfers: defaultTransferReplacementSettings,
   benefits: { socialSecurityReform: false, medicareReform: false },
+  personalAccounts: { ...defaultPersonalAccountSettings },
   spendingEnabled: false,
   otherSpending: { ...defaultOtherSpendingPolicy },
   // A zero debt-risk premium keeps the unsolved 70-year debt paths interpretable;
@@ -136,7 +140,7 @@ export function scoreCombined(policy: CombinedPolicy, taxIndexingMode: TaxIndexi
       ? policy.assumptions.medicareEligibilityAge : defaultAssumptions.medicareEligibilityAge,
     socialSecurityBenefitCap2026: policy.benefits.socialSecurityReform
       ? policy.assumptions.socialSecurityBenefitCap2026 : null,
-    fundingStrategy: policy.benefits.socialSecurityReform && policy.benefits.medicareReform &&
+    fundingStrategy: !policy.personalAccounts.enabled && policy.benefits.socialSecurityReform && policy.benefits.medicareReform &&
       policy.assumptions.socialSecurityBenefitCap2026 === null
       ? policy.assumptions.fundingStrategy : 'paygo',
     endYear: policy.assumptions.reformYear + 69,
@@ -147,6 +151,13 @@ export function scoreCombined(policy: CombinedPolicy, taxIndexingMode: TaxIndexi
     medicareEligibilityAge: defaultAssumptions.medicareEligibilityAge,
     socialSecurityBenefitCap2026: null,
   }
+  const accountRows = policy.benefits.socialSecurityReform && policy.personalAccounts.enabled
+    ? projectAccountReform(assumptions,policy.personalAccounts,policy.baselineMode) : []
+  const accountsByYear = new Map(accountRows.map(row=>[row.year,row]))
+  const personalAccountFiscalBridge: Partial<FiscalBridge> = accountRows.length?{
+    socialSecurityRetirementPublicTopupBillionsForYear:(year)=>accountsByYear.get(year)?.federalTopupsBillions??0,
+    personalAccountMatchingBillionsForYear:(year)=>accountsByYear.get(year)?.governmentMatchingBillions??0,
+  }:{}
   const health = calculateHealthAnalysis(policy.tax, policy.health)
   const programSavingsBillions = calculateFederalProgramSavings(policy.transfers)
   const tax = calculateMacro(policy.tax, {
@@ -195,6 +206,7 @@ export function scoreCombined(policy: CombinedPolicy, taxIndexingMode: TaxIndexi
   }
   const combinedFiscalBridge: FiscalBridge = {
     ...taxFiscalBridge,
+    ...personalAccountFiscalBridge,
     otherMandatoryPolicySavingsGDP: spendingFiscalBridge.otherMandatoryPolicySavingsGDP,
     defenseDiscretionarySavingsGDPForYear: spendingFiscalBridge.defenseDiscretionarySavingsGDPForYear,
     nonDefenseDiscretionarySavingsGDPForYear: spendingFiscalBridge.nonDefenseDiscretionarySavingsGDPForYear,
@@ -230,7 +242,8 @@ export function scoreCombined(policy: CombinedPolicy, taxIndexingMode: TaxIndexi
     {}, policy.baselineMode, undefined,
     taxFiscalBridge, dynamicGDP,
   )
-  const benefitsOnly = simulate(assumptions, (year) => currentLawRevenueGDP(year), {}, policy.baselineMode, policy.benefits)
+  const benefitsOnly = simulate(assumptions, (year) => currentLawRevenueGDP(year), {}, policy.baselineMode, policy.benefits,
+    {otherMandatorySavingsGDP:0,...personalAccountFiscalBridge})
   const spendingOnly = simulate(
     comparatorAssumptions,
     (year) => currentLawRevenueGDP(year),
@@ -278,6 +291,7 @@ export function scoreCombined(policy: CombinedPolicy, taxIndexingMode: TaxIndexi
     spendingOnly,
     combined,
     staticCombined,
+    accountsByYear,
     laborResponse,
     netWageLogChange,
     steadyGDPLevelChange,
