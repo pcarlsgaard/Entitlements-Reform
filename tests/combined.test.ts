@@ -2,6 +2,19 @@ import { describe, expect, it } from 'vitest'
 import { defaultCombinedPolicy, scoreCombined } from '../src/model/combined'
 
 describe('combined fiscal bridge', () => {
+  it('changes only the combined financing path when selecting primary balance', () => {
+    const result = scoreCombined({ ...defaultCombinedPolicy,
+      revenuePolicy: { mode: 'primaryBalance', additionalRevenueGDP: 0 } })
+    expect(result.combined).toBe(result.financingScenarios.primaryBalance)
+    expect(result.combined.years[0]!.revenue).toBeCloseTo(result.combined.years[0]!.totalPrimarySpending, 7)
+    expect(result.combined.years[0]!.overallDeficit).toBeCloseTo(result.combined.years[0]!.netInterest, 7)
+    expect(result.financingScenarios.totalBalance.years[0]!.overallDeficit).toBeCloseTo(0, 7)
+    expect(result.financingScenarios.totalBalance.years.at(-1)!.endingDebtGDP)
+      .toBeLessThan(result.financingScenarios.primaryBalance.years.at(-1)!.endingDebtGDP)
+    expect(result.taxOnly.years[0]!.revenueRate)
+      .toBeCloseTo(result.financingScenarios.taxSchedule.years[0]!.revenueRate, 8)
+  })
+
   it('reproduces the current-law debt path with both reforms disabled', () => {
     const result = scoreCombined({
       ...defaultCombinedPolicy,
