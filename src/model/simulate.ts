@@ -43,6 +43,16 @@ export type RevenueSchedule = (
   context: RevenueScheduleContext,
 ) => number
 
+/** Optional annual revenue target for the combined reform scenario. */
+export type RevenueTargetMode = 'taxSchedule' | 'primaryBalance' | 'totalBalance'
+export interface RevenueTargetRule {
+  mode: Exclude<RevenueTargetMode, 'taxSchedule'>
+  /** Receipts above the selected balance, as a share of GDP. */
+  additionalRevenueGDP: number
+  /** Stop extra receipts upon reaching this debt/GDP ratio. */
+  debtTargetGDP: number
+}
+
 export interface InitialFiscalState {
   beginningDebtBillions?: number
   effectiveNominalInterestRate?: number
@@ -96,6 +106,7 @@ export function simulate(
   fiscalBridge?: FiscalBridge,
   /** Optional policy-induced GDP level path, relative to the baseline economy. */
   gdpLevelFactorForYear?: (year: number) => number,
+  revenueTargetRule?: RevenueTargetRule,
 ): SimulationResult {
   if (selection ? !selection.socialSecurityReform : Boolean(currentLawBaselineMode)) {
     assumptions = { ...assumptions, fullRetirementAge: currentLawRetirementAge, socialSecurityClaimAge: currentLawRetirementAge, socialSecurityBenefitCap2026: null }
@@ -278,7 +289,7 @@ export function simulate(
     // Once the selected debt/GDP target is reached, the surplus falls to zero:
     // receipts equal total outlays, nominal debt is held constant, and growth
     // continues to reduce debt/GDP.
-    if (!fiscalBalanceReached &&
+    if (!revenueTargetRule && !fiscalBalanceReached &&
       scheduledRevenue >= totalFederalSpending - 1e-9) {
       fiscalBalanceReached = true
     }
@@ -288,7 +299,19 @@ export function simulate(
     const maximumRevenueToTarget =
       beginningDebt + totalFederalSpending - targetDebt
     let revenue = scheduledRevenue
-    if (fiscalBalanceReached) {
+    if (revenueTargetRule) {
+      // In primary-balance mode interest is borrowed; in total-balance mode
+      // receipts finance both primary spending and net interest.
+      const balancedSpending = revenueTargetRule.mode === 'primaryBalance'
+        ? totalPrimarySpending : totalFederalSpending
+      const desiredIncrement = Math.max(0, revenueTargetRule.additionalRevenueGDP) * nominalGDP
+      const debtGoal = revenueTargetRule.debtTargetGDP * nominalGDP
+      const maximumIncrement = Math.max(0,
+        beginningDebt + totalFederalSpending - debtGoal - balancedSpending)
+      const increment = beginningDebtGDP <= revenueTargetRule.debtTargetGDP + 1e-12
+        ? 0 : Math.min(desiredIncrement, maximumIncrement)
+      revenue = balancedSpending + increment
+    } else if (fiscalBalanceReached) {
       const scheduledSurplus = Math.max(
         0,
         scheduledRevenue - totalFederalSpending,
