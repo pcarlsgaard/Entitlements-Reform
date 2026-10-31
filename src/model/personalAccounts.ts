@@ -100,7 +100,7 @@ function workWeight(age: number): number {
   return .55
 }
 function gdp(year: number, a: ModelAssumptions): number {
-  return a.startingNominalGDPBillions * nominalGDPGrowth(a) ** (year-a.reformYear)
+  return a.startingNominalGDPBillions * (1 + nominalGDPGrowth(a)) ** (year-a.reformYear)
 }
 export function payrollDiversionShare(year: number, p: PersonalAccountsPolicy): number {
   return year < p.startYear ? 0 : p.redirectShare * Math.min(1,(year-p.startYear+1)/p.rampYears)
