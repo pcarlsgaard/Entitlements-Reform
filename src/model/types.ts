@@ -180,6 +180,10 @@ export interface PrimaryComponents {
 export interface SimulationYear extends PrimaryComponents {
   year: number
   nominalGDP: number
+  /** Lost current-law public receipts owing to mandatory contributions directly to private accounts. */
+  lostMandatoryPayrollReceipts?: number
+  /** Lost income taxes on old-age checks displaced by tax-exempt private annuities. */
+  lostBenefitTaxReceipts?: number
   socialSecurityPrefunding: number
   fullSocialSecurityPrefundingCost: number
   socialSecurityPrefundedShare: number
