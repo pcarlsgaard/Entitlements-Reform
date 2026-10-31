@@ -1,0 +1,28 @@
+name: Personal accounts research report
+on:
+  push:
+    branches:
+      - experiment/scheduled-benefit-personal-accounts
+  workflow_dispatch:
+
+jobs:
+  sensitivity-report:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run test -- tests/personalAccounts.test.ts
+      - name: Run research sensitivity analysis
+        run: npm run analyze:personal-accounts | tee personal-accounts-sensitivity.txt
+      - name: Archive report
+        uses: actions/upload-artifact@v4
+        with:
+          name: personal-accounts-sensitivity
+          path: personal-accounts-sensitivity.txt
