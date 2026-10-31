@@ -124,6 +124,41 @@ for(const spec of specs){
       privateCoverage:d(100*x.privateTowardPromiseBillions/x.scheduledOASIBillions)})
   }
 }
+// Five-year government cash-flow trajectory: private saving is never federal outlay.
+const trajectoryYears=[2026,2030,2035,2040,2045,2050,2055,2060,2065,2070,2075,2080,2085,2090,2095]
+const trajectory=trajectoryYears.map(year=>{
+  const base=baseline.years[year-2026]!
+  const paygoFlat=flat.years[year-2026]!
+  const funded=flatPrefunded25.years[year-2026]!
+  const acct=central.sim.years[year-2026]!
+  const model=central.accountMap.get(year)!
+  const g=base.nominalGDP
+  const totalSavings=model.redirectedBillions
+  const privateAnnuities=model.privateTowardPromiseBillions+model.privateExcessBillions
+  return {year,
+    mandatorySavingCoveredWagePct:d(100*.124*Math.min(1,(year-2026+1)/10)),
+    privateAccountDepositsGDP:d(100*totalSavings/g),
+    baselineRetiredWorkerSpendingGDP:d(100*base.legacySocialSecurity/g),
+    privateAccountsPublicTopupsGDP:d(100*acct.legacySocialSecurity/g),
+    privateAnnuitiesGDP:d(100*privateAnnuities/g),
+    privateAnnuitiesCoveringGuaranteeGDP:d(100*model.privateTowardPromiseBillions/g),
+    privateAnnuitiesExcessGDP:d(100*model.privateExcessBillions/g),
+    lostFederalPayrollReceiptsGDP:d(100*(acct.lostMandatoryPayrollReceipts??0)/g),
+    lostFederalBenefitTaxesGDP:d(100*(acct.lostBenefitTaxReceipts??0)/g),
+    accountFiscalCostGDP:d(100*model.federalCostBillions/g),
+    accountFiscalSavingsGDP:d(100*model.fiscalSavingsBillions/g),
+    flatPaygoPublicBenefitsGDP:d(100*(paygoFlat.legacySocialSecurity+paygoFlat.flatSocialSecurityPaygo)/g),
+    flatPrefunded25PublicBenefitsGDP:d(100*(funded.legacySocialSecurity+funded.flatSocialSecurityPaygo)/g),
+    flatPrefunded25TreasuryEndowmentDepositsGDP:d(100*funded.socialSecurityPrefunding/g),
+    flatPrefunded25TotalPublicCostsGDP:d(100*flatFundedCost(funded)/g),
+    baselineTotalFederalOutlaysGDP:d(100*base.totalFederalSpending/g),
+    accountTotalFederalOutlaysGDP:d(100*acct.totalFederalSpending/g),
+    baselineFederalRevenueGDP:d(100*base.revenue/g),
+    accountFederalRevenueGDP:d(100*acct.revenue/g),
+    baselineDebtGDP:d(100*base.endingDebtGDP),
+    accountDebtGDP:d(100*acct.endingDebtGDP),
+  }
+})
 const incomeGroups=central.accounts.filter(x=>[2050,2095].includes(x.year)).map(row=>({
   year:row.year,
   groups:row.groups.map(group=>({group:group.name,
@@ -135,7 +170,7 @@ export const personalAccountComparison={inputs:{
   accountPayrollRate:.124,accountRampYears:10,accountGrossRealReturn:.04,
   accountFee:.0025,accountAnnuityRate:.023,benefitTaxLossRate:.07,
   federalBorrowingRateSensitivity:0,
-},snapshots,totals,sensitivity,incomeGroups}
+},snapshots,trajectory,totals,sensitivity,incomeGroups}
 console.log('PERSONAL_ACCOUNT_COMPARISON_JSON_START')
 console.log(JSON.stringify(personalAccountComparison))
 console.log('PERSONAL_ACCOUNT_COMPARISON_JSON_END')
