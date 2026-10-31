@@ -38,11 +38,15 @@ function runAccounts(policy:PersonalAccountsPolicy){
   const accountMap=new Map(accounts.map(r=>[r.year,r]))
   const sim=simulate(assumptions,revenue,{},'scheduled',undefined,{
     otherMandatorySavingsGDP:0,
-    socialSecurityRetirementNetAdjustmentBillionsForYear:(year:number)=>{
+    socialSecurityRetirementPublicTopupBillionsForYear:(year:number)=>{
       const r=accountMap.get(year)
       if(!r)throw Error('Missing account year '+year)
-      return r.federalCostBillions-r.scheduledOASIBillions
+      return r.governmentTopupBillions
     },
+    mandatoryPrivateSavingsPayrollReceiptsLostBillionsForYear:
+      (year:number)=>accountMap.get(year)?.redirectedBillions ?? 0,
+    privateAnnuityBenefitTaxReceiptsLostBillionsForYear:
+      (year:number)=>accountMap.get(year)?.lostBenefitTaxesBillions ?? 0,
   })
   return {accounts,sim,accountMap}
 }
@@ -61,6 +65,9 @@ const snapshots=years.map(year=>{
     flat150Prefunded40Cost:d(100*flatFundedCost(pf4)/g),
     flatPrefundingDeposit25:d(100*pf.socialSecurityPrefunding/g),
     accountCostOASI:d(100*r.federalCostBillions/g),
+    accountPublicSpendingOASI:d(100*p.legacySocialSecurity/g),
+    accountFederalReceiptsLost:d(100*((p.lostMandatoryPayrollReceipts ?? 0)+(p.lostBenefitTaxReceipts ?? 0))/g),
+    accountNetRevenueGDP:d(100*p.revenue/g),
     accountDiversion:d(100*r.redirectedBillions/g),
     accountTopup:d(100*r.governmentTopupBillions/g),
     accountBenefitTaxLoss:d(100*r.lostBenefitTaxesBillions/g),
@@ -82,6 +89,8 @@ function summary(sim:typeof baseline, cost:(year:number)=>number){
   const pv0=baseline.years.reduce((sum,row)=>sum+realPV(row.legacySocialSecurity,row.year),0)
   const end=sim.years.at(-1)!
   return {retirementPV2026Trillions:d(pv/1000),
+    directPublicOASIPV2026Trillions:d(sim.years.reduce((sum,row)=>
+      sum+realPV(row.legacySocialSecurity+row.flatSocialSecurityPaygo,row.year),0)/1000),
     savingsPV2026Trillions:d((pv0-pv)/1000),
     finalDebtGDP:d(100*end.endingDebtGDP),
     peakDebtGDP:d(100*Math.max(...sim.years.map(x=>x.endingDebtGDP)))}
