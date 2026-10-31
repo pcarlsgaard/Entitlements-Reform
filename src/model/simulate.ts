@@ -55,6 +55,10 @@ export interface BenefitPolicySelection {
 }
 
 export interface FiscalBridge {
+  /** Public benefit-floor topups from mandatory private retirement annuities. */
+  socialSecurityRetirementPublicTopupBillionsForYear?: (year:number)=>number
+  /** Federal 1:1 matching grants for privately held retirement accounts. */
+  personalAccountMatchingBillionsForYear?: (year:number)=>number
   /** Savings classified in other mandatory spending, as a share of GDP. */
   savingsScaleForYear?: (year: number) => number
   otherMandatorySavingsGDP: number
@@ -83,7 +87,8 @@ export function primaryComponentSum(components: PrimaryComponents): number {
     components.otherMandatory +
     components.defenseDiscretionary +
     components.nonDefenseDiscretionary +
-    components.newCohortPrefunding
+    components.newCohortPrefunding +
+    (components.personalAccountMatching??0)
   )
 }
 
@@ -200,8 +205,9 @@ export function simulate(
 
     const components: PrimaryComponents = {
       legacySocialSecurity:
-        socialSecurity.legacyBillions * deliveryShares.socialSecurity,
-      flatSocialSecurityPaygo: socialSecurity.flatPaygoBillions,
+        fiscalBridge?.socialSecurityRetirementPublicTopupBillionsForYear?.(year) ??
+          socialSecurity.legacyBillions * deliveryShares.socialSecurity,
+      flatSocialSecurityPaygo: fiscalBridge?.socialSecurityRetirementPublicTopupBillionsForYear ? 0 : socialSecurity.flatPaygoBillions,
       otherOASDI: assumptions.otherOASDIGDP * baselineNominalGDP,
       legacySeniorMedicare:
         medicare.legacyBillions * deliveryShares.seniorMedicare,
@@ -241,6 +247,7 @@ export function simulate(
                 (fiscalBridge?.nonDefenseDiscretionarySavingsGDPForYear?.(year) ?? 0) * baselineNominalGDP,
             ),
       newCohortPrefunding: funding.totalPrefunding,
+      personalAccountMatching: fiscalBridge?.personalAccountMatchingBillionsForYear?.(year)??0,
     }
     const totalPrimarySpending = primaryComponentSum(components)
     const beginningDebtGDP = beginningDebt / nominalGDP

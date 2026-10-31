@@ -1,6 +1,7 @@
 import { defaultAssumptions } from './defaults'
 import { eligiblePopulationMillions } from './demographics'
 import { defaultCombinedPolicy } from './combined'
+import { defaultPersonalAccountSettings } from './personalAccountReform'
 import type { CombinedPolicy } from './combined'
 import { exampleHouseholds } from './householdScenario'
 import type { ExampleHousehold } from './householdScenario'
@@ -76,6 +77,7 @@ export function parseConfiguration(json: string): SavedConfiguration {
     if (record(scenario.policy.tax) &&
         scenario.policy.tax.progressiveWageBrackets === undefined)
       scenario.policy.tax.progressiveWageBrackets = null
+    if (scenario.policy.personalAccounts === undefined) scenario.policy.personalAccounts={...defaultPersonalAccountSettings}
     if (scenario.policy.spendingEnabled === undefined) scenario.policy.spendingEnabled = false
     if (scenario.policy.otherSpending === undefined)
       scenario.policy.otherSpending = structuredClone(defaultOtherSpendingPolicy)
@@ -134,6 +136,9 @@ export function parseConfiguration(json: string): SavedConfiguration {
   if (!record(scenario.policy)) throw new Error('Missing policy.')
   const policy = scenario.policy as unknown as CombinedPolicy
   oneOf(policy.baselineMode, ['scheduled', 'payable'], 'baseline mode')
+  within(policy.personalAccounts.requiredContributionRate,0,0.25,'mandatory account saving rate')
+  within(policy.personalAccounts.expectedRealReturn,0,0.12,'expected real account return')
+  within(policy.personalAccounts.governmentMatchCap2026,0,25000,'annual matching cap')
   oneOf(policy.assumptions.revenueCapBasis, ['totalBalance','primaryBalance','customOverallBalance'], 'revenue cap basis')
   within(policy.assumptions.customRevenueCapBalanceGDP, -0.10, 0.10, 'custom overall budget balance')
   oneOf(policy.tax.wageTaxMode, ['flat', 'progressive'], 'wage tax mode')
