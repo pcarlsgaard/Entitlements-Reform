@@ -68,6 +68,7 @@ const snapshots=years.map(year=>{
     accountPublicSpendingOASI:d(100*p.legacySocialSecurity/g),
     accountFederalReceiptsLost:d(100*((p.lostMandatoryPayrollReceipts ?? 0)+(p.lostBenefitTaxReceipts ?? 0))/g),
     accountNetRevenueGDP:d(100*p.revenue/g),
+    baselineNetRevenueGDP:d(100*b.revenue/g),
     accountDiversion:d(100*r.redirectedBillions/g),
     accountTopup:d(100*r.governmentTopupBillions/g),
     accountBenefitTaxLoss:d(100*r.lostBenefitTaxesBillions/g),
