@@ -1,6 +1,7 @@
 import { currentLawRevenueGDP, replacedRevenueDriftGDP } from './revenueBaseline'
 import { taxRevenueChangePath, realGDPPerCapitaGrowthFactor } from './taxProjection'
 import type { TaxIndexingMode } from './taxProjection'
+import { cbo2026RevenueGDP } from '../data/cboBaseline'
 import { calculateMacro, defaultSettings } from '../tax/model/macro'
 import { calculateHousehold } from '../tax/model/household'
 import { calculateLaborResponse } from '../tax/model/laborResponse'
@@ -12,7 +13,7 @@ import type { TransferReplacementSettings } from '../tax/model/types'
 import type { HouseholdInput, ReformSettings } from '../tax/model/types'
 import { currentLawRetirementAge, defaultAssumptions } from './defaults'
 import { simulate } from './simulate'
-import type { BenefitPolicySelection, FiscalBridge, RevenueTargetMode } from './simulate'
+import type { BenefitPolicySelection, FiscalBridge } from './simulate'
 import {
   defaultOtherSpendingPolicy,
   discretionaryNominalGrowth,
@@ -34,11 +35,6 @@ export interface CombinedPolicy {
   otherSpending: OtherSpendingPolicy
   assumptions: ModelAssumptions
   baselineMode: CurrentLawBaselineMode
-  revenuePolicy: {
-    mode: RevenueTargetMode
-    /** Optional annual receipts above the selected balance, as a GDP share. */
-    additionalRevenueGDP: number
-  }
   dynamic: {
     enabled: boolean
     /** Hours supplied per percentage change in the after-tax marginal wage. */
@@ -83,7 +79,6 @@ export const defaultCombinedPolicy: CombinedPolicy = {
   // the entitlement solver's separate default still uses its 2 bp sensitivity.
   assumptions: { ...defaultAssumptions, fundingStrategy: 'paygo', endYear: 2095, debtSensitivity: 0 },
   baselineMode: 'scheduled',
-  revenuePolicy: { mode: 'taxSchedule', additionalRevenueGDP: 0 },
   dynamic: { enabled: false, laborElasticity: 0.15, laborShareGDP: 0.60, phaseInYears: 10,
     capitalGDPLevelAtReference: 0.014, capitalRateSensitivity: 0.15, capitalPhaseInYears: 15 },
 }
@@ -242,29 +237,17 @@ export function scoreCombined(policy: CombinedPolicy, taxIndexingMode: TaxIndexi
     {}, policy.baselineMode, undefined,
     spendingFiscalBridge,
   )
-  const simulateBudgetRule = (
-    mode: RevenueTargetMode,
-    gdpFactor?: (year: number) => number,
-  ) => simulate(
+  const staticCombined = simulate(
     assumptions,
     (year) => currentLawRevenueGDP(year) + revenueDelta(year),
-    {}, policy.baselineMode, policy.benefits, combinedFiscalBridge, gdpFactor,
-    mode === 'taxSchedule' ? undefined : {
-      mode,
-      additionalRevenueGDP: policy.revenuePolicy.additionalRevenueGDP,
-      debtTargetGDP: assumptions.debtPaydownTargetGDP,
-    },
+    {}, policy.baselineMode, policy.benefits,
+    combinedFiscalBridge,
   )
-  const staticCombined = simulateBudgetRule(policy.revenuePolicy.mode)
-  const financingScenarios = {
-    taxSchedule: !dynamicGDP && policy.revenuePolicy.mode === 'taxSchedule'
-      ? staticCombined : simulateBudgetRule('taxSchedule', dynamicGDP),
-    primaryBalance: !dynamicGDP && policy.revenuePolicy.mode === 'primaryBalance'
-      ? staticCombined : simulateBudgetRule('primaryBalance', dynamicGDP),
-    totalBalance: !dynamicGDP && policy.revenuePolicy.mode === 'totalBalance'
-      ? staticCombined : simulateBudgetRule('totalBalance', dynamicGDP),
-  }
-  const combined = financingScenarios[policy.revenuePolicy.mode]
+  const combined = dynamicGDP ? simulate(
+    assumptions,
+    (year) => currentLawRevenueGDP(year) + revenueDelta(year),
+    {}, policy.baselineMode, policy.benefits, combinedFiscalBridge, dynamicGDP,
+  ) : staticCombined
   const goal = (extraRevenueGDP: number) => simulate(
     assumptions,
     (year) => currentLawRevenueGDP(year) + revenueDelta(year) + extraRevenueGDP,
@@ -295,7 +278,6 @@ export function scoreCombined(policy: CombinedPolicy, taxIndexingMode: TaxIndexi
     spendingOnly,
     combined,
     staticCombined,
-    financingScenarios,
     laborResponse,
     netWageLogChange,
     steadyGDPLevelChange,

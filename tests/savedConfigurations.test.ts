@@ -28,13 +28,13 @@ describe('portable named simulator configurations', () => {
     expect(parseConfigurationLibrary(JSON.stringify([saved]))).toEqual([saved])
   })
 
-  it('migrates older saved policies without the revenue-target selector', () => {
-    const legacy = makeConfiguration('Legacy financing', scenario(), 'legacy-financing')
-    delete (legacy.scenario.policy as unknown as Record<string, unknown>).revenuePolicy
+  it('migrates older saved policies to the original total-balance cap default', () => {
+    const legacy = makeConfiguration('Legacy cap', scenario(), 'legacy-cap')
+    delete (legacy.scenario.policy.assumptions as unknown as Record<string, unknown>).revenueCapBasis
+    delete (legacy.scenario.policy.assumptions as unknown as Record<string, unknown>).customRevenueCapBalanceGDP
     const imported = parseConfiguration(JSON.stringify(legacy))
-    expect(imported.scenario.policy.revenuePolicy).toEqual({
-      mode: 'taxSchedule', additionalRevenueGDP: 0,
-    })
+    expect(imported.scenario.policy.assumptions.revenueCapBasis).toBe('totalBalance')
+    expect(imported.scenario.policy.assumptions.customRevenueCapBalanceGDP).toBe(0)
   })
 
   it('migrates the former constant wage-growth control to a Trustees-path deviation', () => {

@@ -80,6 +80,8 @@ export const defaultAssumptions: ModelAssumptions = {
   debtPaydownTargetGDP: 0.40,
   // Default: balance the total budget once reached and let GDP growth reduce debt/GDP.
   debtPaydownSurplusCapGDP: 0,
+  revenueCapBasis: 'totalBalance',
+  customRevenueCapBalanceGDP: 0,
   peakDebtCeilingGDP: 1.5,
 }
 

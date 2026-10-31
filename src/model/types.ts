@@ -4,6 +4,9 @@ export type EntitlementDesign = 'reform' | 'currentLaw'
 
 export type CurrentLawBaselineMode = 'scheduled' | 'payable'
 
+/** Reference budget balance against which the tax-schedule revenue cap is measured. */
+export type RevenueCapBasis = 'totalBalance' | 'primaryBalance' | 'customOverallBalance'
+
 export type SocialSecurityCOLAMode = 'current' | 'chainedCpi' | 'cap' | 'custom'
 
 export type SocialSecurityInitialBenefitMode =
@@ -91,6 +94,10 @@ export interface ModelAssumptions {
   debtPaydownTargetGDP: number
   /** Maximum annual overall surplus devoted to debt paydown, as a share of GDP. */
   debtPaydownSurplusCapGDP: number
+  /** Budget reference for limiting (never increasing) scheduled revenue. */
+  revenueCapBasis: RevenueCapBasis
+  /** Overall budget surplus target (signed GDP share), used for custom basis only. */
+  customRevenueCapBalanceGDP: number
   peakDebtCeilingGDP: number
 }
 
@@ -193,6 +200,8 @@ export interface SimulationYear extends PrimaryComponents {
   totalPrimarySpending: number
   revenue: number
   revenueRate: number
+  /** Uncapped revenue rate implied by statutory tax and legacy receipts. */
+  scheduledRevenueRate: number
   primaryBalance: number
   primaryDeficit: number
   realTargetInterestRate: number

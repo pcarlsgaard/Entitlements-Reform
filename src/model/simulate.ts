@@ -43,16 +43,6 @@ export type RevenueSchedule = (
   context: RevenueScheduleContext,
 ) => number
 
-/** Optional annual revenue target for the combined reform scenario. */
-export type RevenueTargetMode = 'taxSchedule' | 'primaryBalance' | 'totalBalance'
-export interface RevenueTargetRule {
-  mode: Exclude<RevenueTargetMode, 'taxSchedule'>
-  /** Receipts above the selected balance, as a share of GDP. */
-  additionalRevenueGDP: number
-  /** Stop extra receipts upon reaching this debt/GDP ratio. */
-  debtTargetGDP: number
-}
-
 export interface InitialFiscalState {
   beginningDebtBillions?: number
   effectiveNominalInterestRate?: number
@@ -106,7 +96,6 @@ export function simulate(
   fiscalBridge?: FiscalBridge,
   /** Optional policy-induced GDP level path, relative to the baseline economy. */
   gdpLevelFactorForYear?: (year: number) => number,
-  revenueTargetRule?: RevenueTargetRule,
 ): SimulationResult {
   if (selection ? !selection.socialSecurityReform : Boolean(currentLawBaselineMode)) {
     assumptions = { ...assumptions, fullRetirementAge: currentLawRetirementAge, socialSecurityClaimAge: currentLawRetirementAge, socialSecurityBenefitCap2026: null }
@@ -137,8 +126,7 @@ export function simulate(
   let previousEffectiveRate =
     initialState.effectiveNominalInterestRate ??
     assumptions.startingEffectiveNominalRate
-  let fiscalBalanceReached = false
-
+ 
   for (
     let year = assumptions.reformYear;
     year <= assumptions.endYear;
@@ -283,50 +271,27 @@ export function simulate(
       totalFederalSpending,
     })
     const scheduledRevenue = scheduledRevenueRate * nominalGDP
-    // The scheduled tax policy runs until it first closes the overall deficit.
-    // From that point onward the budget remains at least balanced. Any additional
-    // surplus used for debt reduction is capped explicitly as a share of GDP.
-    // Once the selected debt/GDP target is reached, the surplus falls to zero:
-    // receipts equal total outlays, nominal debt is held constant, and growth
-    // continues to reduce debt/GDP.
-    if (!revenueTargetRule && !fiscalBalanceReached &&
-      scheduledRevenue >= totalFederalSpending - 1e-9) {
-      fiscalBalanceReached = true
-    }
-    const atDebtTarget =
+    // The tax schedule always determines receipts. This is a ceiling on its
+    // receipts, NOT a revenue target/floor: a schedule producing less revenue
+    // than the cap is collected unchanged.
+    const referenceReceipts =
+      assumptions.revenueCapBasis === 'primaryBalance' ? totalPrimarySpending :
+      assumptions.revenueCapBasis === 'customOverallBalance'
+        ? totalFederalSpending + assumptions.customRevenueCapBalanceGDP * nominalGDP
+        : totalFederalSpending
+    const permittedReceipts = Math.max(0,
+      referenceReceipts + assumptions.debtPaydownSurplusCapGDP * nominalGDP)
+    // Preserve the existing separate debt/GDP paydown stop. Even when the
+    // revenue cap would permit a surplus, no extra receipts retire debt after
+    // the paydown target, and a single year cannot overshoot the target.
+    const beginningDebtGDPAtTarget =
       beginningDebtGDP <= assumptions.debtPaydownTargetGDP + 1e-12
-    const targetDebt = assumptions.debtPaydownTargetGDP * nominalGDP
-    const maximumRevenueToTarget =
-      beginningDebt + totalFederalSpending - targetDebt
-    let revenue = scheduledRevenue
-    if (revenueTargetRule) {
-      // In primary-balance mode interest is borrowed; in total-balance mode
-      // receipts finance both primary spending and net interest.
-      const balancedSpending = revenueTargetRule.mode === 'primaryBalance'
-        ? totalPrimarySpending : totalFederalSpending
-      const desiredIncrement = Math.max(0, revenueTargetRule.additionalRevenueGDP) * nominalGDP
-      const debtGoal = revenueTargetRule.debtTargetGDP * nominalGDP
-      const maximumIncrement = Math.max(0,
-        beginningDebt + totalFederalSpending - debtGoal - balancedSpending)
-      const increment = beginningDebtGDP <= revenueTargetRule.debtTargetGDP + 1e-12
-        ? 0 : Math.min(desiredIncrement, maximumIncrement)
-      revenue = balancedSpending + increment
-    } else if (fiscalBalanceReached) {
-      const scheduledSurplus = Math.max(
-        0,
-        scheduledRevenue - totalFederalSpending,
-      )
-      const allowedSurplus = atDebtTarget
-        ? 0
-        : Math.min(
-            scheduledSurplus,
-            assumptions.debtPaydownSurplusCapGDP * nominalGDP,
-          )
-      revenue = totalFederalSpending + allowedSurplus
-      if (!atDebtTarget) {
-        revenue = Math.min(revenue, maximumRevenueToTarget)
-      }
-    }
+    const debtTarget = assumptions.debtPaydownTargetGDP * nominalGDP
+    const receiptsToDebtTarget = beginningDebt + totalFederalSpending - debtTarget
+    const paydownCeiling = beginningDebtGDPAtTarget
+      ? totalFederalSpending
+      : Math.max(0, receiptsToDebtTarget)
+    const revenue = Math.min(scheduledRevenue, permittedReceipts, paydownCeiling)
     const revenueAdjusted = Math.abs(revenue - scheduledRevenue) > 1e-9
     const revenueRate = revenueAdjusted ? revenue / nominalGDP : scheduledRevenueRate
     const primaryBalance = revenue - totalPrimarySpending
@@ -356,6 +321,7 @@ export function simulate(
       totalPrimarySpending,
       revenue,
       revenueRate,
+      scheduledRevenueRate,
       primaryBalance,
       primaryDeficit,
       realTargetInterestRate,
