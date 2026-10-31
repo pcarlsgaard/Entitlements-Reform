@@ -18,7 +18,8 @@ describe('scheduled-benefit personal accounts',()=>{
     expect(payrollDiversionShare(2026,p)).toBeCloseTo(.1)
     expect(payrollDiversionShare(2035,p)).toBeCloseTo(1)
     const annual=redirectedPayrollBillions(2026,a,p)
-    expect(annual/a.startingNominalGDPBillions).toBeCloseTo(.35*.124*.1)
+    expect(annual/a.startingNominalGDPBillions).toBeCloseTo(.342*.124*.1)
+    expect(defaultPersonalAccountsPolicy.payrollGDPByYear?.[2035]).toBeCloseTo(.362)
   })
   it('does not give legacy retirees retroactive capital',()=>{
     const row=projectPersonalAccounts(a,defaultPersonalAccountsPolicy,2026)[0]!
