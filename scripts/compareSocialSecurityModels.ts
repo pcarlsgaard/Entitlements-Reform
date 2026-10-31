@@ -1,0 +1,117 @@
+/**
+ * Reproducible same-baseline federal comparison.
+ * Run: npm run analyze:comparison
+ * No tax reform, Medicare reform, or other spending policies.
+ * Scheduled-benefit comparator, 2026-2095, constant exogenous macro path.
+ */
+import { defaultAssumptions } from '../src/model/defaults'
+import { simulate } from '../src/model/simulate'
+import { currentLawRevenueGDP } from '../src/model/revenueBaseline'
+import { defaultPersonalAccountsPolicy, projectPersonalAccounts } from '../src/model/personalAccounts'
+import type { PersonalAccountsPolicy, PersonalAccountsYear } from '../src/model/personalAccounts'
+
+const assumptions={...defaultAssumptions,endYear:2095,debtSensitivity:0,
+  fundingStrategy:'paygo' as const}
+const flatAssumptions={...assumptions,
+  flatBenefitFPLMultiple:1.50,benefitPhaseInYears:20,
+  socialSecurityInitialBenefitMode:'flatTransition' as const,
+  fullRetirementAge:70,socialSecurityClaimAge:70,
+}
+const revenue=(year:number)=>currentLawRevenueGDP(year)
+const baseline=simulate(assumptions,revenue,{},'scheduled')
+const flat=simulate(flatAssumptions,revenue,{},undefined,
+  {socialSecurityReform:true,medicareReform:false})
+const years=[2026,2035,2050,2075,2095]
+const d=(n:number)=>Number(n.toFixed(4))
+function realPV(billions:number,year:number){
+  const t=year-2026
+  return billions / ((1+assumptions.inflation)*(1+.023))**t
+}
+function runAccounts(policy:PersonalAccountsPolicy){
+  const accounts=projectPersonalAccounts(assumptions,policy,2095)
+  const accountMap=new Map(accounts.map(r=>[r.year,r]))
+  const sim=simulate(assumptions,revenue,{},'scheduled',undefined,{
+    otherMandatorySavingsGDP:0,
+    socialSecurityRetirementNetAdjustmentBillionsForYear:(year:number)=>{
+      const r=accountMap.get(year)
+      if(!r)throw Error('Missing account year '+year)
+      return r.federalCostBillions-r.scheduledOASIBillions
+    },
+  })
+  return {accounts,sim,accountMap}
+}
+const central=runAccounts(defaultPersonalAccountsPolicy)
+const snapshots=years.map(year=>{
+  const i=year-2026
+  const b=baseline.years[i]!, f=flat.years[i]!, p=central.sim.years[i]!
+  const r=central.accountMap.get(year)!
+  const g=b.nominalGDP
+  if(Math.abs(g-r.nominalGDPBillions)>1e-6*g)throw Error('GDP mismatch in accounts')
+  return {year,
+    scheduledOASI:d(100*b.legacySocialSecurity/g),
+    flat150OASI:d(100*(f.legacySocialSecurity+f.flatSocialSecurityPaygo)/g),
+    accountCostOASI:d(100*r.federalCostBillions/g),
+    accountDiversion:d(100*r.redirectedBillions/g),
+    accountTopup:d(100*r.governmentTopupBillions/g),
+    accountBenefitTaxLoss:d(100*r.lostBenefitTaxesBillions/g),
+    accountPrivateCoveragePct:d(100*r.privateTowardPromiseBillions/r.scheduledOASIBillions),
+    savingsFlatGDP:d(100*(b.legacySocialSecurity-f.legacySocialSecurity-f.flatSocialSecurityPaygo)/g),
+    savingsAccountsGDP:d(100*r.fiscalSavingsBillions/g),
+    baselineDebtGDP:d(100*b.endingDebtGDP),
+    flatDebtGDP:d(100*f.endingDebtGDP),
+    accountDebtGDP:d(100*p.endingDebtGDP),
+    baselineTotalSpendingGDP:d(100*b.totalFederalSpending/g),
+    flatTotalSpendingGDP:d(100*f.totalFederalSpending/g),
+    accountTotalSpendingGDP:d(100*p.totalFederalSpending/g),
+  }
+})
+function summary(sim:typeof baseline, cost:(year:number)=>number){
+  const pv=sim.years.reduce((sum,row)=>sum+realPV(cost(row.year),row.year),0)
+  const pv0=baseline.years.reduce((sum,row)=>sum+realPV(row.legacySocialSecurity,row.year),0)
+  const end=sim.years.at(-1)!
+  return {retirementPV2026Trillions:d(pv/1000),
+    savingsPV2026Trillions:d((pv0-pv)/1000),
+    finalDebtGDP:d(100*end.endingDebtGDP),
+    peakDebtGDP:d(100*Math.max(...sim.years.map(x=>x.endingDebtGDP)))}
+}
+const totals={
+  baseline:summary(baseline,row=>baseline.years[row-2026]!.legacySocialSecurity),
+  flat150:summary(flat,year=>{const r=flat.years[year-2026]!;return r.legacySocialSecurity+r.flatSocialSecurityPaygo}),
+  personalAccounts:summary(central.sim,year=>central.accountMap.get(year)!.federalCostBillions),
+}
+const sensitivity: {case:string,year:number,retirementCostGDP:number,topupGDP:number,redirectGDP:number,privateCoverage:number}[]=[]
+const specs=[
+  {case:'1% real, 10yr ramp',annualRealReturn:.01,rampYears:10},
+  {case:'2.5% real, 10yr ramp',annualRealReturn:.025,rampYears:10},
+  {case:'5.5% real, 10yr ramp',annualRealReturn:.055,rampYears:10},
+  {case:'4% real, 1yr ramp',annualRealReturn:.04,rampYears:1},
+  {case:'4% real, 5yr ramp',annualRealReturn:.04,rampYears:5},
+  {case:'4% real, 20yr ramp',annualRealReturn:.04,rampYears:20},
+  {case:'4% real, 10yr, 6.2%',annualRealReturn:.04,rampYears:10,payrollRate:.062},
+  {case:'4% real, 10yr, 10.6%',annualRealReturn:.04,rampYears:10,payrollRate:.106},
+]
+for(const spec of specs){
+  const scenario=projectPersonalAccounts(assumptions,{...defaultPersonalAccountsPolicy,...spec},2095)
+  for(const year of [2050,2095]){
+    const x=scenario[year-2026]!
+    const g=x.nominalGDPBillions
+    sensitivity.push({case:spec.case,year,retirementCostGDP:d(100*x.federalCostBillions/g),
+      topupGDP:d(100*x.governmentTopupBillions/g),redirectGDP:d(100*x.redirectedBillions/g),
+      privateCoverage:d(100*x.privateTowardPromiseBillions/x.scheduledOASIBillions)})
+  }
+}
+const incomeGroups=central.accounts.filter(x=>[2050,2095].includes(x.year)).map(row=>({
+  year:row.year,
+  groups:row.groups.map(group=>({group:group.name,
+    publicTopupShareOfGroupBenefitPct:d(100*group.governmentTopupBillions/group.scheduledBillions),
+    privateExcessBillions:d(group.privateExcessBillions)})),
+}))
+export const personalAccountComparison={inputs:{
+  horizon:'2026-2095',flatFPL:1.5,flatPhaseInYears:20,flatRetirementAge:70,
+  accountPayrollRate:.124,accountRampYears:10,accountGrossRealReturn:.04,
+  accountFee:.0025,accountAnnuityRate:.023,benefitTaxLossRate:.07,
+  federalBorrowingRateSensitivity:0,
+},snapshots,totals,sensitivity,incomeGroups}
+console.log('PERSONAL_ACCOUNT_COMPARISON_JSON_START')
+console.log(JSON.stringify(personalAccountComparison))
+console.log('PERSONAL_ACCOUNT_COMPARISON_JSON_END')
