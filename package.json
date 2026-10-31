@@ -9,7 +9,8 @@
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run",
     "test:watch": "vitest",
-    "analyze:personal-accounts": "vite-node scripts/personalAccountsReport.ts"
+    "analyze:personal-accounts": "vite-node scripts/personalAccountsReport.ts",
+    "analyze:comparison": "vite-node scripts/compareSocialSecurityModels.ts"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
