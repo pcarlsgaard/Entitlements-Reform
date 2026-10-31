@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "analyze:personal-accounts": "vite-node scripts/personalAccountsReport.ts"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
