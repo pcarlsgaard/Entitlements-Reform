@@ -38,7 +38,8 @@ const people:Person[]=ages.flatMap(age=>incomeGroups.map(group=>{
   retirementYear:2026+70-age}
 }))
 const totalWeight=people.reduce((s,p)=>s+p.weight,0)
-const lowerWeight=people.filter(p=>p.rank!=='p90').reduce((s,p)=>s+p.weight,0)
+const bottom80Weight=(p:Person)=>p.rank==='p90'?0:p.rank==='p75'?p.weight/2:p.weight
+const lowerWeight=people.reduce((s,p)=>s+bottom80Weight(p),0)
 const percent=(n:number)=>Math.round(n*10000)/100
 function run(ret:number){
  const output=[]
@@ -80,7 +81,7 @@ function run(ret:number){
    const loss=baseline>0?(reformed/baseline-1):0
    const protectedAtRetirement=loss>=-1e-9
    if(protectedAtRetirement)weightedProtected+=person.weight
-   if(protectedAtRetirement&&person.rank!=='p90')lowerProtected+=person.weight
+   if(protectedAtRetirement)lowerProtected+=bottom80Weight(person)
    if(person.age>=50){nearWeight+=person.weight;if(protectedAtRetirement)nearProtected+=person.weight}
    else if(person.age>=35){midWeight+=person.weight;if(protectedAtRetirement)midProtected+=person.weight}
    else {earlyWeight+=person.weight;if(protectedAtRetirement)earlyProtected+=person.weight}
@@ -92,7 +93,7 @@ function run(ret:number){
    if(loss<worst.loss)worst={loss,age:person.age,rank:person.rank,wage:person.wage}
    const workingOk=working.cashChange>=-1e-9
    if(workingOk)workingProtected+=person.weight
-   if(workingOk&&person.rank!=='p90')lowerWorkingProtected+=person.weight
+   if(workingOk)lowerWorkingProtected+=bottom80Weight(person)
    weightedWorkingDelta+=working.cashChange*person.weight
    cellRows.push({age:person.age,rank:person.rank,wage:person.wage,
       changePct:percent(loss),retirementYear:person.retirementYear,
