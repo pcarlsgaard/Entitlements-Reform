@@ -68,7 +68,7 @@ describe('frontier robustness and incidence audit (research)',()=>{
    {filingStatus:'married' as const,cashWage:65000,secondaryCashWage:35000,children:2,childrenUnder6:1},
   ].map(h=>{
    const b=calculateHousehold(h,tax)
-   const wages=h.cashWage+('secondaryCashWage'in h?h.secondaryCashWage:0)
+   const wages=h.cashWage+('secondaryCashWage'in h?(h.secondaryCashWage??0):0)
    const taxSaving= .065*wages
    return {label:h.filingStatus+'-'+wages+'-'+h.children, taxCashDelta:b.dollarChange,
      privateContribution:taxSaving,netDisposableDelta:b.dollarChange-taxSaving}
