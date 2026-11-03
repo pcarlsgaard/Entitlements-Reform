@@ -73,7 +73,7 @@ export function averageIndexedMonthlyEarnings(record:readonly CoveredEarning[],
  birthYear:number,a:ModelAssumptions):number{
  const age60Year=birthYear+60
  const baseAWI=nationalAverageWageIndex(age60Year,a)
- const indexed=record.filter(r=>r.age>=21&&r.year<=birthYear+70).map(r=>{
+ const indexed=record.filter(r=>r.age>=18&&r.year<=birthYear+70).map(r=>{
    const cap=r.coveredEarnings
    return Math.max(0,cap)*(r.year<age60Year?baseAWI/nationalAverageWageIndex(r.year,a):1)
  })
