@@ -89,4 +89,37 @@ describe('November 2 uploaded scenario score audit (research only)',()=>{
   console.log('UPLOADED_POLICY_AUDIT_JSON='+JSON.stringify(summary))
   expect(fiscal).toHaveLength(5)
  },60000)
+ it('audits both two-earner spouses and tests the common legacy multiplier',()=>{
+  const score=scoreCombined(p)
+  const profile=householdProfiles.find(x=>x.id==='two-earner')!
+  const breakdown=[2026,2056,2058,2060,2070,2075].map(year=>{
+   const r=scoreExampleHousehold(profile,year,p,score.baseline,score.combined)!
+   return {year,ages:r.ages,
+    baselineSocialSecurity:r.baselineSocialSecurity,
+    reformSocialSecurity:r.reformSocialSecurity,
+    delta:r.socialSecurityChange,
+    adults:r.adults.map(x=>({
+      age:x.age,baselineSS:x.baselineSS,
+      scheduledPublicSS:x.scheduledReformSS,
+      privateAnnuity:x.privateAccountAnnuity,
+      federalTopup:x.publicTopup,
+      combinedRetirement:x.reformSS,
+      accountBalanceAtClaim:x.accountBalanceAtClaim,
+      claimYear:x.accountClaimYear,
+     }))
+   }
+  })
+  const sensitivity=[.6,.7,.8,.9,1,1.1,1.2].map(multiplier=>{
+   const h={...profile,legacyBenefitMultiplier:multiplier}
+   const r=scoreExampleHousehold(h,2075,p,score.baseline,score.combined)!
+   return {multiplier,current:r.baselineSocialSecurity,
+     reform:r.reformSocialSecurity,difference:r.socialSecurityChange,
+     privateAnnuity:r.privateAccountRetirementIncome}
+  })
+  console.log('TWO_EARNER_DETAILED_AUDIT_JSON='+JSON.stringify({breakdown,sensitivity}))
+  const r=breakdown.find(x=>x.year===2075)!
+  expect(r.adults).toHaveLength(2)
+  expect(Math.abs(r.delta+48817)).toBeLessThan(3)
+ },120000)
+
 })
