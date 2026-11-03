@@ -5,7 +5,9 @@ import { flatBenefitReal, legacySocialSecurityBenefitNominal, socialSecurityBene
 import { annualWorkCredit, actuarialClaimFactor, currentLawClaimFactor, workCreditFraction } from './claiming'
 import { premiumSupportPerPersonNominal } from './medicare'
 import { nominalGDPBillionsForYear } from './budget'
-import { realWageGrowthFactor } from './taxProjection'
+import { individualNominalEarnings, individualScheduledSocialSecurity } from './individualEarnings'
+import type { IndividualWageScenario } from './individualEarnings'
+import { projectedTaxableMaximum } from './ssaScaledWorkers'
 import { calculateTransferAnalysis } from '../tax/model/transfers'
 import type { TransferHouseholdInput, TransferProgramId, TransferProgramResult } from '../tax/model/types'
 import type { CombinedPolicy } from './combined'
@@ -99,13 +101,42 @@ function annualSocialSecurity(simulation: SimulationResult, year: number, age: n
 
 /** Credit for completed earnings years before claiming. Past years are editable;
  * future partial years use CPI-indexed earnings thresholds and projected wages. */
+function wageScenario(profile:ExampleHousehold,adult:number):IndividualWageScenario {
+  return {
+    age2026:adult===0?profile.primaryAge2026:profile.spouseAge2026,
+    wage2026:adult===0?profile.primaryWage2026:profile.spouseWage2026,
+    creditedYearsBefore2026:adult===0?profile.primaryCreditedYears2026:profile.spouseCreditedYears2026,
+    workThroughAge:profile.workThroughAge,
+  }
+}
+
+/** Override the representative Social Security proxy with individual AIME/PIA.
+ * The existing legacy multiplier remains an optional manual sensitivity.
+ * Already-retired workers with no 2026 wage retain their known-award proxy.
+ */
+function individualLegacyFactor(
+  worker:IndividualWageScenario,claimAge:number,paymentYear:number,
+  simulation:SimulationResult,manualMultiplier:number,
+):number {
+  if(worker.age2026>=67 || worker.wage2026<=0 || claimAge<62)return manualMultiplier
+  const a=simulation.assumptions,birthYear=2026-worker.age2026
+  const baseline=legacySocialSecurityBenefitNominal(
+    birthYear+67,birthYear+claimAge,paymentYear,a,'currentLaw')*
+    currentLawClaimFactor(claimAge)
+  if(baseline<=0)return manualMultiplier
+  const statutory=individualScheduledSocialSecurity(worker,claimAge,paymentYear,a)
+    .scheduledAnnualNominal
+  return manualMultiplier*statutory/baseline
+}
+
 export function householdWorkCredits(profile: ExampleHousehold, adult: number, claimAge: number, policy: CombinedPolicy): number {
-  const age2026 = adult === 0 ? profile.primaryAge2026 : profile.spouseAge2026
-  let credits = adult === 0 ? profile.primaryCreditedYears2026 : profile.spouseCreditedYears2026
-  const wage = adult === 0 ? profile.primaryWage2026 : profile.spouseWage2026
-  for (let age = age2026; age < claimAge && age <= profile.workThroughAge; age++) {
-    credits += annualWorkCredit(wage * realWageGrowthFactor(2026 + age - age2026, policy.assumptions),
-      policy.assumptions.qualifyingEarnings2026)
+  const worker=wageScenario(profile,adult)
+  let credits = worker.creditedYearsBefore2026
+  for (let age = worker.age2026; age < claimAge && age <= profile.workThroughAge; age++) {
+    const year=2026+age-worker.age2026
+    const nominal=individualNominalEarnings(worker,year,policy.assumptions)
+    const real=nominal/(1+policy.assumptions.inflation)**(year-2026)
+    credits += annualWorkCredit(real, policy.assumptions.qualifyingEarnings2026)
   }
   return credits
 }
@@ -172,10 +203,10 @@ export function scoreExampleHousehold(profile: ExampleHousehold, year: number, p
   const ages = [profile.primaryAge2026, ...(profile.filingStatus === 'married' ? [profile.spouseAge2026] : [])].map(age => age + elapsed)
   if (ages.some(age => age > policy.assumptions.maxModeledAge)) return null
   const childAges = profile.childAges2026.map(age => age + elapsed).filter(age => age < 18)
-  const realWageFactor = realWageGrowthFactor(year, policy.assumptions)
   const inflationFactor = (1 + policy.assumptions.inflation) ** elapsed
-  const wages = [profile.primaryWage2026, profile.spouseWage2026].map((wage, index) =>
-    (ages[index] ?? 999) <= profile.workThroughAge ? wage * realWageFactor : 0)
+  const workerProfiles=[wageScenario(profile,0),wageScenario(profile,1)]
+  const wages=workerProfiles.map(worker=>
+    individualNominalEarnings(worker,year,policy.assumptions)/inflationFactor)
   const householdInput: TransferHouseholdInput = {
     household: { filingStatus: profile.filingStatus, cashWage: wages[0]!, secondaryCashWage: wages[1]!,
       children: childAges.length, childrenUnder6: childAges.filter(age => age < 6).length },
@@ -202,20 +233,12 @@ export function scoreExampleHousehold(profile: ExampleHousehold, year: number, p
   const inKindTransferChange = inKindTransferLoss ? -inKindTransferLoss : 0
 
   const privatePolicy = policy.personalAccounts
-  const annualCashWage=(worker:number,at:number)=>{
-    const age2026=worker===0?profile.primaryAge2026:profile.spouseAge2026
-    const w=worker===0?profile.primaryWage2026:profile.spouseWage2026
-    const age=age2026+at-policy.assumptions.reformYear
-    return age>=18 && age<=profile.workThroughAge
-      ? w*realWageGrowthFactor(at,policy.assumptions)*
-          (1+policy.assumptions.inflation)**(at-policy.assumptions.reformYear) : 0
-  }
+  const annualCashWage=(worker:number,at:number)=>
+    individualNominalEarnings(workerProfiles[worker]!,at,policy.assumptions)
   const contributionFor=(worker:number,at:number,age:number)=>{
     if(!privatePolicy.enabled||age<18)return 0
-    // Illustrative taxable ceiling, indexed with real wages and CPI.
-    const ceiling=184_500*realWageGrowthFactor(at,policy.assumptions)*
-      (1+policy.assumptions.inflation)**(at-policy.assumptions.reformYear)
-    return Math.min(ceiling,annualCashWage(worker,at))*privatePolicy.requiredContributionRate
+    return Math.min(projectedTaxableMaximum(at,policy.assumptions),
+      annualCashWage(worker,at))*privatePolicy.requiredContributionRate
   }
   const adults = ages.map((age, index) => {
     const chosen = index === 0 ? profile.primaryClaimAge : profile.spouseClaimAge
@@ -230,13 +253,18 @@ export function scoreExampleHousehold(profile: ExampleHousehold, year: number, p
     const annuityFactor=accountAnnuityFactor(birthYear,claim,policy.assumptions)
     const privateAnnuity=privatePolicy.enabled && age>=claim && annuityFactor>0
       ? accountBalance/annuityFactor*(1+policy.assumptions.inflation)**(age-claim):0
-    const scheduledReformSS=annualSocialSecurity(combined, year, age, profile.legacyBenefitMultiplier,
+    const adjustedReformFactor=individualLegacyFactor(workerProfiles[index]!,claim,year,
+      combined,profile.legacyBenefitMultiplier)
+    const scheduledReformSS=annualSocialSecurity(combined, year, age, adjustedReformFactor,
       policy.baselineMode, claim, credits, policy.benefits.socialSecurityReform)
     const workingPersonal=age<claim ? contributionFor(index,year,age):0
+    const baselineClaim=chosen??67
+    const adjustedBaselineFactor=individualLegacyFactor(workerProfiles[index]!,baselineClaim,year,
+      baseline,profile.legacyBenefitMultiplier)
     return {
       age,
-      baselineSS: annualSocialSecurity(baseline, year, age, profile.legacyBenefitMultiplier, policy.baselineMode,
-        chosen ?? 67, credits, false),
+      baselineSS: annualSocialSecurity(baseline, year, age, adjustedBaselineFactor, policy.baselineMode,
+        baselineClaim, credits, false),
       reformSS: privatePolicy.enabled ? Math.max(scheduledReformSS,privateAnnuity):scheduledReformSS,
       scheduledReformSS,
       privateAccountAnnuity:privateAnnuity,
