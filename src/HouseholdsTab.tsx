@@ -55,7 +55,7 @@ export default function HouseholdsTab({ policy, score, year, setYear, profiles, 
     }), [profile, policy, score])
 
   return <div className="households-tab">
-    <section className="game-card"><div className="household-heading"><div><h2>Who experiences the reform?</h2><p>Choose an illustrative household and a year. Its ages and child count advance automatically; wages follow SSA age-specific career profiles and the Trustees' national average-wage growth. Each 2026 wage anchors its own reconstructed history.</p></div><span className="game-badge">Annual snapshot · 2026 dollars</span></div>
+    <section className="game-card"><div className="household-heading"><div><h2>Who experiences the reform?</h2><p>Choose an illustrative household and a year. Its ages and child count advance automatically; each worker's entered 2026 wage keeps the same ratio to the national average wage index (AWI) before and after 2026, with no age-specific earnings curve.</p></div><span className="game-badge">Annual snapshot · 2026 dollars</span></div>
       <div className="household-presets" aria-label="Example households">{profiles.map(item => <button key={item.id} onClick={() => setSelectedId(item.id)} className={selectedId === item.id ? 'active' : ''} aria-pressed={selectedId === item.id}><strong>{item.label}</strong><small>{item.description}</small></button>)}</div>
       <div className="household-year"><strong>Year {year}</strong><input aria-label="Household year" type="range" min="2026" max={lastYear} value={Math.min(year, lastYear)} onChange={e => setYear(Number(e.target.value))} />
         <Field label="Year" value={year} min={2026} max={lastYear} onChange={setYear} />
