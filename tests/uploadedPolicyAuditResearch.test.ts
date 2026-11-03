@@ -167,4 +167,47 @@ describe('November 2 uploaded scenario score audit (research only)',()=>{
   expect(output).toHaveLength(2)
  },120000)
 
+ it('audits wage path shared by private saving and annual taxes but not legacy benefits',()=>{
+  const score=scoreCombined(p)
+  const h=householdProfiles.find(x=>x.id==='two-earner')!
+  const w=[2026,2035,2050,2056,2058,2075].map(year=>{
+    const r=scoreExampleHousehold(h,year,p,score.baseline,score.combined)!
+    const infl=(1+p.assumptions.inflation)**(year-2026)
+    return {year,ages:r.ages,realWage:r.annualWages/infl,
+      annualRealSaving:r.mandatoryAccountSaving/infl,
+      annualRealTaxCashChange:r.taxCashChange/infl,
+      earnedRetirementBenefitReal:r.reformSocialSecurity/infl,
+      currentLawRetirementReal:r.baselineSocialSecurity/infl,
+      accountAnnuityReal:r.privateAccountRetirementIncome/infl,
+      childAges:r.childAges}
+  })
+  const boosted={...h,primaryWage2026:h.primaryWage2026*1.5}
+  const years=[2050,2075]
+  const sensitivity=years.map(year=>{
+    const original=scoreExampleHousehold(h,year,p,score.baseline,score.combined)!
+    const high=scoreExampleHousehold(boosted,year,p,score.baseline,score.combined)!
+    const infl=(1+p.assumptions.inflation)**(year-2026)
+    return {year,earningsIncreasePct:50,
+      annualSavingDifferenceReal:(high.mandatoryAccountSaving-original.mandatoryAccountSaving)/infl,
+      taxCashDifferenceReal:(high.taxCashChange-original.taxCashChange)/infl,
+      currentLawSSChangeReal:(high.baselineSocialSecurity-original.baselineSocialSecurity)/infl,
+      annuityChangeReal:(high.privateAccountRetirementIncome-original.privateAccountRetirementIncome)/infl,
+      reformBenefitsChangeReal:(high.reformSocialSecurity-original.reformSocialSecurity)/infl}
+  })
+  const taxesAt68=scoreExampleHousehold(h,2056,p,score.baseline,score.combined)!
+  const unearned={...h,primaryWage2026:0,spouseWage2026:0}
+  const ssWithZeroWages=scoreExampleHousehold(unearned,2075,p,score.baseline,score.combined)!
+  console.log('EARNINGS_TIMELINE_AUDIT_JSON='+JSON.stringify({w,sensitivity,
+    claimYearAge68Contribution:taxesAt68.adults[0]?.annualContribution,
+    claimYearAge68StillHasWages:taxesAt68.annualWages>0,
+    scheduledSSDoesNotDependOn2026Wage:ssWithZeroWages.baselineSocialSecurity,
+  }))
+  expect(w[0]!.annualRealSaving).toBe(10000)
+  expect(w[1]!.annualRealSaving).toBeGreaterThan(10000)
+  expect(w[2]!.annualRealSaving).toBeGreaterThan(w[1]!.annualRealSaving)
+  expect(sensitivity[1]!.currentLawSSChangeReal).toBe(0)
+  expect(sensitivity[1]!.annuityChangeReal).toBeGreaterThan(0)
+  expect(taxesAt68.adults[0]!.annualContribution).toBe(0)
+ },120000)
+
 })
