@@ -13,7 +13,7 @@ const masses:Record<ScaledWorkerClass,number>={veryLow:.186,low:.235,medium:.302
 const bottomMass:Record<ScaledWorkerClass,number>={veryLow:.186,low:.235,medium:.302,high:.077}
 const ages=[20,25,30,35,40,45,50,55,60,65]
 const tierLabel:Record<ScaledWorkerClass,string>={veryLow:'Very low',low:'Low',medium:'Medium',high:'High'}
-const money=(n:number)=>Math.round(n).toLocaleString('en-US')
+const money=(n:number,year:number,inflation:number)=>Math.round(n/(1+inflation)**(year-2026)).toLocaleString('en-US')
 const percent=(n:number)=>`${(n*100).toFixed(1)}%`
 function scoreScaledWorker(policy:CombinedPolicy,age2026:number,tier:ScaledWorkerClass){
   const a=policy.assumptions,claimAge=a.socialSecurityClaimAge,birth=2026-age2026
@@ -38,7 +38,7 @@ function scoreScaledWorker(policy:CombinedPolicy,age2026:number,tier:ScaledWorke
   const taxChange=policy.taxEnabled?calculateHousehold(
      {filingStatus:'single',cashWage:annual2026,children:0},policy.tax).dollarChange:0
   const workingDelta=taxChange-(p.enabled?annual2026*p.requiredContributionRate:0)
-  return {age2026,tier,annual2026,current,annuity,
+  return {age2026,tier,claimYear:birth+claimAge,annual2026,current,annuity,
     governmentTopup:p.enabled?Math.max(0,promised-annuity):promised,
     reformed,workingDelta,difference:current>0?reformed/current-1:0}
 }
@@ -63,7 +63,7 @@ export default function ScaledWorkerPanel({policy}:{policy:CombinedPolicy}){
     <p>Unlike the illustrative household tab, this panel reconstructs annual covered
       earnings from SSA's 2026 age-specific scaled factors and uses one record for
       the high-35-year AIME/PIA calculation and post-2026 private-account contributions.
-      Outcomes are scheduled retirement benefits upon claiming, in nominal dollars.</p>
+      Outcomes are scheduled retirement benefits upon claiming, shown in constant 2026 dollars.</p>
     <div className="game-score-grid">
       <article className="game-card game-score"><span>Bottom 80% with no retirement loss</span>
         <strong>{percent(results.protected)}</strong></article>
@@ -74,15 +74,15 @@ export default function ScaledWorkerPanel({policy}:{policy:CombinedPolicy}){
     </div>
     <label className="game-field"><span>Age in 2026</span><select value={selectedAge}
       onChange={e=>setAge(Number(e.target.value))}>{ages.map(age=><option key={age} value={age}>{age}</option>)}</select></label>
-    <div className="game-table-wrap"><table className="game-table">
+    <p>All financial amounts below are in 2026 dollars, including the annuities at retirement.</p><div className="game-table-wrap"><table className="game-table">
       <thead><tr><th>SSA worker</th><th>2026 covered earnings</th><th>Scheduled current law</th>
         <th>Account annuity</th><th>Federal top-up</th><th>Combined retirement income</th>
         <th>Retirement change</th><th>2026 working cash change</th></tr></thead>
       <tbody>{results.cells.filter(x=>x.age2026===selectedAge).map(x=><tr key={x.tier}>
-        <th>{tierLabel[x.tier]}</th><td>${money(x.annual2026)}</td><td>${money(x.current)}</td>
-        <td>${money(x.annuity)}</td><td>${money(x.governmentTopup)}</td>
-        <td>${money(x.reformed)}</td><td>{percent(x.difference)}</td>
-        <td>${money(x.workingDelta)}</td>
+        <th>{tierLabel[x.tier]}</th><td>${money(x.annual2026,2026,policy.assumptions.inflation)}</td><td>${money(x.current,x.claimYear,policy.assumptions.inflation)}</td>
+        <td>${money(x.annuity,x.claimYear,policy.assumptions.inflation)}</td><td>${money(x.governmentTopup,x.claimYear,policy.assumptions.inflation)}</td>
+        <td>${money(x.reformed,x.claimYear,policy.assumptions.inflation)}</td><td>{percent(x.difference)}</td>
+        <td>${money(x.workingDelta,2026,policy.assumptions.inflation)}</td>
       </tr>)}</tbody>
     </table></div>
     <small>SSA OCACT Note 2026.3, Tables 1 and 6; historical AWI; statutory 90/32/15 PIA.
