@@ -5,6 +5,11 @@ import {describe,it,expect} from 'vitest'
 import {defaultCombinedPolicy,scoreCombined} from '../src/model/combined'
 import {exampleHouseholds,scoreExampleHousehold} from '../src/model/householdScenario'
 import type {CombinedPolicy} from '../src/model/combined'
+import {scaledFactor,nationalAverageWageIndex,projectedTaxableMaximum,
+  averageIndexedMonthlyEarnings,primaryInsuranceAmount,projectedCOLA} from '../src/model/ssaScaledWorkers'
+import {accountBalanceAtClaim,accountAnnuityFactor} from '../src/model/personalAccountReform'
+import {currentLawClaimFactor} from '../src/model/claiming'
+import {oasiPayableShare} from '../src/model/currentLaw'
 const p:CombinedPolicy={
  ...defaultCombinedPolicy,
  tax:{
@@ -120,6 +125,46 @@ describe('November 2 uploaded scenario score audit (research only)',()=>{
   const r=breakdown.find(x=>x.year===2075)!
   expect(r.adults).toHaveLength(2)
   expect(Math.abs(r.delta+48817)).toBeLessThan(3)
+ },120000)
+
+ it('cross-checks two-earner pension with wage-anchored SSA age-earnings profiles',()=>{
+  const ages=[38,36],incomes=[65000,35000];
+  const output=ages.map((age2026,i)=>{
+   const birth=2026-age2026,claimAge=68,claimYear=birth+claimAge;
+   const anchor=scaledFactor(age2026,'medium')*nationalAverageWageIndex(2026,p.assumptions)
+   const ratio=incomes[i]!/anchor
+   const wages=Array.from({length:47},(_,j)=>{
+     const age=21+j,year=birth+age
+     const factor=scaledFactor(Math.min(64,age),'medium')
+     return {year,age,coveredEarnings:Math.min(projectedTaxableMaximum(year,p.assumptions),
+       ratio*factor*nationalAverageWageIndex(year,p.assumptions))}
+   })
+   const aime=averageIndexedMonthlyEarnings(wages,birth,p.assumptions)
+   const piaAt62=primaryInsuranceAmount(aime,birth+62,p.assumptions)
+   let colas=1
+   for(let y=birth+63;y<=2075;y++)colas*=1+projectedCOLA(y,p.assumptions)
+   const scheduled2075=piaAt62*12*currentLawClaimFactor(claimAge)*colas
+   const privateBalance=accountBalanceAtClaim(birth,claimAge,p.assumptions,p.personalAccounts,(year)=>{
+     const w=wages.find(r=>r.year===year)
+     return (w?.coveredEarnings??0)*p.personalAccounts.requiredContributionRate
+   })
+   const privateAtClaim=privateBalance/accountAnnuityFactor(birth,claimAge,p.assumptions)
+   const private2075=privateAtClaim*(1+p.assumptions.inflation)**(2075-claimYear)
+   const flat2075=p.assumptions.individualFPL2026*p.assumptions.flatBenefitFPLMultiple*
+     (1+p.assumptions.inflation)**(2075-2026)
+   const reform2075=Math.max(flat2075,private2075)
+   return {i,birth,age2026,earnings2026:incomes[i],claimYear,aime,piaAt62,
+      scheduled2075,privateBalance,privateAtClaim,private2075,flat2075,reform2075,
+      scheduledDelta:reform2075-scheduled2075}
+  })
+  const baseline=output.reduce((s,x)=>s+x.scheduled2075,0)
+  const reform=output.reduce((s,x)=>s+x.reform2075,0)
+  console.log('TWO_EARNER_SSA_EARNINGS_SENSITIVITY_JSON='+JSON.stringify({
+    output,scheduledBaseline:baseline,reformBenefit:reform,
+    scheduledDifference:reform-baseline,payableBaseline:baseline*oasiPayableShare(2075),
+    payableDifference:reform-baseline*oasiPayableShare(2075)
+  }))
+  expect(output).toHaveLength(2)
  },120000)
 
 })
