@@ -16,7 +16,7 @@ describe('per-spouse SSA benefit and shared wage career history',()=>{
  it('uses the published 2026 SSA bend points',()=>{
   expect(piaBendPoints(2026,p.assumptions)).toEqual({first:1286,second:7749})
  })
- it('anchors each person's 2026 covered earnings to the actual entered wage',()=>{
+ it("anchors each person's 2026 covered earnings to the actual entered wage",()=>{
   expect(individualNominalEarnings(person(0),2026,p.assumptions)).toBeCloseTo(65000,6)
   expect(individualNominalEarnings(person(1),2026,p.assumptions)).toBeCloseTo(35000,6)
   const first=individualCoveredEarnings(person(0),1988,68,p.assumptions)
