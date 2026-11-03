@@ -57,6 +57,21 @@ describe('per-spouse SSA benefit and shared wage career history',()=>{
   expect(raised.adults[0]!.privateAccountAnnuity).toBeGreaterThan(snap.adults[0]!.privateAccountAnnuity)
   expect(raised.adults[1]!.baselineSS).toBeCloseTo(snap.adults[1]!.baselineSS,8)
  },120000)
+ it('corrects the saved two-earner scenario at age-68 claiming',()=>{
+  const saved={...two,workThroughAge:68,primaryClaimAge:68,spouseClaimAge:68}
+  const score=scoreCombined(p)
+  const snap=scoreExampleHousehold(saved,2075,p,score.baseline,score.combined)!
+  const divisor=(1+p.assumptions.inflation)**(2075-2026)
+  const primary=snap.adults[0]!.baselineSS/divisor
+  const spouse=snap.adults[1]!.baselineSS/divisor
+  expect(primary).toBeGreaterThan(spouse)
+  expect(primary/spouse).toBeGreaterThan(1.25)
+  console.log('SAVED_TWO_EARNER_CORRECTED_2026_JSON='+JSON.stringify({
+    primaryScheduled:primary,spouseScheduled:spouse,
+    combinedScheduled:snap.baselineSocialSecurity/divisor,
+    agesIn2075:snap.ages,
+  }))
+ },120000)
  it('keeps older people with no 2026 earnings on the existing-award proxy',()=>{
   const policy={...p,taxEnabled:false}
   const s=scoreCombined(policy)
