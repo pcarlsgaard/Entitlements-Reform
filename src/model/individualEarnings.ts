@@ -5,15 +5,16 @@
  * individualNominalEarnings; the same function builds the lifetime covered
  * earnings history for scheduled current-law Social Security.
  *
- * The 2026 observed wage calibrates the SSA median scaled worker age profile.
- * Only the past `creditedYears2026` are reconstructed; all earlier years are
- * zero, preventing a fictional 35-year pre-2026 career. That remains a
- * stylized approximation, not an observed SSA earnings record.
+ * Each worker's entered 2026 wage is held at a fixed proportion of the
+ * national Average Wage Index (AWI), forward and backward in time.
+ * Pre-2026 wages are reconstructed only for the entered past credited years,
+ * avoiding a fictional full career. All post-2026 annual wages, personal
+ * account contributions, and the AIME/PIA history therefore come from the
+ * same function. No SSA age-specific wage profile is applied yet.
  */
 import { currentLawClaimFactor } from './claiming'
 import { averageIndexedMonthlyEarnings, nationalAverageWageIndex,
-  primaryInsuranceAmount, projectedCOLA, projectedTaxableMaximum,
-  scaledFactor } from './ssaScaledWorkers'
+  primaryInsuranceAmount, projectedCOLA, projectedTaxableMaximum } from './ssaScaledWorkers'
 import type { CoveredEarning } from './ssaScaledWorkers'
 import type { ModelAssumptions } from './types'
 
@@ -24,22 +25,14 @@ export interface IndividualWageScenario {
   creditedYearsBefore2026: number
 }
 
-/** SSA published factors cover ages 21–64. Flat-shape extension for adjacent ages. */
-function ageShape(age: number): number {
-  return scaledFactor(Math.max(21,Math.min(64,age)),'medium')
-}
-
-/** Annual nominal cash wage, with AWI growth and an age-specific career pattern. */
+/** Annual nominal cash wage at the same proportion of AWI as in 2026. */
 export function individualNominalEarnings(
   worker: IndividualWageScenario, year: number, a: ModelAssumptions,
 ): number {
   const age=worker.age2026+year-2026
   if(worker.wage2026<=0||age<18||age>worker.workThroughAge)return 0
-  const anchor=ageShape(worker.age2026)
-  if(anchor<=0)return 0
   const award=worker.wage2026*
-    nationalAverageWageIndex(year,a)/nationalAverageWageIndex(2026,a)*
-    ageShape(age)/anchor
+    nationalAverageWageIndex(year,a)/nationalAverageWageIndex(2026,a)
   if(year<2026){
     const n=Math.max(0,worker.creditedYearsBefore2026)
     const firstYear=2026-Math.ceil(n)
@@ -54,7 +47,7 @@ export function individualCoveredEarnings(
   a: ModelAssumptions,
 ): CoveredEarning[] {
   const history:CoveredEarning[]=[]
-  for(let age=21;age<claimAge;age++){
+  for(let age=18;age<claimAge;age++){
     const year=birthYear+age
     history.push({
       age,year,
