@@ -6,7 +6,7 @@ describe('Retirement tax substitution sensitivity',()=>{
     const results=[]
     for(const rate of [.05,.06,.07,.08,.09,.10,.11,.12,.13,.14,.15]){
       const p=structuredClone(defaultCombinedPolicy)
-      p.tax.rate=.36
+      p.tax.rate=.35
       p.tax.noncomplianceRate=.055
       p.tax.adultCredit=2700
       p.tax.childCredit=5400
