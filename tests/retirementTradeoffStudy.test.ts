@@ -3,7 +3,7 @@ import { defaultCombinedPolicy, scoreCombined } from '../src/model/combined'
 describe('Retirement tax substitution sensitivity',()=>{
   it('calculates 2026-2095 federal debt and private offsets',()=>{
     const results=[]
-    for(const rate of [.06,.08,.10,.12,.14]){
+    for(const rate of [.075,.085,.09,.095,.105]){
       const p=structuredClone(defaultCombinedPolicy)
       p.tax.rate=.36
       p.tax.noncomplianceRate=.055
@@ -50,6 +50,8 @@ describe('Retirement tax substitution sensitivity',()=>{
         debt2075:debt(2075),debt2095:debt(2095),
         peak:Math.max(...out.combined.years.map(x=>x.endingDebtGDP))*100,
         private2026:account(2026).privateContributionBillions,
+        replacementShare2075:account(2075).privateBenefitOffsetBillions/account(2075).scheduledBenefitsBillions,
+        replacementShare2095:account(2095).privateBenefitOffsetBillions/account(2095).scheduledBenefitsBillions,
         offset2075:account(2075).privateBenefitOffsetBillions,
         public2075:account(2075).federalTopupsBillions,
         offset2095:account(2095).privateBenefitOffsetBillions,
