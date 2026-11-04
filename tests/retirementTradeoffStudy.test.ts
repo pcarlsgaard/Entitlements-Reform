@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { defaultCombinedPolicy, scoreCombined } from '../src/model/combined'
+import { projectAccountReform } from '../src/model/personalAccountReform'
 describe('Retirement tax substitution sensitivity',()=>{
   it('calculates 2026-2095 federal debt and private offsets',()=>{
     const results=[]
@@ -63,4 +64,32 @@ describe('Retirement tax substitution sensitivity',()=>{
     console.log('RETIREMENT_TRADEOFF_RESULTS_JSON='+JSON.stringify(results))
     expect(results.length).toBe(5)
   },900000)
+})
+
+describe('real return sensitivity for 2075 retirement replacement',()=>{
+ it('assesses lower and higher account returns independent of tax policy',()=>{
+   const rows=[]
+   for(const realReturn of [.025,.035,.045,.055]){
+     for(const requiredContributionRate of [.08,.09,.10]){
+       const a={...defaultCombinedPolicy.assumptions,
+         benefitPhaseInYears:70,flatBenefitFPLMultiple:2,
+         socialSecurityInitialBenefitMode:'flatTransition' as const,
+         fullRetirementAge:68,socialSecurityClaimAge:68,
+         socialSecurityCOLAMode:'chainedCpi' as const,
+         medicareFundingMode:'perPerson' as const,
+         startingNominalGDPBillions:31902,
+         currentLawSSBenefit2026:24500,
+         startingDebtGDP:1.00605,
+       }
+       const p={enabled:true,requiredContributionRate,
+         expectedRealReturn:realReturn,governmentMatchCap2026:0}
+       const year=projectAccountReform(a,p,'scheduled').find(x=>x.year===2075)!
+       rows.push({realReturn,requiredContributionRate,
+         replacementShare2075:year.privateBenefitOffsetBillions/year.scheduledBenefitsBillions,
+         topups2075Billions:year.federalTopupsBillions})
+     }
+   }
+   console.log('RETIREMENT_RETURN_SENSITIVITY_JSON='+JSON.stringify(rows))
+   expect(rows.length).toBe(12)
+ },900000)
 })
