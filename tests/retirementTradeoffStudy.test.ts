@@ -56,8 +56,6 @@ describe('Retirement tax substitution sensitivity',()=>{
         debt2075:debt(2075),debt2095:debt(2095),
         peak:Math.max(...out.combined.years.map(x=>x.endingDebtGDP))*100,
         private2026:account(2026).privateContributionBillions,
-        replacementShare2075:account(2075).privateBenefitOffsetBillions/account(2075).scheduledBenefitsBillions,
-        replacementShare2095:account(2095).privateBenefitOffsetBillions/account(2095).scheduledBenefitsBillions,
         offset2075:account(2075).privateBenefitOffsetBillions,
         public2075:account(2075).federalTopupsBillions,
         replacementShare2075:account(2075).privateBenefitOffsetBillions/account(2075).scheduledBenefitsBillions,
