@@ -4,7 +4,7 @@ import { projectAccountReform } from '../src/model/personalAccountReform'
 describe('Retirement tax substitution sensitivity',()=>{
   it('calculates 2026-2095 federal debt and private offsets',()=>{
     const results=[]
-    for(const rate of [.05,.06,.07,.08,.09,.10,.11,.12,.13,.14,.15]){
+    for(const rate of [.05,.06,.065,.07,.075,.08,.09,.10,.11,.12,.13,.14,.15]){
       const p=structuredClone(defaultCombinedPolicy)
       p.tax.rate=.35
       p.tax.noncomplianceRate=.055
@@ -72,7 +72,7 @@ describe('Retirement tax substitution sensitivity',()=>{
         laborGDP:out.steadyGDPLevelChange})
     }
     console.log('RETIREMENT_TRADEOFF_RESULTS_JSON='+JSON.stringify(results))
-    expect(results.length).toBe(11)
+    expect(results.length).toBe(13)
   },900000)
 })
 
