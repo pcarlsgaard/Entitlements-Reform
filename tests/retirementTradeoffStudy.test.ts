@@ -4,17 +4,18 @@ import { projectAccountReform } from '../src/model/personalAccountReform'
 describe('Retirement tax substitution sensitivity',()=>{
   it('calculates 2026-2095 federal debt and private offsets',()=>{
     const results=[]
-    for(const rate of [.075,.085,.09,.095,.105]){
+    for(const rate of [.05,.06,.07,.08,.09,.10,.11,.12,.13,.14,.15]){
       const p=structuredClone(defaultCombinedPolicy)
       p.tax.rate=.36
       p.tax.noncomplianceRate=.055
       p.tax.adultCredit=2700
       p.tax.childCredit=5400
       p.tax.progressiveWageBrackets=[
-        { upperPerAdult:70000,rate:.175+.10-rate },
-        { upperPerAdult:220000,rate:.25+.10-rate },
-        { upperPerAdult:275000,rate:.30+.10-rate },
-        { upperPerAdult:null,rate:.36+.10-rate },
+        { upperPerAdult:70000,rate:.175 },
+        { upperPerAdult:184500,rate:.25 },
+        { upperPerAdult:220000,rate:.25 },
+        { upperPerAdult:275000,rate:.30 },
+        { upperPerAdult:null,rate:.35 },
       ]
       p.benefits={socialSecurityReform:true,medicareReform:true}
       p.personalAccounts={enabled:true,requiredContributionRate:rate,
@@ -42,11 +43,15 @@ describe('Retirement tax substitution sensitivity',()=>{
         employerHealthPassThroughRate:1,employerFicaPassThroughRate:1,
         redistributionRule:'nationalEqual',recipientScope:'policyholders'})
       Object.assign(p.dynamic,{enabled:true,laborElasticity:.15,laborShareGDP:.6})
-      const out=scoreCombined(p)
+      const out=scoreCombined(p,'cpi',.10-rate)
       const debt=(y:number)=>out.combined.years.find(x=>x.year===y)!.endingDebtGDP*100
       const account=(y:number)=>out.accountsByYear.get(y)!
-      results.push({saving:rate,rates:p.tax.progressiveWageBrackets.map(x=>x.rate),
-        tax2026:out.tax.netRevenue,
+      const coveredTax2026=out.cappedWageTaxChangeGDP(2026)*p.assumptions.startingNominalGDPBillions
+      results.push({saving:rate,coveredWageTaxAdjustment:.10-rate,
+        rates:p.tax.progressiveWageBrackets.map(x=>x.rate),
+        effectiveMarginalRatesUnderCap:p.tax.progressiveWageBrackets.slice(0,2).map(x=>x.rate+.10-rate),
+        tax2026:out.tax.netRevenue+coveredTax2026,
+        coveredTax2026,
         debt2035:debt(2035),debt2050:debt(2050),
         debt2075:debt(2075),debt2095:debt(2095),
         peak:Math.max(...out.combined.years.map(x=>x.endingDebtGDP))*100,
@@ -55,14 +60,16 @@ describe('Retirement tax substitution sensitivity',()=>{
         replacementShare2095:account(2095).privateBenefitOffsetBillions/account(2095).scheduledBenefitsBillions,
         offset2075:account(2075).privateBenefitOffsetBillions,
         public2075:account(2075).federalTopupsBillions,
+        replacementShare2075:account(2075).privateBenefitOffsetBillions/account(2075).scheduledBenefitsBillions,
         offset2095:account(2095).privateBenefitOffsetBillions,
         public2095:account(2095).federalTopupsBillions,
+        replacementShare2095:account(2095).privateBenefitOffsetBillions/account(2095).scheduledBenefitsBillions,
         extra2095:account(2095).privateExcessBillions,
         fiscalAdjustment:out.additionalFiscalAdjustmentGDP,
         laborGDP:out.steadyGDPLevelChange})
     }
     console.log('RETIREMENT_TRADEOFF_RESULTS_JSON='+JSON.stringify(results))
-    expect(results.length).toBe(5)
+    expect(results.length).toBe(11)
   },900000)
 })
 
