@@ -19,15 +19,25 @@ describe('Retirement tax substitution sensitivity',()=>{
       p.personalAccounts={enabled:true,requiredContributionRate:rate,
         expectedRealReturn:.045,governmentMatchCap2026:0}
       p.spendingEnabled=true
+      p.otherSpending.defenseMode='currentLaw'
       p.otherSpending.nonDefenseMode='onePercentNominal'
       p.otherSpending.farmSubsidyPolicy='eliminateAll'
       p.otherSpending.federalRetirementReform=true
       Object.assign(p.assumptions,{benefitPhaseInYears:70,flatBenefitFPLMultiple:2,
-        fullRetirementAge:68,startingNominalGDPBillions:31902,
+        fullRetirementAge:68,socialSecurityClaimAge:68,
+        socialSecurityCOLAMode:'chainedCpi',
+        socialSecurityInitialBenefitMode:'flatTransition',
+        startingNominalGDPBillions:31902,
         debtSensitivity:0,startingDebtGDP:1.00605,
+        startingEffectiveNominalRate:.0323741364743303,
         nonDefenseDiscretionaryGDP2026:.03121,
-        otherMandatoryGDP2026:.02994,medicareSupportGDPShare:.0395393424550185})
-      Object.assign(p.health,{uninsuredTakeUpRate:.85,
+        otherMandatoryGDP2026:.02994,
+        medicareFundingMode:'perPerson',
+        premiumSupportRealGrowth:.018,
+        medicareSupportGDPShare:.0395393424550185,
+        otherOASDIGDP:.01,under65MedicareGDP:.006,
+        debtPaydownSurplusCapGDP:.10})
+      Object.assign(p.health,{uninsuredTakeUpRate:.85,adultHealthCredit:3000,childHealthCredit:1500,replaceAcaAptc:true,benchmarkPremiumScale:1.03,
         employerHealthPassThroughRate:1,employerFicaPassThroughRate:1,
         redistributionRule:'nationalEqual',recipientScope:'policyholders'})
       Object.assign(p.dynamic,{enabled:true,laborElasticity:.15,laborShareGDP:.6})
