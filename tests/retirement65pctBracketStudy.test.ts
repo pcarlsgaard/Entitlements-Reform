@@ -67,7 +67,6 @@ describe('6.5% mandatory Roth and child-credit-preserving wage schedules',()=>{
       const debt=(y:number)=>s.combined.years.find(row=>row.year===y)!.endingDebtGDP*100
       outputs.push({
         name:c.name,rates:c.rates,cutoffs:c.cutoffs,
-        grossWageTax2026:s.tax.grossWageRevenue,
         cappedTax2026:s.cappedWageTaxChangeGDP(2026)*31902,
         netTax2026:s.tax.netRevenue+s.cappedWageTaxChangeGDP(2026)*31902,
         peakDebtGDP:Math.max(...s.combined.years.map(row=>row.endingDebtGDP))*100,
