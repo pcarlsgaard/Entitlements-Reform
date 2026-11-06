@@ -1,4 +1,5 @@
 import { currentLawRevenueGDP, replacedRevenueDriftGDP } from './revenueBaseline'
+import { ssaTaxablePayrollGDP2026 } from '../data/ssaTaxablePayrollGDP2026'
 import { taxRevenueChangePath, realGDPPerCapitaGrowthFactor } from './taxProjection'
 import type { TaxIndexingMode } from './taxProjection'
 import { calculateMacro, defaultSettings } from '../tax/model/macro'
@@ -130,7 +131,14 @@ const householdExamples: { label: string; input: HouseholdInput }[] = [
   { label: 'Family · $100k + 2 children', input: { filingStatus: 'married', cashWage: 65_000, secondaryCashWage: 35_000, children: 2 } },
 ];
 
-export function scoreCombined(policy: CombinedPolicy, taxIndexingMode: TaxIndexingMode = 'cpi') {
+/** Optional analysis-only marginal tax on SSA-covered earnings, independently capped per worker.
+ * This is held separate from the progressive compensation-based X-tax; hence only
+ * SSA taxable payroll is used for the 1:1 retirement-saving substitution.
+ * It is wage-indexed by the SSA taxable-payroll-to-GDP projection.
+ */
+export function scoreCombined(policy: CombinedPolicy,
+  taxIndexingMode: TaxIndexingMode = 'cpi',
+  additionalCoveredWageTaxRate = 0) {
   const assumptions: ModelAssumptions = {
     ...policy.assumptions,
     fullRetirementAge: policy.benefits.socialSecurityReform
@@ -165,12 +173,18 @@ export function scoreCombined(policy: CombinedPolicy, taxIndexingMode: TaxIndexi
   })
   // CPI-indexed dollar rules are rescored annually as real incomes change.
   // Receipts and refundable credit outlay savings remain separate in the ledger.
+  const cappedWageTaxChangeGDP = (year: number) =>
+    policy.taxEnabled ? additionalCoveredWageTaxRate *
+      (ssaTaxablePayrollGDP2026[year] ?? ssaTaxablePayrollGDP2026[2100] ?? .33) *
+      (1 - policy.tax.noncomplianceRate) : 0
   const netTaxRevenueChangeGDP = policy.taxEnabled
-    ? (tax.netRevenue - tax.targetRevenue) / tax.gdp : 0
+    ? (tax.netRevenue - tax.targetRevenue) / tax.gdp +
+      cappedWageTaxChangeGDP(assumptions.reformYear) : 0
   const annualTaxDelta = policy.taxEnabled
     ? taxRevenueChangePath(policy.tax, assumptions, health.totalHealthCreditCostBillions, taxIndexingMode) : new Map<number, number>()
   const revenueDelta = (year: number) => policy.taxEnabled ?
-    (annualTaxDelta.get(year) ?? 0) - replacedRevenueDriftGDP(year, policy.tax) : 0
+    (annualTaxDelta.get(year) ?? 0) - replacedRevenueDriftGDP(year, policy.tax) +
+      cappedWageTaxChangeGDP(year) : 0
   const outlaySavingsGDP = policy.taxEnabled
     ? tax.totalFederalSavings / tax.gdp : 0
   const taxFiscalBridge: FiscalBridge = {
@@ -300,6 +314,7 @@ export function scoreCombined(policy: CombinedPolicy, taxIndexingMode: TaxIndexi
     periods: [period(combined, baseline, assumptions.reformYear + 9),
       period(combined, baseline, assumptions.reformYear + 69)],
     netTaxRevenueChangeGDP,
+    cappedWageTaxChangeGDP,
     annualTaxDelta,
     outlaySavingsGDP,
     otherSpendingPolicySavingsGDP,
