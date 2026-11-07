@@ -378,7 +378,11 @@ function calculateCell(
   const incomeProxy = (cashWage + employerFicaPassThrough + healthWage)
     * (31_902 / baseline2025.gdp);
   const familySize = Math.max(1, cell.scheduleAdults + cell.children);
-  const acaRate = cell.policyholderWorkers > 0
+  // The two +/-$500 rows are MTR derivatives; when ACA transition is off,
+  // there is no need to recalculate hypothetical eligibility for them.
+  const needAca = cell.policyholderWorkers > 0
+    && (primaryWageDelta === 0 || clampShare(policy.esiAcaTransitionShare ?? 0) > 0);
+  const acaRate = needAca
     ? acaApplicableRate2026(incomeProxy, familySize) : null;
   const acaCredit = acaRate === null ? 0
     : acaPremiumTaxCredit2026(incomeProxy, familySize, benchmarkPremium);
