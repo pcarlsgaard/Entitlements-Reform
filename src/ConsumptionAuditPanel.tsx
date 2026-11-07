@@ -1,14 +1,8 @@
-import type { ConsumptionAuditResult, ConsumptionAuditBand } from './tax/model/consumptionAudit'
+import type { ConsumptionAuditResult } from './tax/model/consumptionAudit'
 
 const pct=(x:number)=>x.toFixed(1)+'%'
 const millions=(x:number)=>x.toFixed(2)+'M'
 const money=(x:number)=>(x<0?'−':'')+'$'+Math.abs(Math.round(x)).toLocaleString('en-US')
-
-function Mechanism({ b }: { b: ConsumptionAuditBand }) {
-  return <span title="Signed average annual dollars per observed tax unit">
-    {money(b.meanTaxCreditChangeDollars)} tax/credit; {money(b.meanHealthTransitionChangeDollars)} health; {money(b.meanRothSavingDollars)} Roth
-  </span>
-}
 
 /** Screening tool: tax-unit microdata, not linked contract-level households. */
 export default function ConsumptionAuditPanel({audit}:{audit:ConsumptionAuditResult}) {
