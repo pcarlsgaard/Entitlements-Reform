@@ -31,6 +31,10 @@ type Observation = Row & {
   previous: number; change: number; taxChange: number;
   healthChange: number; rothChange: number; premiumNew: number;
   creditHealth: number; sourceWage: number;
+  /** Personal-tax savings from opting for a prior-law shadow calculation on new cash wages. */
+  legacyTaxElectionSaving: number
+  /** More generous comparison calculated on the original pre-reform wage base. */
+  legacyOriginalWageTaxElectionSaving: number
 }
 interface Acc {
   weight: number; winners: number; losses1: number; losses5: number;
@@ -236,9 +240,22 @@ function sampleOutcome(row:Row,t:ReformSettings,h:HealthPolicySettings,accounts:
     +Math.min(SSA_CAP_2026,Math.max(0,row.s+ficaS))
   ):0
   const rothChange=-mandatory
+  const newPersonalTax=reformWageTax+retainedCurrentTaxes-adultCredit-childCredit
+  const oldLawOnReformCash=calculateCurrentLaw({
+    filingStatus:status,children:row.children,
+    cashWage:row.p+ficaP+healthWageCash,
+    secondaryCashWage:row.s+ficaS,
+  })
+  const oldLawTax=oldLawOnReformCash.individualIncomeTax
+    +oldLawOnReformCash.employeePayrollTax
+  const legacyTaxElectionSaving=Math.max(0,newPersonalTax-oldLawTax)
+  const previousPersonalTax=previousTax.individualIncomeTax
+    +previousTax.employeePayrollTax
+  const legacyOriginalWageTaxElectionSaving=Math.max(0,newPersonalTax-previousPersonalTax)
   return {...row,previous,change:taxChange+healthChange+rothChange,
     taxChange,healthChange,rothChange,premiumNew:replacementPremium,
-    creditHealth:healthCredit,sourceWage:row.w}
+    creditHealth:healthCredit,sourceWage:row.w,
+    legacyTaxElectionSaving,legacyOriginalWageTaxElectionSaving}
 }
 
 function premiumBands(h:HealthPolicySettings,group:(r:Cell)=>string):PremiumAuditBand[]{
@@ -423,5 +440,125 @@ export function calculateConsumptionHistogram(
     gainPct:share(gain),lossOver1Pct:share(loss1),lossOver5Pct:share(loss5),
     lossOver10Pct:share(loss10),p10ChangePct:quantile(.1),
     medianChangePct:quantile(.5),p90ChangePct:quantile(.9),
+  }
+}
+
+
+/** Exploratory 2026 baseline: statutory compensation to limit downside to 1%. */
+export interface HoldHarmlessCostBand {
+  label: string
+  includedTaxUnitsMillions: number
+  eligiblePositiveBaselineMillions: number
+  recipientsMillions: number
+  annualHoldHarmlessBillions: number
+  averageRecipientPaymentDollars: number
+  maximumPaymentDollars: number
+  annualHoldHarmlessExcludingRothBillions: number
+  recipientsExcludingRothMillions: number
+  annualShadowOldLawElectionBillions: number
+  oldLawElectionRecipientsMillions: number
+  annualShadowOriginalWageElectionBillions: number
+  residualHoldHarmlessAfterElectionBillions: number
+  combinedOldElectionAndMakeWholeBillions: number
+  stillOverOnePctAfterElectionMillions: number
+  /** Full top-up to 0% loss, rather than the permitted 1% current-consumption loss. */
+  zeroLossBillions: number
+}
+export interface HoldHarmlessCostStudy {
+  allEligible: HoldHarmlessCostBand
+  byBottomQuintile: HoldHarmlessCostBand[]
+  quintileWageBoundariesDollars: number[]
+  totalTaxUnitsMillions: number
+  positiveBaselineEligibleMillions: number
+  notes: string[]
+}
+/**
+ * Calculates the static first-year federal cost of fully REFUNDABLE make-whole
+ * payments for wage-income quintiles Q1-Q3, with family-ESI continuation.
+ *
+ * This is a 2026 tax-unit/insurance sensitivity, not an integrated CBO score.
+ * The shadow prior-law election applies individual income tax + employee FICA
+ * to post-reform cash compensation, while preserving the reform's health and
+ * Roth rules. It is NOT a literal election into the defunct income/payroll
+ * tax regime, and it is NOT guaranteed to make families whole.
+ */
+export function calculateHoldHarmlessCostStudy(
+  tax: ReformSettings,
+  health: HealthPolicySettings,
+  accounts: PersonalAccountSettings,
+): HoldHarmlessCostStudy {
+  const {rows}=prepared(health)
+  rows.sort((a,b)=>a.w-b.w)
+  const total=rows.reduce((sum,r)=>sum+r.weight,0)
+  let running=0,mostRecent=0
+  const bounds:number[]=[]
+  for(const row of rows){
+    const idx=Math.min(4,Math.floor(5*(running+row.weight/2)/Math.max(1,total)))
+    for(let i=mostRecent;i<idx;i++)bounds[i]=row.w
+    mostRecent=idx
+    row.quintile=idx
+    running+=row.weight
+  }
+  const observations=rows.filter(r=>r.quintile<=2).map(r=>sampleOutcome(r,tax,health,accounts))
+  const evaluate=(label:string,records:Observation[]):HoldHarmlessCostBand=>{
+    let included=0,eligible=0,recipients=0,topUp=0,zero=0,maxPayment=0
+    let noRoth=0,noRothRecipients=0,oldElection=0,oldOriginal=0,oldElectors=0
+    let residual=0,stillLose=0
+    for(const r of records){
+      const wt=r.weight
+      included+=wt
+      // A percentage-loss guarantee cannot meaningfully be calculated with
+      // zero or negative starting spendable income. Report these separately.
+      if(r.previous<=0)continue
+      eligible+=wt
+      const allowedLoss=.01*r.previous
+      const amount=Math.max(0,-r.change-allowedLoss)
+      const directLoss=Math.max(0,-r.change)
+      const withoutRothAmount=Math.max(0,-r.change+r.rothChange-allowedLoss)
+      const election=r.legacyTaxElectionSaving
+      const paymentAfterElection=Math.max(0,amount-election)
+      recipients+=wt*Number(amount>0)
+      topUp+=wt*amount
+      zero+=wt*directLoss
+      maxPayment=Math.max(maxPayment,amount)
+      noRoth+=wt*withoutRothAmount
+      noRothRecipients+=wt*Number(withoutRothAmount>0)
+      oldElection+=wt*election
+      oldOriginal+=wt*r.legacyOriginalWageTaxElectionSaving
+      oldElectors+=wt*Number(election>0)
+      residual+=wt*paymentAfterElection
+      stillLose+=wt*Number(paymentAfterElection>0)
+    }
+    return {
+      label,
+      includedTaxUnitsMillions:included/1e6,
+      eligiblePositiveBaselineMillions:eligible/1e6,
+      recipientsMillions:recipients/1e6,
+      annualHoldHarmlessBillions:topUp/1e9,
+      averageRecipientPaymentDollars:recipients>0?topUp/recipients:0,
+      maximumPaymentDollars:maxPayment,
+      annualHoldHarmlessExcludingRothBillions:noRoth/1e9,
+      recipientsExcludingRothMillions:noRothRecipients/1e6,
+      annualShadowOldLawElectionBillions:oldElection/1e9,
+      oldLawElectionRecipientsMillions:oldElectors/1e6,
+      annualShadowOriginalWageElectionBillions:oldOriginal/1e9,
+      residualHoldHarmlessAfterElectionBillions:residual/1e9,
+      combinedOldElectionAndMakeWholeBillions:(oldElection+residual)/1e9,
+      stillOverOnePctAfterElectionMillions:stillLose/1e6,
+      zeroLossBillions:zero/1e9,
+    }
+  }
+  return {
+    allEligible:evaluate('Bottom 60% of wage-earning tax units',observations),
+    byBottomQuintile:[0,1,2].map(q=>evaluate('Q'+(q+1),observations.filter(r=>r.quintile===q))),
+    quintileWageBoundariesDollars:bounds,
+    totalTaxUnitsMillions:total/1e6,
+    positiveBaselineEligibleMillions:observations.reduce((s,r)=>s+(r.previous>0?r.weight:0),0)/1e6,
+    notes:[
+      'Refundable guarantee payment = max(0, .99*old-law consumption - new-law consumption) for Q1–Q3.',
+      'The tax-only old-law shadow election does not remove replacement health premiums or mandatory Roth saving.',
+      'No adjustment for family policy links, nongroup insurance status, behavioral responses or changed tax-unit filing status over five years.',
+      'All costs are first-year 2026-equivalent, before dynamic fiscal effects and administration.',
+    ],
   }
 }
