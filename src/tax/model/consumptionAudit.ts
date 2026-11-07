@@ -23,7 +23,7 @@ type Coverage = 'policyholder' | 'dependent' | 'nonESI'
 type Row = {
   p: number; s: number; w: number; weight: number;
   adults: number; eligibleAdults: number; children: number; under6: number;
-  premium: number; employerContribution: number; healthWage: number;
+  premium: number; benchmark2024: number; employerContribution: number; healthWage: number;
   coveredPeople: number; coveredAdults: number; tier: number; ageBand: number;
   coverage: Coverage; quintile: number;
 }
@@ -146,7 +146,7 @@ function prepared(h: HealthPolicySettings): { rows: Row[]; excluded: number } {
     const wt=r[6]!*Math.max(0,1-(all>0?esiPart/all:0))
     if(wt<=0)continue
     rows.push({p,s,w,weight:wt,adults:a,eligibleAdults:r[3]!,children:r[4]!,
-      under6:r[5]!,premium:0,employerContribution:0,healthWage:0,
+      under6:r[5]!,premium:0,benchmark2024:0,employerContribution:0,healthWage:0,
       coveredPeople:0,coveredAdults:0,tier:0,ageBand:0,coverage:'nonESI',quintile:0})
   }
   let excluded=0
@@ -157,7 +157,7 @@ function prepared(h: HealthPolicySettings): { rows: Row[]; excluded: number } {
     if(dependent&&mode==='exclude'){excluded+=weight;continue}
     const active=!dependent || mode==='asModeled'
     rows.push({p,s,w,weight,adults:a,eligibleAdults:r[3]!,children:r[4]!,under6:0,
-      premium:active?r[7]!:0,employerContribution:active?r[8]!:0,
+      premium:active?r[7]!:0,benchmark2024:active?r[9]!:0,employerContribution:active?r[8]!:0,
       healthWage:active?allocatedHealthWage(r,h):0,
       coveredPeople:active?r[5]!:0,coveredAdults:active?r[6]!:0,
       tier:r[16]!,ageBand:r[17]!,coverage:dependent?'dependent':'policyholder',quintile:0})
@@ -207,29 +207,24 @@ function sampleOutcome(row:Row,t:ReformSettings,h:HealthPolicySettings,accounts:
   }
   const taxChange=fica + previousTax.individualIncomeTax + previousTax.employeePayrollTax
     -reformWageTax-retainedCurrentTaxes+adultCredit+childCredit
-  const premiumNew=row.coverage==='nonESI'?0:row.coveredPeople>0
-    ? row.coveredPeople>=0 ? 0 : 0 : 0
-  // Premium values in the ESI source are already annual 2024 dollars.
-  // The audit uses the same benchmark scale and per-person credit cap as health.ts.
-  // The current premium itself is assigned in the calling loop.
-  void premiumNew
-  const newBenchmark=row.coveredPeople>=0?0:0
-  void newBenchmark
-  const benchmark = (row as Row & { benchmark2024?:number }).benchmark2024 ?? 0
-  const replacementPremium=benchmark*Math.max(0,h.benchmarkPremiumScale)
+  // Annual 2024 HIPM SLCSP benchmark, scaled by the selected policy factor.
+  const replacementPremium=row.benchmark2024*Math.max(0,h.benchmarkPremiumScale)
   const healthCredit=Math.min(replacementPremium,
     Math.max(0,h.adultHealthCredit)*row.coveredAdults
     +Math.max(0,h.childHealthCredit)*Math.max(0,row.coveredPeople-row.coveredAdults))
   const healthChange=healthComp + row.premium + healthCredit - replacementPremium
-  const mandatory=accounts.enabled
-    ? accounts.requiredContributionRate*(
-        Math.min(SSA_CAP_2026,Math.max(0,row.p+
-          previousTax.employerSocialSecurity/2+previousTax.employerMedicare/2
-          +fica/Math.max(1,row.w)*row.p +healthWageCash))
-        +Math.min(SSA_CAP_2026,Math.max(0,row.s+
-          previousTax.employerSocialSecurity/2+previousTax.employerMedicare/2
-          +fica/Math.max(1,row.w)*row.s)))
-    :0
+  const employerTaxFor=(w:number)=>.062*Math.min(SSA_CAP_2026,Math.max(0,w))+.0145*Math.max(0,w)
+  const employerP=employerTaxFor(pastPrimary)
+  const employerS=employerTaxFor(pastSecondary)
+  const safeEmployerTotal=employerP+employerS
+  const ficaP=fica*(safeEmployerTotal>0?employerP/safeEmployerTotal:0)
+  const ficaS=fica*(safeEmployerTotal>0?employerS/safeEmployerTotal:0)
+  // New mandatory saving is modeled on covered worker compensation; existing
+  // pensions and earlier retirement contributions remain additional.
+  const mandatory=accounts.enabled?Math.max(0,accounts.requiredContributionRate)*(
+    Math.min(SSA_CAP_2026,Math.max(0,row.p+ficaP+healthWageCash))
+    +Math.min(SSA_CAP_2026,Math.max(0,row.s+ficaS))
+  ):0
   const rothChange=-mandatory
   return {...row,previous,change:taxChange+healthChange+rothChange,
     taxChange,healthChange,rothChange,premiumNew:replacementPremium,
