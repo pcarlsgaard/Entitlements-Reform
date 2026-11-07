@@ -65,7 +65,17 @@ export interface PremiumAuditBand {
   sharePremiumOver20000: number
   shareBenchmarkExceedsOldTotal: number
 }
+export interface ConsumptionHistogramBin {
+  label: string
+  lowerPct: number | null
+  upperPct: number | null
+  taxUnitsMillions: number
+  /** Share of wage-earning tax units with a positive current-law denominator. */
+  sharePercent: number
+}
+
 export interface ConsumptionAuditResult {
+  histogram: ConsumptionHistogramBin[]
   mode: HealthPolicySettings['nonPolicyholderTreatment']
   taxUnitsMillions: number
   quintileWageBoundaries: number[]
@@ -284,6 +294,36 @@ function band(label:string,records:Observation[]):ConsumptionAuditBand{
     meanHealthTransitionChangeDollars:w?a.amountHealth/w:0,
     meanRothSavingDollars:w?a.amountRoth/w:0}
 }
+const HISTOGRAM_BINS: {label:string,lowerPct:number|null,upperPct:number|null}[] = [
+  {label:'≤−20%',lowerPct:null,upperPct:-20},
+  {label:'−20 to −10%',lowerPct:-20,upperPct:-10},
+  {label:'−10 to −5%',lowerPct:-10,upperPct:-5},
+  {label:'−5 to −1%',lowerPct:-5,upperPct:-1},
+  {label:'−1 to 0%',lowerPct:-1,upperPct:0},
+  {label:'0 to +1%',lowerPct:0,upperPct:1},
+  {label:'+1 to +5%',lowerPct:1,upperPct:5},
+  {label:'+5 to +10%',lowerPct:5,upperPct:10},
+  {label:'+10 to +20%',lowerPct:10,upperPct:20},
+  {label:'+20 to +40%',lowerPct:20,upperPct:40},
+  {label:'≥+40%',lowerPct:40,upperPct:null},
+]
+function consumptionHistogram(records:Observation[]):ConsumptionHistogramBin[]{
+  const weights=HISTOGRAM_BINS.map(()=>0)
+  let classified=0
+  for(const row of records){
+    if(row.previous<=0)continue
+    const change=100*row.change/row.previous
+    // Upper endpoints are exclusive; 0 is a gain/no-loss.
+    let i=HISTOGRAM_BINS.findIndex(b=>(b.lowerPct===null||change>=b.lowerPct)
+      &&(b.upperPct===null||change<b.upperPct))
+    if(i<0)i=change<0?0:weights.length-1
+    weights[i]!+=row.weight
+    classified+=row.weight
+  }
+  return HISTOGRAM_BINS.map((bin,i)=>({...bin,taxUnitsMillions:weights[i]!/1e6,
+    sharePercent:classified>0?100*weights[i]!/classified:0}))
+}
+
 const lossOver=(r:Observation,pct:number)=>r.previous>0 && r.change< -pct*r.previous
 export function calculateConsumptionAudit(
   tax:ReformSettings,health:HealthPolicySettings,accounts:PersonalAccountSettings,
@@ -304,6 +344,7 @@ export function calculateConsumptionAudit(
   const observed=rows.map(r=>sampleOutcome(r,tax,health,accounts))
   const mode=health.nonPolicyholderTreatment??'continueFamilyPolicy'
   return{mode,taxUnitsMillions:total/1e6,quintileWageBoundaries:boundaries,
+    histogram:consumptionHistogram(observed),
     total:band('All wage-earning tax units',observed),
     byWageQuintile:[0,1,2,3,4].map(q=>band('Q'+(q+1),observed.filter(r=>r.quintile===q))),
     loss1ByCoverage:(['policyholder','dependent','nonESI'] as Coverage[]).map(kind=>
