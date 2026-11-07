@@ -458,7 +458,10 @@ function calculateNongroupCreditCosts(policy: HealthPolicySettings): NongroupCre
     const statusScale = nongroupHealthSnapshot.statusWeightScales[String(status)] ?? 1;
     if (status === 1) noAptc += proposed * weight * statusScale;
     if (status === 2) {
-      const baselineCredit = currentAptc2024 * Math.max(0, policy.benchmarkPremiumScale);
+      // Source-year APTC must not exceed the benchmark price: a floor to the
+      // universal credit can never result in more than one gross premium.
+      const baselineCredit = Math.min(benchmark,
+        Math.max(0, currentAptc2024) * Math.max(0, policy.benchmarkPremiumScale));
       existingAptc += baselineCredit * weight * statusScale;
       aptcFloorTopUp += (policy.replaceAcaAptc ? proposed : Math.max(0, proposed - baselineCredit))
         * weight * statusScale;
