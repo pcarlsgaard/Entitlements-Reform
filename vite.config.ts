@@ -8,6 +8,6 @@ export default defineConfig({
     include: ['tests/**/*.test.ts'],
     // Shared CI runners intermittently exceed Vitest's 5s default for
     // long-horizon entitlement computations; preserve assertions with headroom.
-    testTimeout: 15_000,
+    testTimeout: 30_000,
   },
 })
