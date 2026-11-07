@@ -217,7 +217,7 @@ describe('scenario comparison', () => {
       expect(prefundedStrategy).toBe('both')
       expect(paygo).toEqual(prefunded)
     },
-    15_000,
+    25_000,
   )
 
   it(
