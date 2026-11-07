@@ -71,6 +71,23 @@ describe('premium construction and 2026 consumption-decomposition audit',()=>{
     expect(exclude.loss5ByCoverage.find(x=>x.label==='dependent')!.unitsMillions).toBe(0)
   },240000)
 
+  it('quantifies premium sensitivity without treating it as a fiscal score',()=>{
+    const scenarios=[1.03,.90,.80].map(scale=>{
+      const a=calculateConsumptionAudit(tax,{
+        ...h,benchmarkPremiumScale:scale,
+        nonPolicyholderTreatment:'continueFamilyPolicy',
+      },accounts)
+      return {scale,loss5Percent:a.total.loss5Percent,
+        low3Loss5Millions:a.byWageQuintile.slice(0,3).reduce((sum,q)=>sum+q.loss5Millions,0),
+        olderMeanPremium:a.premiumByAge.find(q=>q.label==='60–64')!.meanPremiumDollars}
+    })
+    console.log('PREMIUM_AUDIT_PRICE_SENSITIVITY_JSON='+JSON.stringify(scenarios))
+    expect(scenarios[1]!.olderMeanPremium).toBeLessThan(scenarios[0]!.olderMeanPremium)
+    expect(scenarios[2]!.olderMeanPremium).toBeLessThan(scenarios[1]!.olderMeanPremium)
+    expect(scenarios[1]!.low3Loss5Millions).toBeLessThanOrEqual(scenarios[0]!.low3Loss5Millions)
+    expect(scenarios[2]!.low3Loss5Millions).toBeLessThanOrEqual(scenarios[1]!.low3Loss5Millions)
+  },240000)
+
   it('isolates compulsory Roth saving from gross statutory reform cash changes',()=>{
     const saved=calculateConsumptionAudit(tax,{...h,nonPolicyholderTreatment:'continueFamilyPolicy'},accounts)
     const noAccounts=calculateConsumptionAudit(tax,{...h,nonPolicyholderTreatment:'continueFamilyPolicy'},{
