@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { defaultCombinedPolicy, scoreCombined } from '../src/model/combined'
 import { calculateHealthAnalysis } from '../src/tax/model/health'
 import { calculateConsumptionAudit } from '../src/tax/model/consumptionAudit'
+import { makeConfiguration, parseConfiguration } from '../src/model/savedConfigurations'
+import { exampleHouseholds } from '../src/model/householdScenario'
 import {
   acaApplicableRate2026, acaPremiumTaxCredit2026,
   greaterOfAcaUniversal,povertyGuideline2025Contiguous,
@@ -99,6 +101,19 @@ describe('2026 ACA greater-of nonstacking rules and ESI transition sensitivities
       beforeAll:a.total.loss5Percent,afterAll:full.total.loss5Percent
     }))
   },240000)
+
+  it('preserves a saved explicit ACA replacement choice and migrates new share to zero',()=>{
+    const config=makeConfiguration('Legacy ACA choice',{
+      policy:{...b,health:{...b.health,replaceAcaAptc:true}},
+      householdProfiles:structuredClone(exampleHouseholds),
+      householdYear:2035,
+      householdSelectedId:exampleHouseholds[0]!.id,
+    },'legacy-aca')
+    delete (config.scenario.policy.health as unknown as Record<string,unknown>).esiAcaTransitionShare
+    const p=parseConfiguration(JSON.stringify(config))
+    expect(p.scenario.policy.health.replaceAcaAptc).toBe(true)
+    expect(p.scenario.policy.health.esiAcaTransitionShare).toBe(0)
+  })
 
   it('increases modeled federal credits when the optional transition share increases',()=>{
     const a=scoreCombined({...b,health:{...health,replaceAcaAptc:false,esiAcaTransitionShare:0}})
