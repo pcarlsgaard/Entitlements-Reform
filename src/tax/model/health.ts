@@ -6,6 +6,8 @@ import type { FilingStatus, HouseholdInput, ReformSettings, TaxBreakdown } from 
 
 export type HealthRedistributionRule = 'nationalEqual' | 'employerCellEqual' | 'ownContribution';
 export type HealthRecipientScope = 'policyholders' | 'coveredWorkers';
+/** Attribution for dependents covered by a policy outside their own tax unit. */
+export type EsiNonPolicyholderTreatment = 'continueFamilyPolicy' | 'asModeled' | 'exclude';
 
 export interface HealthPolicySettings {
   adultHealthCredit: number;
@@ -19,6 +21,8 @@ export interface HealthPolicySettings {
   replaceAcaAptc?: boolean;
   redistributionRule: HealthRedistributionRule;
   recipientScope: HealthRecipientScope;
+  /** Continue family coverage is the default. Exclusion is an incidence-only diagnostic. */
+  nonPolicyholderTreatment: EsiNonPolicyholderTreatment;
 }
 
 export interface HealthSourceLink {
@@ -136,6 +140,15 @@ export interface HealthDistributionSummary {
 export interface HealthAnalysis {
   affectedTaxUnitsMillions: number;
   coveredPeopleMillions: number;
+  nonPolicyholderTreatment: EsiNonPolicyholderTreatment;
+  /** These counts are from all ESI rows, even when the excluded sample is used. */
+  noPolicyholderTaxUnitsMillions: number;
+  noPolicyholderWageTaxUnitsMillions: number;
+  excludedTaxUnitsMillions: number;
+  /** Original model's credits associated with unlinked dependent tax units. */
+  unlinkedFamilyCreditPoolBillions: number;
+  /** The portion of total health credits reserved for unmatched policyholders. */
+  creditsHeldForFamilyPolicyReconciliationBillions: number;
   policyholderWorkersMillions: number;
   coveredWorkersMillions: number;
   employerContributionPoolBillions: number;
@@ -206,6 +219,7 @@ export const defaultHealthPolicySettings: HealthPolicySettings = {
   replaceAcaAptc: false,
   redistributionRule: 'nationalEqual',
   recipientScope: 'policyholders',
+  nonPolicyholderTreatment: 'continueFamilyPolicy',
 };
 
 const cells: HealthCell[] = healthSnapshot.distribution.map((row) => ({
@@ -500,13 +514,57 @@ const ageBandLabels: Record<number, string> = {
   5: 'Policyholder age 60–64',
 };
 
+/**
+ * Null-contract assumption: ESI dependents without a policyholder in their
+ * tax unit remain on an outside family contract. Do not give their separate
+ * tax unit a premium, health credit, employer ESI compensation or employee
+ * premium. Covered people remain in the population count.
+ *
+ * This dataset lacks an outside-policy identifier. The associated credit pool
+ * is reserved fiscally rather than treated as federal savings; it has NOT been
+ * allocated to any specific policyholder record.
+ */
+function continuationCell(cell: HealthCell): HealthCell {
+  if (cell.policyholderWorkers > 0) return cell;
+  return {
+    ...cell,
+    employeePremium: 0,
+    employerContribution: 0,
+    benchmarkPremium2024: 0,
+    nationalPolicyholderWage: 0,
+    nationalCoveredWorkerWage: 0,
+    cellPolicyholderWage: 0,
+    cellCoveredWorkerWage: 0,
+  };
+}
+
+function healthPurchaseCredit(cell: HealthCell, policy: HealthPolicySettings): number {
+  const benchmark = cell.benchmarkPremium2024 * Math.max(0, policy.benchmarkPremiumScale);
+  return Math.min(
+    benchmark,
+    Math.max(0, policy.adultHealthCredit) * cell.coveredAdults
+      + Math.max(0, policy.childHealthCredit) * Math.max(0, cell.coveredPeople - cell.coveredAdults),
+  );
+}
+
 export function calculateHealthAnalysis(
   settings: ReformSettings,
   policy: HealthPolicySettings,
 ): HealthAnalysis {
-  const rows = cells.map((cell) => calculateCell(cell, settings, policy));
-  const downRows = cells.map((cell) => calculateCell(cell, settings, policy, -500));
-  const upRows = cells.map((cell) => calculateCell(cell, settings, policy, 500));
+  const mode = policy.nonPolicyholderTreatment ?? 'continueFamilyPolicy';
+  const unlinked = cells.filter(cell => cell.policyholderWorkers === 0);
+  const noPolicyholderTaxUnitsMillions = unlinked.reduce((sum, cell) => sum + cell.weight, 0) / 1e6;
+  const noPolicyholderWageTaxUnitsMillions = unlinked.reduce((sum, cell) =>
+    sum + (cell.primaryCashWage + cell.secondaryCashWage > 0 ? cell.weight : 0), 0) / 1e6;
+  const unlinkedFamilyCreditPoolBillions = unlinked.reduce((sum, cell) =>
+    sum + cell.weight * healthPurchaseCredit(cell, policy), 0) / 1e9;
+  // Excluding records affects the incidence sample only, not the budget.
+  const includedCells = mode === 'exclude'
+    ? cells.filter(cell => cell.policyholderWorkers > 0)
+    : mode === 'continueFamilyPolicy' ? cells.map(continuationCell) : cells;
+  const rows = includedCells.map((cell) => calculateCell(cell, settings, policy));
+  const downRows = includedCells.map((cell) => calculateCell(cell, settings, policy, -500));
+  const upRows = includedCells.map((cell) => calculateCell(cell, settings, policy, 500));
   const macro = calculateMacro(settings);
   let taxUnits = 0;
   let coveredPeople = 0;
@@ -559,13 +617,26 @@ export function calculateHealthAnalysis(
     healthSnapshot.browserReconciliation.employerContributionPoolBillions;
   const employeePremiumBillions = employeePremiums / 1e9;
   const totalCurrentPremiumBillions = employerContributionPoolBillions + employeePremiumBillions;
-  const healthCreditCostBillions = healthCredits / 1e9;
+  // The outside-family credit budget is not assumed to vanish just because
+  // the insured person files separately. Until contract matching is possible,
+  // hold these credits in the federal ledger without assigning them to a
+  // specific policyholder tax unit. That is conservative for solvency.
+  const creditsHeldForFamilyPolicyReconciliationBillions = mode === 'asModeled'
+    ? 0 : unlinkedFamilyCreditPoolBillions;
+  const healthCreditCostBillions = healthCredits / 1e9
+    + creditsHeldForFamilyPolicyReconciliationBillions;
   const nongroup = calculateNongroupCreditCosts(policy);
   const nongroupExtensionCostBillions = nongroup.noAptc
     + nongroup.aptcFloorTopUp + nongroup.uninsuredInducedEnrollment;
   const totalHealthCreditCostBillions = healthCreditCostBillions + nongroupExtensionCostBillions;
 
   return {
+    nonPolicyholderTreatment: mode,
+    noPolicyholderTaxUnitsMillions,
+    noPolicyholderWageTaxUnitsMillions,
+    excludedTaxUnitsMillions: mode === 'exclude' ? noPolicyholderTaxUnitsMillions : 0,
+    unlinkedFamilyCreditPoolBillions,
+    creditsHeldForFamilyPolicyReconciliationBillions,
     affectedTaxUnitsMillions: taxUnits / 1e6,
     coveredPeopleMillions: coveredPeople / 1e6,
     policyholderWorkersMillions: healthSnapshot.calibration.weightedPolicyholderWorkersMillions,
