@@ -1,5 +1,7 @@
 import healthData from '../data/health_esi_2025.json';
 import nongroupHealthData from '../data/health_nongroup_2025.json';
+import baseline2025 from '../data/baseline_2025.json';
+import { acaApplicableRate2026, acaPremiumTaxCredit2026, greaterOfAcaUniversal } from './aca2026';
 import { calculateAdultCredit, calculateCurrentLaw, calculateReformWageTax } from './household';
 import { calculateMacro } from './macro';
 import type { FilingStatus, HouseholdInput, ReformSettings, TaxBreakdown } from './types';
@@ -19,6 +21,8 @@ export interface HealthPolicySettings {
   benchmarkPremiumScale: number;
   /** Replace the observed ACA premium tax credit with the flat purchase credit. */
   replaceAcaAptc?: boolean;
+  /** Share of ESI policyholders moving to Marketplace coverage (for ACA top-up sensitivity). */
+  esiAcaTransitionShare?: number;
   redistributionRule: HealthRedistributionRule;
   recipientScope: HealthRecipientScope;
   /** Continue family coverage is the default. Exclusion is an incidence-only diagnostic. */
@@ -163,6 +167,15 @@ export interface HealthAnalysis {
   healthCreditCostBillions: number;
   nongroupNoAptcCostBillions: number;
   nongroupAptcFloorTopUpCostBillions: number;
+  /** For reporting only: source ACA credits from 2024, not a 2026 re-estimation. */
+  nongroupLegacyAptc2024Billions: number;
+  /** Annual incremental ACA credits *above* universal for eligible ESI switchers. */
+  esiAcaTransitionTopUpCostBillions: number;
+  esiAcaFullTransitionTopUpBillions: number;
+  esiAcaEligiblePolicyholderTaxUnitsMillions: number;
+  esiAcaPositivePolicyholderTaxUnitsMillions: number;
+  /** Sensitivity excluding credits for 100–138% FPL (likely Medicaid in expansion states). */
+  esiAcaFullTransitionTopUpExcluding100To138FplBillions: number;
   estimatedExistingAptcSavingsBillions: number;
   uninsuredFullTakeUpCostBillions: number;
   uninsuredInducedEnrollmentCostBillions: number;
@@ -196,6 +209,10 @@ interface CellResult {
   dollarChange: number;
   baseChangeBeforeHealthCredit: number;
   healthCredit: number;
+  acaEsiPotentialTopUp: number;
+  acaEsiEligible: boolean;
+  acaEsiPositive: boolean;
+  acaEsiLowIncomeTopUp: number;
   benchmarkPremium: number;
   healthWage: number;
   healthTransferWageTax: number;
@@ -217,6 +234,7 @@ export const defaultHealthPolicySettings: HealthPolicySettings = {
   employeePremiumPreTaxShare: 1,
   benchmarkPremiumScale: 1.03,
   replaceAcaAptc: false,
+  esiAcaTransitionShare: 0,
   redistributionRule: 'nationalEqual',
   recipientScope: 'policyholders',
   nonPolicyholderTreatment: 'continueFamilyPolicy',
@@ -348,11 +366,29 @@ function calculateCell(
   );
   const childCredit = cell.children * settings.childCredit;
   const benchmarkPremium = cell.benchmarkPremium2024 * Math.max(0, policy.benchmarkPremiumScale);
-  const healthCredit = Math.min(
+  const universalHealthCredit = Math.min(
     benchmarkPremium,
     Math.max(0, policy.adultHealthCredit) * cell.coveredAdults
       + Math.max(0, policy.childHealthCredit) * Math.max(0, cell.coveredPeople - cell.coveredAdults),
   );
+  // This is a scenario for actual ESI-to-Marketplace transitions, NOT a claim
+  // that every current policyholder is eligible for ACA PTC while employed.
+  // The underlying snapshot has tax-unit wages rather than full household MAGI
+  // and no state/Medicaid or employer-affordability eligibility flags.
+  const incomeProxy = (cashWage + employerFicaPassThrough + healthWage)
+    * (31_902 / baseline2025.gdp);
+  const familySize = Math.max(1, cell.scheduleAdults + cell.children);
+  const acaRate = cell.policyholderWorkers > 0
+    ? acaApplicableRate2026(incomeProxy, familySize) : null;
+  const acaCredit = acaRate === null ? 0
+    : acaPremiumTaxCredit2026(incomeProxy, familySize, benchmarkPremium);
+  const greaterOf = greaterOfAcaUniversal(acaCredit, universalHealthCredit, benchmarkPremium);
+  const acaEsiPotentialTopUp = cell.policyholderWorkers > 0 ? greaterOf.topUpOverUniversal : 0;
+  const acaEsiLowIncomeTopUp = acaRate !== null
+    && incomeProxy / (15_650 + 5_500 * (familySize - 1)) < 1.38
+    ? acaEsiPotentialTopUp : 0;
+  const healthCredit = universalHealthCredit
+    + acaEsiPotentialTopUp * clampShare(policy.esiAcaTransitionShare ?? 0);
   const reformDisposableBeforeHealthCredit = reformGrossResources
     - reformWageTax
     - retainedPreCreditTax
@@ -380,6 +416,10 @@ function calculateCell(
     dollarChange: reformDisposable - currentDisposable,
     baseChangeBeforeHealthCredit,
     healthCredit,
+    acaEsiPotentialTopUp,
+    acaEsiEligible: acaRate !== null,
+    acaEsiPositive: acaCredit > 0,
+    acaEsiLowIncomeTopUp,
     benchmarkPremium,
     healthWage,
     healthTransferWageTax: reformWageTax - reformWageTaxWithoutHealth,
@@ -574,6 +614,10 @@ export function calculateHealthAnalysis(
   let employeePremiums = 0;
   let benchmarkPremiums = 0;
   let healthCredits = 0;
+  let esiAcaPotentialTopUps = 0;
+  let esiAcaEligibleTaxUnits = 0;
+  let esiAcaPositiveTaxUnits = 0;
+  let esiAcaLowIncomePotentialTopUps = 0;
   let healthTransferWageTax = 0;
   let currentResources = 0;
   let reformResources = 0;
@@ -593,6 +637,10 @@ export function calculateHealthAnalysis(
     employeePremiums += weight * row.cell.employeePremium;
     benchmarkPremiums += weight * row.benchmarkPremium;
     healthCredits += weight * row.healthCredit;
+    esiAcaPotentialTopUps += weight * row.acaEsiPotentialTopUp;
+    esiAcaEligibleTaxUnits += weight * Number(row.acaEsiEligible);
+    esiAcaPositiveTaxUnits += weight * Number(row.acaEsiPositive);
+    esiAcaLowIncomePotentialTopUps += weight * row.acaEsiLowIncomeTopUp;
     healthTransferWageTax += weight * row.healthTransferWageTax;
     currentResources += weight * row.currentDisposable;
     reformResources += weight * row.reformDisposable;
@@ -657,6 +705,14 @@ export function calculateHealthAnalysis(
     healthCreditCostBillions,
     nongroupNoAptcCostBillions: nongroup.noAptc,
     nongroupAptcFloorTopUpCostBillions: nongroup.aptcFloorTopUp,
+    nongroupLegacyAptc2024Billions: nongroup.existingAptc,
+    esiAcaTransitionTopUpCostBillions:
+      (esiAcaPotentialTopUps / 1e9) * clampShare(policy.esiAcaTransitionShare ?? 0),
+    esiAcaFullTransitionTopUpBillions: esiAcaPotentialTopUps / 1e9,
+    esiAcaEligiblePolicyholderTaxUnitsMillions: esiAcaEligibleTaxUnits / 1e6,
+    esiAcaPositivePolicyholderTaxUnitsMillions: esiAcaPositiveTaxUnits / 1e6,
+    esiAcaFullTransitionTopUpExcluding100To138FplBillions:
+      (esiAcaPotentialTopUps - esiAcaLowIncomePotentialTopUps) / 1e9,
     estimatedExistingAptcSavingsBillions: policy.replaceAcaAptc ? nongroup.existingAptc : 0,
     uninsuredFullTakeUpCostBillions: nongroup.uninsuredFullTakeUp,
     uninsuredInducedEnrollmentCostBillions: nongroup.uninsuredInducedEnrollment,
