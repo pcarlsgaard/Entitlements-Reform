@@ -7,6 +7,8 @@ import { useDeferredValue, useMemo, useState } from 'react'
 import { Area, CartesianGrid, ComposedChart, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { defaultCombinedPolicy, scoreCombined } from './model/combined'
 import HouseholdsTab from './HouseholdsTab'
+import ConsumptionAuditPanel from './ConsumptionAuditPanel'
+import { calculateConsumptionAudit } from './tax/model/consumptionAudit'
 import SavedConfigurationsPanel from './SavedConfigurationsPanel'
 import type { ScenarioState } from './model/savedConfigurations'
 import { exampleHouseholds, lastHouseholdYear } from './model/householdScenario'
@@ -122,6 +124,9 @@ export default function CombinedGame() {
   const [policy, setPolicy] = useState<CombinedPolicy>(defaultCombinedPolicy)
   const deferred = useDeferredValue(policy)
   const score = useMemo(() => scoreCombined(deferred), [deferred])
+  const consumptionAudit = useMemo(() => tab === 'tax' && deferred.taxEnabled
+    ? calculateConsumptionAudit(deferred.tax, deferred.health, deferred.personalAccounts)
+    : null, [tab, deferred.taxEnabled, deferred.tax, deferred.health, deferred.personalAccounts])
   const setTax = (patch: Partial<ReformSettings>) => setPolicy(p => ({ ...p, tax: { ...p.tax, ...patch } }))
   const setHealth = (patch: Partial<HealthPolicySettings>) => setPolicy(p => ({ ...p, health: { ...p.health, ...patch } }))
   const setA = (patch: Partial<ModelAssumptions>) => setPolicy(p => ({ ...p, assumptions: { ...p.assumptions, ...patch } }))
@@ -346,6 +351,7 @@ export default function CombinedGame() {
           <section className="game-card"><h2>Taxes replaced</h2><fieldset disabled={!policy.taxEnabled}>{(['individualIncome','payroll','corporateIncome','customs'] as const).map((key,i)=>{const amount=taxBaseline2025.federalReceipts[key];return <Toggle key={key} label={`${(['Individual income','Payroll','Corporate income','Customs'][i] ?? key)} · ${USD}${realBillions(amount,2025).toFixed(0)}B · ${pct(amount / score.tax.gdp,2)} GDP`} checked={t.replacedTaxes[key]} onChange={v=>setTax({replacedTaxes:{...t.replacedTaxes,[key]:v}})} />})}</fieldset></section>
           <section className="game-card"><h2>Opening tax ledger · 2026 dollars</h2><dl className="game-ledger"><div><dt>Gross X tax receipts</dt><dd>{taxBillionsGDP(score.tax.grossRevenue)}</dd></div><div><dt>Adult and child tax credits</dt><dd>{taxBillionsGDP(score.tax.adultCreditCost+score.tax.childCreditCost,'−')}</dd></div><div><dt>Health credits</dt><dd>{taxBillionsGDP(score.health.totalHealthCreditCostBillions,'−')}</dd></div><div><dt>Replaced receipts</dt><dd>{taxBillionsGDP(score.tax.targetRevenue,'−')}</dd></div><div><dt>Transfers and ACA credit savings</dt><dd>{taxBillionsGDP(score.tax.federalTransferSavings,'+')}</dd></div><div><dt>Refundable tax credit outlay savings</dt><dd>{taxBillionsGDP(score.tax.refundableTaxCreditOutlaySavings,'+')}</dd></div><div className="game-total"><dt>Net fiscal improvement if enabled</dt><dd>{taxBillionsGDP(score.tax.deficitReduction,score.tax.deficitReduction>=0?'+':'−')}</dd></div></dl><small>Aggregate federal dollar amounts also show their share of opening GDP. Per-person credits and bracket thresholds remain in dollars because they are household policy parameters, not federal aggregates. The underlying tax calibration uses 2025 data, restated here in 2026 purchasing power using the selected inflation assumption; long-run progressive wage-tax receipts are rescored against the Trustees real-wage path, while the flat X-tax gross base remains tied to the aggregate macro base.</small></section>
         </div></div>}
+      {tab === 'tax' && consumptionAudit && <ConsumptionAuditPanel audit={consumptionAudit} />}
       {tab === 'entitlements' && <div className="game-two-col"><div className="game-column"><section className="game-card"><h2>Social Security</h2>
         <Toggle label="Enable Social Security policy changes" checked={policy.benefits.socialSecurityReform} onChange={v=>setBenefits({socialSecurityReform:v})} />
         <div className="game-actions"><button className="game-reset" onClick={()=>applySSPackage(0.50)}>Load PPI50 package</button><button className="game-reset" onClick={()=>applySSPackage(0.75)}>Load PPI75 package</button></div>
