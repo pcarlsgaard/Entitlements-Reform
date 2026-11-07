@@ -258,10 +258,14 @@ function premiumBands(h:HealthPolicySettings,group:(r:Cell)=>string):PremiumAudi
 function add(acc:Acc,r:Observation){
   const wt=r.weight,base=Math.max(0,r.previous),threshold1=.01*base,threshold5=.05*base,threshold10=.10*base
   acc.weight+=wt;acc.winners+=wt*Number(r.change>=0)
-  acc.losses1+=wt*Number(r.change< -threshold1)
-  acc.losses5+=wt*Number(r.change< -threshold5)
-  acc.losses10+=wt*Number(r.change< -threshold10)
-  acc.losses5WithoutRoth+=wt*Number(r.change< -threshold5 && r.change-r.rothChange>= -threshold5)
+  // Percent losses are undefined when prior disposable income is nonpositive.
+  // Keep such units in population and gain counts, but not the loss bins.
+  if(r.previous>0){
+    acc.losses1+=wt*Number(r.change< -threshold1)
+    acc.losses5+=wt*Number(r.change< -threshold5)
+    acc.losses10+=wt*Number(r.change< -threshold10)
+    acc.losses5WithoutRoth+=wt*Number(r.change< -threshold5 && r.change-r.rothChange>= -threshold5)
+  }
   acc.amountTax+=wt*r.taxChange;acc.amountHealth+=wt*r.healthChange
   acc.amountRoth+=wt*r.rothChange;acc.amountChange+=wt*r.change
   acc.lossDollarTotal+=wt*Math.max(0,-r.change);acc.premiumTotal+=wt*r.premiumNew
@@ -280,7 +284,7 @@ function band(label:string,records:Observation[]):ConsumptionAuditBand{
     meanHealthTransitionChangeDollars:w?a.amountHealth/w:0,
     meanRothSavingDollars:w?a.amountRoth/w:0}
 }
-const lossOver=(r:Observation,pct:number)=>r.change< -pct*Math.max(0,r.previous)
+const lossOver=(r:Observation,pct:number)=>r.previous>0 && r.change< -pct*r.previous
 export function calculateConsumptionAudit(
   tax:ReformSettings,health:HealthPolicySettings,accounts:PersonalAccountSettings,
 ):ConsumptionAuditResult{
