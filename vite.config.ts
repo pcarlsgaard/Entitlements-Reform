@@ -6,5 +6,8 @@ export default defineConfig({
   base: '/Entitlements-Reform/',
   test: {
     include: ['tests/**/*.test.ts'],
+    // Shared CI runners intermittently exceed Vitest's 5s default for
+    // long-horizon entitlement computations; preserve assertions with headroom.
+    testTimeout: 15_000,
   },
 })
