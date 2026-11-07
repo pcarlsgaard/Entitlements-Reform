@@ -320,6 +320,22 @@ export default function CombinedGame() {
           {numT('childCredit','Child credit',1,0,30000,100,'$')}{numT('under6ChildCredit','Additional under-six credit',1,0,30000,100,'$')}{numT('childCreditBaselineRefundableShare','Credit available at $0 earnings',100,0,100,1,'%')}{numT('childCreditPhaseInRate','Child credit phase-in',100,0,100,1,'%')}</fieldset></section></div>
         <div className="game-column"><section className="game-card"><h2>Health coverage credits</h2><fieldset disabled={!policy.taxEnabled}>
           {numH('adultHealthCredit','Adult health credit',1,0,20000,100,'$')}{numH('childHealthCredit','Child health credit',1,0,20000,100,'$')}{numH('uninsuredTakeUpRate','Uninsured take-up',100,0,100,1,'%')}
+          <Select label="ESI dependents outside the policyholder's tax unit"
+            value={h.nonPolicyholderTreatment ?? 'continueFamilyPolicy'}
+            options={[
+              {value:'continueFamilyPolicy',label:'Continue family coverage (default)'},
+              {value:'asModeled',label:'Separate replacement premiums (legacy)'},
+              {value:'exclude',label:'Exclude these tax units (sensitivity only)'},
+            ]}
+            onChange={v=>setHealth({nonPolicyholderTreatment:v as HealthPolicySettings['nonPolicyholderTreatment']})} />
+          <small>Continuation does not charge dependents a separate premium, employee contribution or health credit and assigns no employer ESI wages to their tax units. Exclusion affects ESI incidence statistics only, not the fiscal ledger or the broader CPS household sample.</small>
+          <dl className="game-ledger">
+            <div><dt>No in-unit ESI policyholder</dt><dd>{score.health.noPolicyholderTaxUnitsMillions.toFixed(1)}M tax units</dd></div>
+            <div><dt>With positive wage earnings</dt><dd>{score.health.noPolicyholderWageTaxUnitsMillions.toFixed(1)}M</dd></div>
+            <div><dt>Unmatched family credits reserved in federal ledger</dt><dd>{USD}{score.health.creditsHeldForFamilyPolicyReconciliationBillions.toFixed(1)}B</dd></div>
+            <div><dt>ESI tax units included in selected incidence sample</dt><dd>{score.health.affectedTaxUnitsMillions.toFixed(1)}M</dd></div>
+          </dl>
+          <small>Outside-family policy identifiers are missing. Credits that would otherwise be assigned to dependent tax units are held at the aggregate policyholder level for fiscal scoring, not assumed to vanish. A fully contract-linked family accounting model requires new data.</small>
           <Toggle label="Replace ACA premium tax credits" checked={Boolean(h.replaceAcaAptc)} onChange={v=>setHealth({replaceAcaAptc:v})} />
           <details className="game-more"><summary>Health incidence assumptions</summary>{numH('employerHealthPassThroughRate','Employer health pass-through',100,0,100,1,'%')}{numH('employerFicaPassThroughRate','Employer FICA pass-through',100,0,100,1,'%')}{numH('employeePremiumPreTaxShare','Pre-tax employee premiums',100,0,100,1,'%')}{numH('benchmarkPremiumScale','Benchmark premium scale',100,0,300,1,'%')}
             <Select label="Employer pool redistribution" value={h.redistributionRule} options={[{value:'nationalEqual',label:'National equal'},{value:'employerCellEqual',label:'Employer cell equal'},{value:'ownContribution',label:'Own contribution'}]} onChange={v=>setHealth({redistributionRule:v as HealthPolicySettings['redistributionRule']})} />
