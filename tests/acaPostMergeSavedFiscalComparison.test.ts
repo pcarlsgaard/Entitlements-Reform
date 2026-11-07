@@ -49,8 +49,16 @@ describe('Saved reform after max ACA or universal PTC rule',()=>{
   })
   console.log('SAVED_POST_ACA_FISCAL_RESULTS_JSON='+JSON.stringify(results))
   expect(results).toHaveLength(4)
-  expect(results[1]!.taxNetRevenueBillions).toBeLessThan(results[0]!.taxNetRevenueBillions)
-  expect(results[2]!.taxNetRevenueBillions).toBeLessThan(results[1]!.taxNetRevenueBillions)
-  expect(results[3]!.taxNetRevenueBillions).toBeLessThan(results[2]!.taxNetRevenueBillions)
+  // A retained existing ACA credit lowers new universal spending but
+  // eliminates a larger ACA repeal outlay saving; assess net fiscal result.
+  expect(results[1]!.taxNetRevenueBillions).toBeGreaterThan(results[0]!.taxNetRevenueBillions)
+  expect(results[1]!.openingNetFiscalImprovementGDP).toBeLessThan(
+    results[0]!.openingNetFiscalImprovementGDP)
+  expect(results[2]!.openingNetFiscalImprovementGDP).toBeLessThan(
+    results[1]!.openingNetFiscalImprovementGDP)
+  expect(results[3]!.openingNetFiscalImprovementGDP).toBeLessThan(
+    results[2]!.openingNetFiscalImprovementGDP)
+  expect(results[1]!.peakDebtPercent).toBeGreaterThan(results[0]!.peakDebtPercent)
+  expect(results[3]!.peakDebtPercent).toBeGreaterThan(results[2]!.peakDebtPercent)
  },600000)
 })
