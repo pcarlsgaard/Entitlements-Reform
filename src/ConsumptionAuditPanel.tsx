@@ -1,3 +1,4 @@
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { ConsumptionAuditResult } from './tax/model/consumptionAudit'
 
 const pct=(x:number)=>x.toFixed(1)+'%'
@@ -9,6 +10,24 @@ export default function ConsumptionAuditPanel({audit}:{audit:ConsumptionAuditRes
   return <section className="game-card" aria-label="2026 premium and consumption audit">
     <h2>2026 tax-unit consumption and ESI premium audit</h2>
     <p>The tables update with the selected tax, insurance, ESI-dependent, and Roth settings. Both the ESI and residual wage samples are weighted tax units—not a linked household panel. Mandatory retirement deposits are subtracted from current spending, but remain privately owned savings.</p>
+    <h3>Distribution of 2026 consumption gains and losses</h3>
+    <p>Population-weighted percentage change in current spendable income against current law. Negative values are losses; positive values are gains. Open-ended tails include all changes beyond the labeled cutoff.</p>
+    <div className="game-chart-area" role="img" aria-label="Histogram of 2026 consumption changes as a percentage of eligible tax units">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={audit.histogram.map(b=>({label:b.label,
+          loss:b.upperPct!==null&&b.upperPct<=0?b.sharePercent:0,
+          gain:b.lowerPct!==null&&b.lowerPct>=0?b.sharePercent:0
+        }))} margin={{top:10,right:12,left:0,bottom:35}}>
+          <CartesianGrid vertical={false} stroke="#e7ecf1"/>
+          <XAxis dataKey="label" interval={0} angle={-35} textAnchor="end" height={65} tick={{fontSize:10}}/>
+          <YAxis tickFormatter={v=>String(v)+'%'} tick={{fontSize:11}}/>
+          <Tooltip formatter={(value,name)=>[Number(value).toFixed(2)+'%',name]}/>
+          <Bar dataKey="loss" stackId="distribution" name="Consumption loss" fill="#b05b46"/>
+          <Bar dataKey="gain" stackId="distribution" name="Consumption gain" fill="#167b60"/>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+    <small>Histogram denominator: tax units with positive baseline disposable income, approximately {millions(audit.histogram.reduce((a,b)=>a+b.taxUnitsMillions,0))}. The {millions(audit.nonPositiveBaselineMillions)} tax units with nonpositive baseline are excluded from percentage-change bins. Selected insurance and tax policy settings automatically update the chart.</small>
     <div className="game-table-wrap"><table className="game-table">
       <thead><tr><th>Wage-income quintile</th><th>Tax units</th><th>Gain any</th><th>Lose &gt;1%</th><th>Lose &gt;5%</th><th>Lose &gt;10%</th></tr></thead>
       <tbody>{audit.byWageQuintile.map(b=><tr key={b.label}>
