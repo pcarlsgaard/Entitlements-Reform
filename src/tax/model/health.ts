@@ -554,7 +554,6 @@ export function calculateHealthAnalysis(
   const mode = policy.nonPolicyholderTreatment ?? 'continueFamilyPolicy';
   const unlinked = cells.filter(cell => cell.policyholderWorkers === 0);
   const noPolicyholderTaxUnitsMillions = unlinked.reduce((sum, cell) => sum + cell.weight, 0) / 1e6;
-  const wageScale = healthSnapshot.calibration.cashWageScaleToBea2025;
   const noPolicyholderWageTaxUnitsMillions = unlinked.reduce((sum, cell) =>
     sum + (cell.primaryCashWage + cell.secondaryCashWage > 0 ? cell.weight : 0), 0) / 1e6;
   const unlinkedFamilyCreditPoolBillions = unlinked.reduce((sum, cell) =>
