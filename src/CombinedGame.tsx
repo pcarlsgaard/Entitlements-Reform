@@ -343,7 +343,18 @@ export default function CombinedGame() {
             <div><dt>Median cash-resource change (ESI sample)</dt><dd>{USD}{Math.round(score.health.medianDollarChange).toLocaleString()}</dd></div>
           </dl>
           <small>This ESI cash-resource incidence excludes required private Roth contributions and is not the separate 127M-unit CPS consumption comparison. Outside-family policy identifiers are missing. Credits previously assigned to dependent tax units are retained as an unallocated federal family-policy budget reserve, not assumed to vanish. Contract-linked family analysis requires new data.</small>
-          <Toggle label="Replace ACA premium tax credits" checked={Boolean(h.replaceAcaAptc)} onChange={v=>setHealth({replaceAcaAptc:v})} />
+          <Toggle label="Retain larger of ACA PTC or universal health credit"
+            checked={!Boolean(h.replaceAcaAptc)}
+            onChange={v=>setHealth({replaceAcaAptc:!v})} />
+          {numH('esiAcaTransitionShare','ESI policyholders shifting to Marketplace',100,0,100,5,'%')}
+          <small>Marketplace enrollees receive the greater ACA or universal credit, capped at the benchmark premium—never both in full. The switcher share is a scenario, not a predicted employer response. ACA eligibility uses a 2026 100–400% FPL rule and a tax-unit wage-based MAGI proxy. Existing Marketplace ACA amounts remain from a calibrated 2024 dataset; no linked state, Medicaid, or tax-family records are available.</small>
+          <dl className="game-ledger">
+            <div><dt>Existing nongroup ACA floor top-up (source-year calibration)</dt><dd>{USD}{score.health.nongroupAptcFloorTopUpCostBillions.toFixed(1)}B</dd></div>
+            <div><dt>ESI switcher ACA increment at 100% transition</dt><dd>{USD}{score.health.esiAcaFullTransitionTopUpBillions.toFixed(1)}B</dd></div>
+            <div><dt>ESI switcher ACA increment counted in fiscal ledger</dt><dd>{USD}{score.health.esiAcaTransitionTopUpCostBillions.toFixed(1)}B</dd></div>
+            <div><dt>Potentially ACA-eligible ESI policyholder tax units (100% transition)</dt><dd>{score.health.esiAcaEligiblePolicyholderTaxUnitsMillions.toFixed(1)}M</dd></div>
+            <div><dt>Excluding 100–138% FPL ACA top-ups (Medicaid sensitivity)</dt><dd>{USD}{score.health.esiAcaFullTransitionTopUpExcluding100To138FplBillions.toFixed(1)}B</dd></div>
+          </dl>
           <details className="game-more"><summary>Health incidence assumptions</summary>{numH('employerHealthPassThroughRate','Employer health pass-through',100,0,100,1,'%')}{numH('employerFicaPassThroughRate','Employer FICA pass-through',100,0,100,1,'%')}{numH('employeePremiumPreTaxShare','Pre-tax employee premiums',100,0,100,1,'%')}{numH('benchmarkPremiumScale','Benchmark premium scale',100,0,300,1,'%')}
             <Select label="Employer pool redistribution" value={h.redistributionRule} options={[{value:'nationalEqual',label:'National equal'},{value:'employerCellEqual',label:'Employer cell equal'},{value:'ownContribution',label:'Own contribution'}]} onChange={v=>setHealth({redistributionRule:v as HealthPolicySettings['redistributionRule']})} />
             <Select label="Credit recipients" value={h.recipientScope} options={[{value:'policyholders',label:'Policyholders'},{value:'coveredWorkers',label:'Covered workers'}]} onChange={v=>setHealth({recipientScope:v as HealthPolicySettings['recipientScope']})} /></details></fieldset></section>

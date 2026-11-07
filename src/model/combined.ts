@@ -72,7 +72,7 @@ export const defaultCombinedPolicy: CombinedPolicy = {
     childCredit: 12_000,
     noncomplianceRate: 0.10,
   },
-  health: { ...defaultHealthPolicySettings, adultHealthCredit: 3000, childHealthCredit: 1500, replaceAcaAptc: true },
+  health: { ...defaultHealthPolicySettings, adultHealthCredit: 3000, childHealthCredit: 1500, replaceAcaAptc: false },
   transfers: defaultTransferReplacementSettings,
   benefits: { socialSecurityReform: false, medicareReform: false },
   personalAccounts: { ...defaultPersonalAccountSettings },

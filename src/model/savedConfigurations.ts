@@ -80,6 +80,8 @@ export function parseConfiguration(json: string): SavedConfiguration {
     if (scenario.policy.personalAccounts === undefined) scenario.policy.personalAccounts={...defaultPersonalAccountSettings}
     if (record(scenario.policy.health) && scenario.policy.health.nonPolicyholderTreatment === undefined)
       scenario.policy.health.nonPolicyholderTreatment = 'continueFamilyPolicy'
+    if (record(scenario.policy.health) && scenario.policy.health.esiAcaTransitionShare === undefined)
+      scenario.policy.health.esiAcaTransitionShare = 0
     if (scenario.policy.spendingEnabled === undefined) scenario.policy.spendingEnabled = false
     if (scenario.policy.otherSpending === undefined)
       scenario.policy.otherSpending = structuredClone(defaultOtherSpendingPolicy)
@@ -149,6 +151,7 @@ export function parseConfiguration(json: string): SavedConfiguration {
   oneOf(policy.health.redistributionRule, ['nationalEqual', 'employerCellEqual', 'ownContribution'], 'redistribution')
   oneOf(policy.health.recipientScope, ['policyholders', 'coveredWorkers'], 'recipient scope')
   oneOf(policy.health.nonPolicyholderTreatment, ['continueFamilyPolicy', 'asModeled', 'exclude'], 'ESI non-policyholder treatment')
+  within(policy.health.esiAcaTransitionShare ?? 0, 0, 1, 'ESI Marketplace transition share')
   oneOf(policy.assumptions.fundingStrategy, ['paygo', 'socialSecurityOnly', 'medicareOnly', 'both', 'socialSecurityFirst', 'savingsFundedSequential'], 'funding strategy')
   if (![0, 18].includes(policy.assumptions.prefundingStartAge) ||
       policy.assumptions.reformYear !== 2026 || policy.assumptions.endYear !== 2095 ||
