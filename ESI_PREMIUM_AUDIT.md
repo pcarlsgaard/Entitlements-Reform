@@ -76,6 +76,27 @@ Source references:
    and gains but are unclassified for percentage loss cutoffs and are listed
    in the audit.
 
+## HIPM benchmark sensitivity (reference 6.5% savings configuration)
+
+The following numbers are model diagnostics, **not actuarial equivalence tests**
+or predictions of an achievable universal premium reduction. The saved-style
+reference uses 20/25/30/35% wage rates, 6.5% new Roth saving, $2,700 adult
+credit, $5,400 child credit, default family continuation and an older-worker
+benchmark profile from the 2024 HIPM snapshot.
+
+| Benchmark scale applied to 2024 HIPM premiums | Tax units losing >5% nationwide | Q1–Q3 tax units losing >5% | Average 60–64 policyholder benchmark |
+|---|---:|---:|---:|
+| 103% (original) | 3.82% | 1.91 million | $17,496 |
+| 90% | 2.25% | 1.10 million | $15,287 |
+| 80% | 1.32% | 0.67 million | $13,589 |
+
+The premiums affect the modeled **gross exchange premium** and the amount of
+the credit capped at the premium; these are not simply extra subsidies.
+The existing *Benchmark premium scale* control on the Tax reform tab can
+reproduce these scenarios. This distributional audit should not be interpreted
+as a budget-neutral policy comparison; the full fiscal engine separately
+scores premium-capped health credits.
+
 ## Fundamental limitations
 
 - **Insurance-contract matching is unavailable.** No claim is made that
