@@ -34,7 +34,7 @@ describe('Permanent restoration of enhanced 2024 ACA PTCs',()=>{
   const original=saved.scenario.policy as CombinedPolicy
   const rates=['current2026','restored2024'] as const
   const transitions=[0,.25,1]
-  const out=[]
+  const out: Array<{ACA:string;share:number;esiAcaTopUpBillions:number;debt2095Pct:number;loss5Pct:number;[key:string]:unknown}>=[]
   for(const rule of rates){
    for(const share of transitions){
     const p={...original,health:{...original.health,
