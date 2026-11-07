@@ -14,6 +14,7 @@ import microJson from '../data/microdata_2025.json'
 import baselineJson from '../data/baseline_2025.json'
 import { calculateAdultCredit, calculateCurrentLaw, calculateReformWageTax } from './household'
 import { calculateChildCredit } from './childCredits'
+import { acaPremiumTaxCredit2026, greaterOfAcaUniversal } from './aca2026'
 import type { TaxBreakdown, ReformSettings, FilingStatus } from './types'
 import type { HealthPolicySettings } from './health'
 import type { PersonalAccountSettings } from '../../model/personalAccountReform'
@@ -30,13 +31,14 @@ type Row = {
 type Observation = Row & {
   previous: number; change: number; taxChange: number;
   healthChange: number; rothChange: number; premiumNew: number;
-  creditHealth: number; sourceWage: number;
+  creditHealth: number; acaEsiTopUp: number; sourceWage: number;
 }
 interface Acc {
   weight: number; winners: number; losses1: number; losses5: number;
   losses10: number; losses5WithoutRoth: number;
   amountTax: number; amountHealth: number; amountRoth: number; amountChange: number;
   lossDollarTotal: number; premiumTotal: number; dollarBaseline: number;
+  acaEsiTopUpTotal: number;
 }
 export interface ConsumptionAuditBand {
   label: string
@@ -54,6 +56,7 @@ export interface ConsumptionAuditBand {
   meanTaxCreditChangeDollars: number
   meanHealthTransitionChangeDollars: number
   meanRothSavingDollars: number
+  meanAdditionalEsiAcaCreditDollars: number
 }
 export interface PremiumAuditBand {
   label: string
@@ -114,7 +117,8 @@ const limit01 = (v: number) => Math.min(1, Math.max(0, v))
 const percent = (top: number, bottom: number) => bottom > 0 ? 100 * top / bottom : 0
 const init = (): Acc => ({ weight:0,winners:0,losses1:0,losses5:0,losses10:0,
   losses5WithoutRoth:0,amountTax:0,amountHealth:0,amountRoth:0,
-  amountChange:0,lossDollarTotal:0,premiumTotal:0,dollarBaseline:0 })
+  amountChange:0,lossDollarTotal:0,premiumTotal:0,dollarBaseline:0,
+  acaEsiTopUpTotal:0 })
 const tierLabel = (tier: number) => ['Outside-unit dependent','Self-only ESI','Employee plus one','Family ESI'][tier] ?? 'Other'
 const ageLabel = (age: number) => ['Outside-unit dependent','Under 30','30–39','40–49','50–59','60–64'][age] ?? 'Other'
 
@@ -222,7 +226,18 @@ function sampleOutcome(row:Row,t:ReformSettings,h:HealthPolicySettings,accounts:
   const healthCredit=Math.min(replacementPremium,
     Math.max(0,h.adultHealthCredit)*row.coveredAdults
     +Math.max(0,h.childHealthCredit)*Math.max(0,row.coveredPeople-row.coveredAdults))
-  const healthChange=healthComp + row.premium + healthCredit - replacementPremium
+  // ESI exit option: the ACA PTC is a floor over the universal credit, not
+  // a second fully refundable credit. Only ESI policyholder tax units with an
+  // assumed Marketplace transition can earn this additional amount.
+  // For partial shares this represents a weighted expected benefit; it does
+  // not identify which actual tax units leave employer coverage.
+  const acaEsiCredit=row.coverage==='policyholder'
+    ? acaPremiumTaxCredit2026(row.w+fica+healthWageCash,
+        Math.max(1,row.adults+row.children),replacementPremium):0
+  const acaEsiTopUp=greaterOfAcaUniversal(acaEsiCredit,healthCredit,replacementPremium)
+    .topUpOverUniversal*limit01(h.esiAcaTransitionShare??0)
+  const healthChange=healthComp + row.premium + healthCredit
+    +acaEsiTopUp - replacementPremium
   const employerTaxFor=(w:number)=>.062*Math.min(SSA_CAP_2026,Math.max(0,w))+.0145*Math.max(0,w)
   const employerP=employerTaxFor(pastPrimary)
   const employerS=employerTaxFor(pastSecondary)
@@ -238,7 +253,7 @@ function sampleOutcome(row:Row,t:ReformSettings,h:HealthPolicySettings,accounts:
   const rothChange=-mandatory
   return {...row,previous,change:taxChange+healthChange+rothChange,
     taxChange,healthChange,rothChange,premiumNew:replacementPremium,
-    creditHealth:healthCredit,sourceWage:row.w}
+    creditHealth:healthCredit,acaEsiTopUp,sourceWage:row.w}
 }
 
 function premiumBands(h:HealthPolicySettings,group:(r:Cell)=>string):PremiumAuditBand[]{
@@ -280,6 +295,7 @@ function add(acc:Acc,r:Observation){
   acc.amountRoth+=wt*r.rothChange;acc.amountChange+=wt*r.change
   acc.lossDollarTotal+=wt*Math.max(0,-r.change);acc.premiumTotal+=wt*r.premiumNew
   acc.dollarBaseline+=wt*r.previous
+  acc.acaEsiTopUpTotal+=wt*r.acaEsiTopUp
 }
 function band(label:string,records:Observation[]):ConsumptionAuditBand{
   const a=init();for(const r of records)add(a,r)
@@ -292,7 +308,8 @@ function band(label:string,records:Observation[]):ConsumptionAuditBand{
     meanChangeDollars:w?a.amountChange/w:0,
     meanTaxCreditChangeDollars:w?a.amountTax/w:0,
     meanHealthTransitionChangeDollars:w?a.amountHealth/w:0,
-    meanRothSavingDollars:w?a.amountRoth/w:0}
+    meanRothSavingDollars:w?a.amountRoth/w:0,
+    meanAdditionalEsiAcaCreditDollars:w?a.acaEsiTopUpTotal/w:0}
 }
 const HISTOGRAM_BINS: {label:string,lowerPct:number|null,upperPct:number|null}[] = [
   {label:'≤−20%',lowerPct:null,upperPct:-20},
