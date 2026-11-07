@@ -320,3 +320,67 @@ export function calculateConsumptionAudit(
     nongroupPremiumStatusAvailable:false
   }
 }
+
+
+/** Histogram of percent change in 2026 spendable income.
+ * All plan series must use the SAME edges and the same ESI/health assumptions.
+ * Nonpositive current disposable income is not assigned a percentage.
+ */
+export interface ConsumptionHistogram {
+  binStartPct: number
+  binWidthPct: number
+  binSharePctOfTaxUnits: number[]
+  belowRangePct: number
+  aboveRangePct: number
+  unknownDenominatorPct: number
+  taxUnitsMillions: number
+  lossOver1Pct: number
+  lossOver5Pct: number
+  lossOver10Pct: number
+  gainPct: number
+  p10ChangePct: number
+  medianChangePct: number
+  p90ChangePct: number
+}
+export function calculateConsumptionHistogram(
+  tax: ReformSettings,
+  health: HealthPolicySettings,
+  accounts: PersonalAccountSettings,
+): ConsumptionHistogram {
+  const start=-50,width=2.5,end=100,count=(end-start)/width
+  const hist=Array<number>(count).fill(0)
+  const {rows}=prepared(health)
+  let total=0,below=0,above=0,unknown=0,gain=0,loss1=0,loss5=0,loss10=0
+  const values: {changePct:number, weight:number}[]=[]
+  for(const row of rows){
+    const r=sampleOutcome(row,tax,health,accounts),weight=r.weight
+    total+=weight
+    if(r.change>=0)gain+=weight
+    if(r.previous<=0){unknown+=weight;continue}
+    const ratio=100*r.change/r.previous
+    if(ratio< -1)loss1+=weight
+    if(ratio< -5)loss5+=weight
+    if(ratio< -10)loss10+=weight
+    values.push({changePct:ratio,weight})
+    if(ratio<start)below+=weight
+    else if(ratio>=end)above+=weight
+    else hist[Math.floor((ratio-start)/width)]! +=weight
+  }
+  values.sort((a,b)=>a.changePct-b.changePct)
+  const valid=total-unknown
+  const quantile=(share:number)=>{
+    const target=valid*share
+    let running=0
+    for(const row of values){running+=row.weight;if(running>=target)return row.changePct}
+    return values.length?values[values.length-1]!.changePct:0
+  }
+  const share=(n:number)=>total>0?100*n/total:0
+  return {
+    binStartPct:start,binWidthPct:width,binSharePctOfTaxUnits:hist.map(share),
+    belowRangePct:share(below),aboveRangePct:share(above),
+    unknownDenominatorPct:share(unknown),taxUnitsMillions:total/1e6,
+    gainPct:share(gain),lossOver1Pct:share(loss1),lossOver5Pct:share(loss5),
+    lossOver10Pct:share(loss10),p10ChangePct:quantile(.1),
+    medianChangePct:quantile(.5),p90ChangePct:quantile(.9),
+  }
+}
