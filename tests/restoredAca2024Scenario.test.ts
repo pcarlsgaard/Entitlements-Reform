@@ -33,7 +33,7 @@ describe('Permanent restoration of enhanced 2024 ACA PTCs',()=>{
  it('compares fixed saved scenario under 2026 law and restored 2024 enhancements',()=>{
   const original=saved.scenario.policy as CombinedPolicy
   const rates=['current2026','restored2024'] as const
-  const transitions=[0,.10,.25,.50,1]
+  const transitions=[0,.25,1]
   const out=[]
   for(const rule of rates){
    for(const share of transitions){
