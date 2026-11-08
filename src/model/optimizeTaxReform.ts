@@ -49,6 +49,8 @@ export interface TaxOptimizationReportRow {
   labor: {
     higherWedgePct:number
     higherPersonalRatePct:number
+    higherLiquidRatePct:number
+    liquidChangePp:number
     wedgeChangePp:number
     personalRateChangePp:number
     netWageLogChange:number
@@ -161,6 +163,8 @@ function assessLabor(l:LaborResponseResult):NonNullable<TaxOptimizationReportRow
  return {
   higherWedgePct:100*l.workerShareHigherWedge,
   higherPersonalRatePct:100*l.workerShareHigherPersonalRate,
+  higherLiquidRatePct:100*l.workerShareHigherLiquidRate,
+  liquidChangePp:100*(l.weightedReformLiquidMarginalRate-l.weightedCurrentPersonalMarginalRate),
   wedgeChangePp:100*(l.weightedReformMarginalRate-l.weightedCurrentMarginalRate),
   personalRateChangePp:100*(l.weightedReformPersonalMarginalRate-l.weightedCurrentPersonalMarginalRate),
   netWageLogChange:l.netWageLogChange,
@@ -175,6 +179,7 @@ function score(row:TaxOptimizationReportRow):number {
    +Math.max(0,65-d.winnersPct)*2.3
    +d.byQuintile.slice(0,3).reduce((s,q)=>s+q.lose5Pct*1.8,0)
    +(l?l.higherWedgePct*.14+l.higherPersonalRatePct*.16
+      +l.higherLiquidRatePct*.08+Math.max(0,l.liquidChangePp)*.5
       +Math.max(0,l.wedgeChangePp)*2.0+Math.max(0,l.personalRateChangePp)*1.2:0)
 }
 function laborPriority(row:TaxOptimizationReportRow):number {
@@ -188,7 +193,7 @@ function nonDominated(candidates:TaxOptimizationReportRow[]):TaxOptimizationRepo
  const dims=(x:TaxOptimizationReportRow)=>[
   x.distribution.lose5Pct,x.distribution.lose1Pct,x.distribution.gain20Pct,
   100-x.distribution.winnersPct,x.labor?.higherWedgePct??100,
-  x.labor?.higherPersonalRatePct??100,
+  x.labor?.higherPersonalRatePct??100,x.labor?.higherLiquidRatePct??100,
  ]
  return candidates.filter(a=>!candidates.some(b=>{
   if(a===b)return false
@@ -308,7 +313,8 @@ export function optimizeTaxReform(
  const laborRows=[...selected.values()]
  for(const r of laborRows){
   r.labor=assessLabor(calculateLaborResponse(schedule(base,r.candidate).tax,
-     base.health.employerFicaPassThroughRate))
+     base.health.employerFicaPassThroughRate,
+      base.personalAccounts.requiredContributionRate))
   r.balancedScore=score(r)
  }
  laborRows.sort((a,b)=>a.balancedScore-b.balancedScore)
@@ -321,8 +327,8 @@ export function optimizeTaxReform(
   Math.ceil(fiscalFinalists*.12))
  include([...laborRows].sort((a,b)=>b.distribution.winnersPct-a.distribution.winnersPct),
   Math.ceil(fiscalFinalists*.12))
- include([...laborRows].sort((a,b)=>(a.labor!.higherWedgePct+a.labor!.higherPersonalRatePct)-
-   (b.labor!.higherWedgePct+b.labor!.higherPersonalRatePct)),Math.ceil(fiscalFinalists*.15))
+ include([...laborRows].sort((a,b)=>(a.labor!.higherWedgePct+a.labor!.higherPersonalRatePct+a.labor!.higherLiquidRatePct)-
+   (b.labor!.higherWedgePct+b.labor!.higherPersonalRatePct+b.labor!.higherLiquidRatePct)),Math.ceil(fiscalFinalists*.15))
  include([...laborRows].sort((a,b)=>b.netRevenueBillions-a.netRevenueBillions),
   Math.ceil(fiscalFinalists*.08))
  include(laborRows.filter(r=>r.candidate.brackets.length===5),2)
@@ -361,7 +367,8 @@ export function optimizeTaxReform(
  }
  const rank=(r:TaxOptimizationReportRow)=>r.balancedScore
  const baseline=prelim.find(r=>r.candidate.id==='saved')!
- baseline.labor=assessLabor(calculateLaborResponse(base.tax,base.health.employerFicaPassThroughRate))
+ baseline.labor=assessLabor(calculateLaborResponse(base.tax,base.health.employerFicaPassThroughRate,
+      base.personalAccounts.requiredContributionRate))
  baseline.balancedScore=score(baseline)
  // The baseline must receive a full score whether or not it made the shortlist.
  if(!baseline.fiscal){
@@ -395,8 +402,8 @@ export function optimizeTaxReform(
    balanced:best((a,b)=>rank(a)-rank(b)),
    minimumSevereLosses:best((a,b)=>a.distribution.lose5Pct-b.distribution.lose5Pct),
    maximumWinners:best((a,b)=>b.distribution.winnersPct-a.distribution.winnersPct),
-   strongerWorkIncentives:best((a,b)=>((a.labor!.higherWedgePct+a.labor!.higherPersonalRatePct)
-      -(b.labor!.higherWedgePct+b.labor!.higherPersonalRatePct))),
+   strongerWorkIncentives:best((a,b)=>((a.labor!.higherWedgePct+a.labor!.higherPersonalRatePct+a.labor!.higherLiquidRatePct)
+      -(b.labor!.higherWedgePct+b.labor!.higherPersonalRatePct+b.labor!.higherLiquidRatePct))),
    minimumBigWinners:best((a,b)=>a.distribution.gain20Pct-b.distribution.gain20Pct),
    fiveRate:best((a,b)=>rank(a)-rank(b),r=>r.candidate.brackets.length===5),
    maximumRevenue:best((a,b)=>b.netRevenueBillions-a.netRevenueBillions),
