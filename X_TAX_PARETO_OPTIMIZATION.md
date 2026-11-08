@@ -78,7 +78,10 @@ candidate budget and seed; a repeated run returns the same candidates.
    shortlist. Distinguish employer-inclusive effective marginal
    **economic wedge** from the worker-facing personal tax rate.
    Report share of workers with higher wedges, share with higher
-   personal rates, weighted rate changes and net-wage log changes.
+   personal rates, weighted rate changes, and the **Roth-inclusive liquid
+   marginal take-home rate**. The private deposit is an asset, not a
+   government tax, and does not enter the employer-inclusive economic
+   wedge used in the GDP-growth calculation.
    Roth deposits affect **current consumption** but are not counted as
    taxes in the employer-inclusive economic wedge.
 4. **Fiscal:** For a balanced/multimetric shortlist, run the **full
@@ -96,6 +99,30 @@ candidate budget and seed; a repeated run returns the same candidates.
    a non-dominated frontier. If none passes all hard tests,
    **do not label a scenario feasible**: show the five smallest
    violations and which constraints remain unmet.
+
+## Run the optimization without editing code
+
+After this branch is merged, go to **GitHub → Actions → X-tax Pareto
+optimizer → Run workflow**. The job runs on demand and uploads
+`x-tax-pareto-2026-report` containing the raw log and structured
+`tax-optimizer-results.json`. It does not alter deployed rates.
+
+Three result populations are deliberately distinguished:
+
+- **Strictly feasible**: primary balance nonnegative in 2035, peak debt
+  ≤150% GDP, 2095 debt ≤40% GDP, **and** more than half of wage-earning
+  tax units gain current consumption.
+- **Fiscal-only feasible**: all three fiscal tests pass but the majority
+  may lose consumption. These are stress-test counterexamples, not
+  recommended outcomes.
+- **Debt-only compromises**: peak and terminal debt targets hold but
+  primary balance remains negative in 2035. Report the remaining
+  fiscal gap instead of claiming all eight goals are met.
+
+The enhanced search targets $550–850 billion additional annual receipts
+to explore the least disruptive schedules near primary-budget break-even.
+It tests modest increases in upper wage bands separately from removing
+adult or child tax credits.
 
 ## Interpretation and data limitations
 
