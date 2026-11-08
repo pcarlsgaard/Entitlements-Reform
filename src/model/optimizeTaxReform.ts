@@ -278,6 +278,38 @@ export function optimizeTaxReform(
      pick(rng,[4400,5000,5400,5800]),
      pick(rng,[.15,.20]),pick(rng,[.20,.25])))
  }
+
+ // Second-stage fiscal targeting: find an adult credit consistent with an
+ // incremental annual revenue goal while independently varying rate ladders.
+ // This expands the search near the 2035 primary-balance feasibility frontier.
+ for(let i=0;i<28;i++){
+   const five=i%6===0
+   const rates=five
+     ?[pick(rng,[.10,.125]),pick(rng,[.20,.215,.235]),
+       pick(rng,[.275,.295,.315]),pick(rng,[.33,.34]),.35]
+     :[pick(rng,[.175,.185,.20,.215,.235]),
+       pick(rng,[.265,.28,.295,.31]),pick(rng,[.325,.335,.345]),.35]
+   const cuts=five
+     ?[pick(rng,[10000,17000]),pick(rng,[40000,55000]),
+       pick(rng,[90000,130000]),pick(rng,[150000,184500])]
+     :[pick(rng,[35000,55000,65000]),pick(rng,[80000,115000,150000]),
+       pick(rng,[150000,184500,225000])]
+   const child=pick(rng,[1800,2800,3600,4400,5400])
+   const phase=pick(rng,[.15,.20])
+   const make=(adult:number)=>mkCandidate('target-'+i,rates,cuts,adult,child,phase,.20)
+   if(!coherent(make(0)))continue
+   const rev=(adult:number)=>macro(schedule(base,make(adult))).netRevenue-referenceRevenue
+   const maxRevenue=rev(0),minRevenue=rev(3300)
+   for(const target of [550,650,750,850]){
+     if(target<minRevenue||target>maxRevenue)continue
+     let low=0,high=3300
+     for(let k=0;k<5;k++){
+       const mid=(low+high)/2
+       if(rev(mid)>target)low=mid;else high=mid
+     }
+     put({...make(Math.round(((low+high)/2)/100)*100),id:'target-'+i+'-'+target})
+   }
+ }
  const prelim:TaxOptimizationReportRow[]=[]
  for(const candidate of candidateMap.values()){
   const p=schedule(base,candidate),distribution=reference(p.tax)
@@ -296,6 +328,10 @@ export function optimizeTaxReform(
  const byLoss=[...eligible].sort((a,b)=>a.distribution.lose5Pct-b.distribution.lose5Pct)
  const byGentle=[...eligible].sort((a,b)=>a.distribution.gain20Pct-b.distribution.gain20Pct)
  const byRevenue=[...eligible].sort((a,b)=>b.netRevenueBillions-a.netRevenueBillions)
+ const aroundPrimaryBalance=[...eligible]
+   .filter(r=>r.revenueDeltaBillions>=450&&r.revenueDeltaBillions<=1050)
+   .sort((a,b)=>laborPriority(a)+.04*Math.abs(a.revenueDeltaBillions-700)
+     -(laborPriority(b)+.04*Math.abs(b.revenueDeltaBillions-700)))
  const byRateFive=[...eligible].filter(r=>r.candidate.brackets.length===5)
    .sort((a,b)=>laborPriority(a)-laborPriority(b))
  const selected=new Map<string,TaxOptimizationReportRow>()
@@ -307,6 +343,7 @@ export function optimizeTaxReform(
  select(byLoss,Math.ceil(laborFinalists*.15))
  select(byGentle,Math.ceil(laborFinalists*.12))
  select(byRevenue,Math.ceil(laborFinalists*.13))
+ select(aroundPrimaryBalance,Math.ceil(laborFinalists*.38))
  select(byRateFive,Math.ceil(laborFinalists*.12))
  select(prelim.filter(r=>r.candidate.id==='saved'),1)
  select(prelim.filter(r=>r.candidate.id.startsWith('feasibility-stress-')),5)
@@ -331,6 +368,8 @@ export function optimizeTaxReform(
    (b.labor!.higherWedgePct+b.labor!.higherPersonalRatePct+b.labor!.higherLiquidRatePct)),Math.ceil(fiscalFinalists*.15))
  include([...laborRows].sort((a,b)=>b.netRevenueBillions-a.netRevenueBillions),
   Math.ceil(fiscalFinalists*.08))
+ include(laborRows.filter(r=>r.revenueDeltaBillions>=450&&r.revenueDeltaBillions<=1050)
+   .sort((a,b)=>a.balancedScore-b.balancedScore),Math.ceil(fiscalFinalists*.40))
  include(laborRows.filter(r=>r.candidate.brackets.length===5),2)
  include(laborRows.filter(r=>r.candidate.id==='saved'),1)
  include(laborRows.filter(r=>r.candidate.id.startsWith('feasibility-stress-')),5)
