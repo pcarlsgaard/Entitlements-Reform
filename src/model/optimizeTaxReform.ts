@@ -218,7 +218,7 @@ export function optimizeTaxReform(
   id:'saved',brackets:savedBrackets.map(b=>({...b})),
   adultCredit:base.tax.adultCredit,childCredit:base.tax.childCredit,
   adultCreditPhaseInRate:base.tax.adultCreditPhaseInRate,
-  childCreditPhaseInRate:base.tax.childCreditPhaseInRate,
+  childCreditPhaseInRate:base.tax.childCreditPhaseInRate??.20,
  }
  const rng=seeded(seed),candidateMap=new Map<string,TaxOptimizationCandidate>()
  const put=(candidate:TaxOptimizationCandidate)=>{
