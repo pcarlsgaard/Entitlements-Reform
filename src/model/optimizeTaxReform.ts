@@ -174,13 +174,13 @@ function score(row:TaxOptimizationReportRow):number {
  const d=row.distribution,l=row.labor
  // Not a social welfare function; a transparent political/policy target.
  return d.lose5Pct*7+d.lose10Pct*9+d.lose1Pct*.6
-   +d.gain20Pct*.8 +d.gain40Pct*.75
-   +d.meanClippedDeviationFrom2Pct*.35
+   +d.gain10Pct*.40+d.gain20Pct*.8+d.gain40Pct*.75
+   +d.meanClippedDeviationFrom2Pct*.35 +d.distributionPenalty*.08
    +Math.max(0,65-d.winnersPct)*2.3
    +d.byQuintile.slice(0,3).reduce((s,q)=>s+q.lose5Pct*1.8,0)
    +(l?l.higherWedgePct*.14+l.higherPersonalRatePct*.16
-      +l.higherLiquidRatePct*.08+Math.max(0,l.liquidChangePp)*.5
-      +Math.max(0,l.wedgeChangePp)*2.0+Math.max(0,l.personalRateChangePp)*1.2:0)
+      +l.higherLiquidRatePct*.08+l.liquidChangePp*.5
+      +l.wedgeChangePp*2.0+l.personalRateChangePp*1.2:0)
 }
 function laborPriority(row:TaxOptimizationReportRow):number {
  const d=row.distribution
