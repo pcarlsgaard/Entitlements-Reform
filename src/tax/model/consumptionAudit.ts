@@ -32,6 +32,9 @@ type Observation = Row & {
   previous: number; change: number; taxChange: number;
   healthChange: number; rothChange: number; premiumNew: number;
   creditHealth: number; acaEsiTopUp: number; sourceWage: number;
+  taxCompensationBase: number; reformTotalCompensation: number; adultCreditBase: number;
+  originalReformTax: number; originalAdultCredit: number; originalChildCredit: number;
+  taxFilingStatus: FilingStatus;
 }
 interface Acc {
   weight: number; winners: number; losses1: number; losses5: number;
@@ -253,7 +256,10 @@ function sampleOutcome(row:Row,t:ReformSettings,h:HealthPolicySettings,accounts:
   const rothChange=-mandatory
   return {...row,previous,change:taxChange+healthChange+rothChange,
     taxChange,healthChange,rothChange,premiumNew:replacementPremium,
-    creditHealth:healthCredit,acaEsiTopUp,sourceWage:row.w}
+    creditHealth:healthCredit,acaEsiTopUp,sourceWage:row.w,
+    taxCompensationBase:taxableComp,reformTotalCompensation:reformComp,
+    adultCreditBase:creditBase,originalReformTax:reformWageTax,
+    originalAdultCredit:adultCredit,originalChildCredit:childCredit,taxFilingStatus:status}
 }
 
 function premiumBands(h:HealthPolicySettings,group:(r:Cell)=>string):PremiumAuditBand[]{
@@ -440,5 +446,100 @@ export function calculateConsumptionHistogram(
     gainPct:share(gain),lossOver1Pct:share(loss1),lossOver5Pct:share(loss5),
     lossOver10Pct:share(loss10),p10ChangePct:quantile(.1),
     medianChangePct:quantile(.5),p90ChangePct:quantile(.9),
+  }
+}
+
+/**
+ * Fast *exact-within-the-tax-unit-model* schedule search. Non-tax mechanisms,
+ * current-law baselines and ESI contracts are precomputed ONCE. Only progressive
+ * wage rates, thresholds, adult/child credits or their phase-in rules may vary.
+ * Keep health settings, payroll/base exclusions and Roth rate fixed.
+ *
+ * Shares use fixed, survey-weighted wage-income quintiles defined from the
+ * same original tax-unit sample; no 2026 insurance-contract/household linkage.
+ */
+export interface TaxSearchConsumptionMetrics {
+  unitsMillions:number
+  winnersPct:number
+  lose1Pct:number
+  lose5Pct:number
+  lose10Pct:number
+  gain10Pct:number
+  gain20Pct:number
+  gain40Pct:number
+  /** Dollar-weighted average absolute percent difference from +2% consumption. */
+  meanClippedDeviationFrom2Pct:number
+  /** Loss/gain asymmetry: severe losses carry greater penalty. */
+  distributionPenalty:number
+  byQuintile:{ winnersPct:number;lose1Pct:number;lose5Pct:number;gain20Pct:number }[]
+  unclassifiedMillions:number
+}
+export function prepareTaxSearchConsumption(
+  baseTax:ReformSettings,health:HealthPolicySettings,accounts:PersonalAccountSettings,
+): (candidate:ReformSettings)=>TaxSearchConsumptionMetrics {
+  const {rows}=prepared(health)
+  rows.sort((a,b)=>a.w-b.w)
+  const totalWeight=rows.reduce((v,r)=>v+r.weight,0)
+  let cum=0
+  const cached=rows.map(row=>{
+    row.quintile=Math.min(4,Math.floor(5*(cum+row.weight/2)/totalWeight))
+    cum+=row.weight
+    return sampleOutcome(row,baseTax,health,accounts)
+  })
+  const fixedShape=(candidate:ReformSettings)=>
+    candidate.cashWageExemptionShare===baseTax.cashWageExemptionShare &&
+    candidate.employerSocialInsuranceExemptionShare===baseTax.employerSocialInsuranceExemptionShare &&
+    candidate.employerHealthInsuranceExemptionShare===baseTax.employerHealthInsuranceExemptionShare &&
+    candidate.employerPensionOtherInsuranceExemptionShare===baseTax.employerPensionOtherInsuranceExemptionShare &&
+    candidate.adultCreditEarningsBase===baseTax.adultCreditEarningsBase &&
+    Object.keys(baseTax.replacedTaxes).every(k=>
+      candidate.replacedTaxes[k as keyof typeof candidate.replacedTaxes]===
+      baseTax.replacedTaxes[k as keyof typeof candidate.replacedTaxes])
+  return candidate=>{
+    if(!fixedShape(candidate))throw new Error('Tax search modifies a cached compensation-base or retained-tax assumption')
+    const weights=Array.from({length:6},()=>({n:0,w:0,l1:0,l5:0,l10:0,g10:0,g20:0,g40:0,pen:0,abs:0}))
+    let unknown=0
+    for(const r of cached){
+      const w=r.weight
+      const revisedTax=calculateReformWageTax(r.taxCompensationBase,r.taxFilingStatus,candidate)
+      const revisedAdult=calculateAdultCredit(r.adultCreditBase,r.eligibleAdults,candidate)
+        *limit01(candidate.adultCreditTakeUpRate)
+      const revisedChild=calculateChildCredit(r.reformTotalCompensation,r.children,r.under6,candidate)
+      const d=r.change+(r.originalReformTax-revisedTax)
+        +(revisedAdult-r.originalAdultCredit)+(revisedChild-r.originalChildCredit)
+      if(r.previous<=0){unknown+=w;continue}
+      const pct=100*d/r.previous
+      const slots=[weights[r.quintile]!,weights[5]!]
+      for(const v of slots){
+        v.n+=w
+        if(d>=0)v.w+=w
+        if(pct< -1)v.l1+=w
+        if(pct< -5)v.l5+=w
+        if(pct< -10)v.l10+=w
+        if(pct>10)v.g10+=w
+        if(pct>20)v.g20+=w
+        if(pct>40)v.g40+=w
+        const bounded=Math.max(-60,Math.min(100,pct))
+        v.abs+=w*Math.abs(bounded-2)
+        // Losses have greater weight, but gains >10% also cost score.
+        v.pen+=w*(3*Math.max(0,-bounded-1)+3*Math.max(0,-bounded-5)
+          +1.4*Math.max(0,bounded-10)+1.2*Math.max(0,bounded-20))
+      }
+    }
+    const pct=(x:number,n:number)=>n>0?100*x/n:0
+    const main=weights[5]!,n=main.n
+    return{
+      unitsMillions:n/1e6,winnersPct:pct(main.w,n),
+      lose1Pct:pct(main.l1,n),lose5Pct:pct(main.l5,n),
+      lose10Pct:pct(main.l10,n),gain10Pct:pct(main.g10,n),
+      gain20Pct:pct(main.g20,n),gain40Pct:pct(main.g40,n),
+      meanClippedDeviationFrom2Pct:n?main.abs/n:0,
+      distributionPenalty:n?main.pen/n:0,
+      byQuintile:weights.slice(0,5).map(v=>({
+        winnersPct:pct(v.w,v.n),lose1Pct:pct(v.l1,v.n),
+        lose5Pct:pct(v.l5,v.n),gain20Pct:pct(v.g20,v.n)
+      })),
+      unclassifiedMillions:unknown/1e6,
+    }
   }
 }
