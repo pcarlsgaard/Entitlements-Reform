@@ -232,7 +232,29 @@ export function optimizeTaxReform(
  put(mkCandidate('C', [.192,.255,.33,.35],[65000,150000,250000],2700,5400))
  put(mkCandidate('five-rate-classic',[.075,.175,.25,.30,.35],[17000,65000,150000,250000],2700,5400))
  put(mkCandidate('four-rate-low',[.175,.25,.30,.35],[70000,185000,275000],2400,5400))
- for(let i=0;i<n*4&&candidateMap.size<n;i++)put(randomCandidate(rng,i))
+ // Deliberately oversample fiscally plausible neighborhoods around the saved
+ // plan; global random draws alone mostly destroy revenue before fiscal tests.
+ for(let i=0;i<n*8&&candidateMap.size<n;i++){
+   if(i%3===0){put(randomCandidate(rng,i));continue}
+   const five=i%7===0
+   if(five)put(mkCandidate('local5-'+i,
+     [pick(rng,[.075,.10,.125]),pick(rng,[.195,.205,.215]),
+      pick(rng,[.255,.27,.28]),pick(rng,[.315,.325,.335]),.35],
+     [pick(rng,[10000,17000]),pick(rng,[50000,65000]),
+      pick(rng,[120000,150000,185000]),pick(rng,[184500,250000])],
+     pick(rng,[1800,2200,2700]),pick(rng,[4000,4600,5400]),
+     pick(rng,[.15,.20]),.20))
+   else put(mkCandidate('local4-'+i,
+     [pick(rng,[.185,.192,.20,.205,.215,.225]),
+      pick(rng,[.245,.255,.265,.275,.285]),
+      pick(rng,[.30,.315,.325,.335]),.35],
+     [pick(rng,[55000,65000,70000,75000]),
+      pick(rng,[125000,150000,185000]),
+      pick(rng,[184500,250000,310000])],
+     pick(rng,[2000,2400,2700,3000]),
+     pick(rng,[4400,5000,5400,5800]),
+     pick(rng,[.15,.20]),pick(rng,[.20,.25])))
+ }
  const prelim:TaxOptimizationReportRow[]=[]
  for(const candidate of candidateMap.values()){
   const p=schedule(base,candidate),distribution=reference(p.tax)
@@ -242,7 +264,10 @@ export function optimizeTaxReform(
    balancedScore:0,fiscal:null})
  }
  const revenueEligible=prelim.filter(r=>r.revenueDeltaBillions>=minRevenueDelta)
- const eligible=revenueEligible.length>0?revenueEligible:prelim
+ // A coarse revenue screen must never reduce the finalist pool so much that
+ // a model-based fiscal/Pareto comparison becomes uninterpretable.
+ const eligible=revenueEligible.length>=Math.ceil(laborFinalists*.75)
+   ?revenueEligible:prelim.filter(r=>r.revenueDeltaBillions>=minRevenueDelta-125)
  const firstRank=[...eligible].sort((a,b)=>laborPriority(a)-laborPriority(b))
  const byWins=[...eligible].sort((a,b)=>b.distribution.winnersPct-a.distribution.winnersPct)
  const byLoss=[...eligible].sort((a,b)=>a.distribution.lose5Pct-b.distribution.lose5Pct)
@@ -283,6 +308,10 @@ export function optimizeTaxReform(
   Math.ceil(fiscalFinalists*.08))
  include(laborRows.filter(r=>r.candidate.brackets.length===5),2)
  include(laborRows.filter(r=>r.candidate.id==='saved'),1)
+ for(const r of laborRows){
+  if(full.size>=fiscalFinalists)break
+  full.set(signature(r.candidate),r)
+ }
  const verified=[...full.values()]
  for(const r of verified){
   const s=scoreCombined(schedule(base,r.candidate))
