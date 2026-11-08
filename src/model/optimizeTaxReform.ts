@@ -59,6 +59,7 @@ export interface TaxOptimizationReportRow {
     passes:boolean
     primaryBalance2035GDP:number
     firstPrimarySurplusYear:number|null
+    majorityWinners:boolean
     peakDebtGDP:number
     debt2095GDP:number
     openingFiscalImprovementGDP:number
@@ -75,6 +76,7 @@ export interface TaxOptimizationResult {
   eligibleLaborCount:number
   fullyScoredCount:number
   feasibleCount:number
+  majorityAndFiscalFeasibleCount:number
   leaders:{
     balanced:TaxOptimizationReportRow|null
     minimumSevereLosses:TaxOptimizationReportRow|null
@@ -85,6 +87,10 @@ export interface TaxOptimizationResult {
     maximumRevenue:TaxOptimizationReportRow|null
   }
   frontier:TaxOptimizationReportRow[]
+  /** Debt/peak-valid candidates that still miss the 2035 primary-balance rule. */
+  debtOnlyFrontier:TaxOptimizationReportRow[]
+  /** Strict fiscal feasibility regardless of consumption-majority preference. */
+  fiscalOnlyLeaders:TaxOptimizationReportRow[]
   bestNearFeasible:TaxOptimizationReportRow[]
 }
 
@@ -232,6 +238,18 @@ export function optimizeTaxReform(
  put(mkCandidate('C', [.192,.255,.33,.35],[65000,150000,250000],2700,5400))
  put(mkCandidate('five-rate-classic',[.075,.175,.25,.30,.35],[17000,65000,150000,250000],2700,5400))
  put(mkCandidate('four-rate-low',[.175,.25,.30,.35],[70000,185000,275000],2400,5400))
+ // These are NOT policy recommendations: they test whether the 2035
+ // primary balance target is even feasible under the frozen 35% top rate.
+ put(mkCandidate('feasibility-stress-flat35',[.35,.35,.35,.35],
+   [20000,75000,184500],0,0))
+ put(mkCandidate('feasibility-stress-highrates',[.28,.32,.345,.35],
+   [25000,75000,184500],1200,2500))
+ put(mkCandidate('feasibility-stress-midrates',[.25,.31,.34,.35],
+   [45000,100000,184500],1500,3200))
+ put(mkCandidate('feasibility-stress-credits',[.225,.30,.34,.35],
+   [45000,100000,184500],800,2000))
+ put(mkCandidate('feasibility-stress-five',[.125,.245,.32,.345,.35],
+   [10000,35000,75000,184500],1000,2500))
  // Deliberately oversample fiscally plausible neighborhoods around the saved
  // plan; global random draws alone mostly destroy revenue before fiscal tests.
  for(let i=0;i<n*8&&candidateMap.size<n;i++){
@@ -286,6 +304,7 @@ export function optimizeTaxReform(
  select(byRevenue,Math.ceil(laborFinalists*.13))
  select(byRateFive,Math.ceil(laborFinalists*.12))
  select(prelim.filter(r=>r.candidate.id==='saved'),1)
+ select(prelim.filter(r=>r.candidate.id.startsWith('feasibility-stress-')),5)
  const laborRows=[...selected.values()]
  for(const r of laborRows){
   r.labor=assessLabor(calculateLaborResponse(schedule(base,r.candidate).tax,
@@ -308,6 +327,7 @@ export function optimizeTaxReform(
   Math.ceil(fiscalFinalists*.08))
  include(laborRows.filter(r=>r.candidate.brackets.length===5),2)
  include(laborRows.filter(r=>r.candidate.id==='saved'),1)
+ include(laborRows.filter(r=>r.candidate.id.startsWith('feasibility-stress-')),5)
  for(const r of laborRows){
   if(full.size>=fiscalFinalists)break
   full.set(signature(r.candidate),r)
@@ -326,12 +346,15 @@ export function optimizeTaxReform(
     y2095.endingDebtGDP<=debtTargetGDP+1e-8&&peak<=debtPeakGDP+1e-8
   r.fiscal={passes,
     primaryBalance2035GDP:checkpoint.primaryBalance/checkpoint.nominalGDP,
-    firstPrimarySurplusYear,peakDebtGDP:peak,
+    firstPrimarySurplusYear,majorityWinners:r.distribution.winnersPct>50,
+    peakDebtGDP:peak,
     debt2095GDP:y2095.endingDebtGDP,
     openingFiscalImprovementGDP:s.openingFiscalImprovementGDP}
  }
  const feasible=verified.filter(r=>r.fiscal?.passes)
- const leadersFrom=feasible.length>0?feasible:verified
+ const fullyFeasible=feasible.filter(r=>r.distribution.winnersPct>50)
+ // Never present an infeasible candidate as an unqualified winning solution.
+ const leadersFrom=fullyFeasible
  const best=(sort:(a:TaxOptimizationReportRow,b:TaxOptimizationReportRow)=>number,
      filter?:(r:TaxOptimizationReportRow)=>boolean)=>{
    return [...leadersFrom].filter(filter??(()=>true)).sort(sort)[0]??null
@@ -347,6 +370,7 @@ export function optimizeTaxReform(
   const peak=Math.max(...y.map(z=>z.endingDebtGDP))
   baseline.fiscal={passes:c.primaryBalance>=0&&tail.endingDebtGDP<=debtTargetGDP&&peak<=debtPeakGDP,
    primaryBalance2035GDP:c.primaryBalance/c.nominalGDP,
+   majorityWinners:baseline.distribution.winnersPct>50,
    firstPrimarySurplusYear:y.find(z=>z.year<=primaryBalanceDeadline&&z.primaryBalance>=0)?.year??null,
    peakDebtGDP:peak,debt2095GDP:tail.endingDebtGDP,openingFiscalImprovementGDP:0}
  }
@@ -366,6 +390,7 @@ export function optimizeTaxReform(
     fiscalCriteria:{debtTargetGDP,peakDebtGDP:debtPeakGDP,primaryBalanceDeadline}},
   baseline,prescreenCount:prelim.length,eligibleLaborCount:eligible.length,
   fullyScoredCount:verified.length,feasibleCount:feasible.length,
+  majorityAndFiscalFeasibleCount:fullyFeasible.length,
   leaders:{
    balanced:best((a,b)=>rank(a)-rank(b)),
    minimumSevereLosses:best((a,b)=>a.distribution.lose5Pct-b.distribution.lose5Pct),
@@ -375,6 +400,11 @@ export function optimizeTaxReform(
    minimumBigWinners:best((a,b)=>a.distribution.gain20Pct-b.distribution.gain20Pct),
    fiveRate:best((a,b)=>rank(a)-rank(b),r=>r.candidate.brackets.length===5),
    maximumRevenue:best((a,b)=>b.netRevenueBillions-a.netRevenueBillions),
-  },frontier:frontier.slice(0,20),bestNearFeasible:near.slice(0,5),
+  },frontier:frontier.slice(0,20),
+  debtOnlyFrontier:nonDominated(verified.filter(r=>
+    r.fiscal!.peakDebtGDP<=debtPeakGDP+1e-8&&
+    r.fiscal!.debt2095GDP<=debtTargetGDP+1e-8)).slice(0,20),
+  fiscalOnlyLeaders:[...feasible].sort((a,b)=>a.balancedScore-b.balancedScore).slice(0,10),
+  bestNearFeasible:near.slice(0,5),
  }
 }
