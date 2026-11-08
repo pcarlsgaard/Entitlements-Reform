@@ -106,7 +106,7 @@ function coherent(c:TaxOptimizationCandidate):boolean {
  if(b.length<4||b.length>5||b.at(-1)!.rate!==.35||b.at(-1)!.upperPerAdult!==null)return false
  let previous=0,lower=0
  for(let i=0;i<b.length;i++){
-  if(b[i]!.rate<previous || b[i]!.rate>.35 || b[i]!.rate-previous>.125)return false
+  if(b[i]!.rate<previous || b[i]!.rate>.35 || (i>0 && b[i]!.rate-previous>.125))return false
   if(i<b.length-1){
     if(b[i]!.upperPerAdult===null||b[i]!.upperPerAdult!<=lower)return false
     lower=b[i]!.upperPerAdult!
