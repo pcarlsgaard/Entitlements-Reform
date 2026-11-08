@@ -310,6 +310,28 @@ export function optimizeTaxReform(
      put({...make(Math.round(((low+high)/2)/100)*100),id:'target-'+i+'-'+target})
    }
  }
+
+ // Refine the approximately break-even high-revenue edge by raising taxes
+ // mostly in the upper wage bands instead of automatically taking away
+ // universal credits from low-income tax units.
+ const upperBase=[
+  {id:'protect-a',r1:.185,r2:.265,adult:3000,child:2800,cut1:35000,cut2:80000},
+  {id:'protect-b',r1:.175,r2:.28,adult:2600,child:3600,cut1:35000,cut2:80000},
+  {id:'protect-c',r1:.192,r2:.275,adult:2700,child:4000,cut1:65000,cut2:120000},
+  {id:'protect-d',r1:.185,r2:.275,adult:2700,child:5400,cut1:70000,cut2:150000},
+ ]
+ for(const b of upperBase){
+  for(const rate3 of [.325,.33,.335,.34,.345,.35]){
+   for(const end3 of [110000,150000,184500,225000,275000]){
+    if(end3<=b.cut2)continue
+    const candidate=mkCandidate(b.id+'-'+rate3+'-'+end3,
+       [b.r1,b.r2,rate3,.35],[b.cut1,b.cut2,end3],b.adult,b.child)
+    if(!coherent(candidate))continue
+    const delta=macro(schedule(base,candidate)).netRevenue-referenceRevenue
+    if(delta>=475&&delta<=900)put(candidate)
+   }
+  }
+ }
  const prelim:TaxOptimizationReportRow[]=[]
  for(const candidate of candidateMap.values()){
   const p=schedule(base,candidate),distribution=reference(p.tax)
@@ -348,6 +370,8 @@ export function optimizeTaxReform(
  // allowing distribution rank to select only the slightly underfunded edge.
  select(eligible.filter(r=>r.revenueDeltaBillions>=590&&r.revenueDeltaBillions<700)
    .sort((a,b)=>laborPriority(a)-laborPriority(b)),6)
+ select(eligible.filter(r=>r.revenueDeltaBillions>=580&&r.revenueDeltaBillions<750)
+   .sort((a,b)=>b.distribution.winnersPct-a.distribution.winnersPct),8)
  select(eligible.filter(r=>r.revenueDeltaBillions>=700&&r.revenueDeltaBillions<900)
    .sort((a,b)=>laborPriority(a)-laborPriority(b)),6)
  select(byRateFive,Math.ceil(laborFinalists*.12))
@@ -378,6 +402,8 @@ export function optimizeTaxReform(
    .sort((a,b)=>a.balancedScore-b.balancedScore),Math.ceil(fiscalFinalists*.40))
  include(laborRows.filter(r=>r.revenueDeltaBillions>=590&&r.revenueDeltaBillions<700)
    .sort((a,b)=>a.balancedScore-b.balancedScore),4)
+ include(laborRows.filter(r=>r.revenueDeltaBillions>=580&&r.revenueDeltaBillions<750)
+   .sort((a,b)=>b.distribution.winnersPct-a.distribution.winnersPct),5)
  include(laborRows.filter(r=>r.revenueDeltaBillions>=700&&r.revenueDeltaBillions<900)
    .sort((a,b)=>a.balancedScore-b.balancedScore),3)
  include(laborRows.filter(r=>r.candidate.brackets.length===5),2)
