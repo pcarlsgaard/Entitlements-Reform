@@ -344,6 +344,12 @@ export function optimizeTaxReform(
  select(byGentle,Math.ceil(laborFinalists*.12))
  select(byRevenue,Math.ceil(laborFinalists*.13))
  select(aroundPrimaryBalance,Math.ceil(laborFinalists*.38))
+ // Explicitly retain the likely 2035 break-even revenue region rather than
+ // allowing distribution rank to select only the slightly underfunded edge.
+ select(eligible.filter(r=>r.revenueDeltaBillions>=590&&r.revenueDeltaBillions<700)
+   .sort((a,b)=>laborPriority(a)-laborPriority(b)),6)
+ select(eligible.filter(r=>r.revenueDeltaBillions>=700&&r.revenueDeltaBillions<900)
+   .sort((a,b)=>laborPriority(a)-laborPriority(b)),6)
  select(byRateFive,Math.ceil(laborFinalists*.12))
  select(prelim.filter(r=>r.candidate.id==='saved'),1)
  select(prelim.filter(r=>r.candidate.id.startsWith('feasibility-stress-')),5)
@@ -370,6 +376,10 @@ export function optimizeTaxReform(
   Math.ceil(fiscalFinalists*.08))
  include(laborRows.filter(r=>r.revenueDeltaBillions>=450&&r.revenueDeltaBillions<=1050)
    .sort((a,b)=>a.balancedScore-b.balancedScore),Math.ceil(fiscalFinalists*.40))
+ include(laborRows.filter(r=>r.revenueDeltaBillions>=590&&r.revenueDeltaBillions<700)
+   .sort((a,b)=>a.balancedScore-b.balancedScore),4)
+ include(laborRows.filter(r=>r.revenueDeltaBillions>=700&&r.revenueDeltaBillions<900)
+   .sort((a,b)=>a.balancedScore-b.balancedScore),3)
  include(laborRows.filter(r=>r.candidate.brackets.length===5),2)
  include(laborRows.filter(r=>r.candidate.id==='saved'),1)
  include(laborRows.filter(r=>r.candidate.id.startsWith('feasibility-stress-')),5)
