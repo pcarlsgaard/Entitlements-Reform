@@ -65,10 +65,13 @@ describe('Constrained 2026 Pareto X-tax search',()=>{
       inputs:result.inputs,
       counts:{candidates:result.prescreenCount,revenueEligible:result.eligibleLaborCount,
         laborFinalists:result.inputs.laborFinalists,fullyScored:result.fullyScoredCount,
-        feasible:result.feasibleCount,frontier:result.frontier.length},
+        fiscalFeasible:result.feasibleCount,majorityAndFiscalFeasible:result.majorityAndFiscalFeasibleCount,
+        frontier:result.frontier.length},
       baseline:fmt(result.baseline),
       leaders:Object.fromEntries(Object.entries(result.leaders).map(([k,v])=>[k,fmt(v)])),
       frontier:result.frontier.slice(0,12).map(fmt),
+      debtOnly:result.debtOnlyFrontier.slice(0,10).map(fmt),
+      fiscalOnly:result.fiscalOnlyLeaders.slice(0,10).map(fmt),
       near:result.bestNearFeasible.map(fmt),
     }))
   },600000)
