@@ -339,6 +339,14 @@ export function searchHighTopRates(
       && x.design.id.startsWith('five-compromise-'))
     .sort((a,b)=>a.policyLoss-b.policyLoss),2)
  }
+ if(options.fiveOnly){
+   const fiscalBand=eligible.filter(x=>x.additionalRevenueBillions>=515&&x.additionalRevenueBillions<675)
+   const lowerBand=eligible.filter(x=>x.additionalRevenueBillions>=490&&x.additionalRevenueBillions<565)
+   select([...fiscalBand].sort((a,b)=>b.q1q4WinnersPct-a.q1q4WinnersPct),15)
+   select([...fiscalBand].sort((a,b)=>a.q1q4Lose5Pct-b.q1q4Lose5Pct),10)
+   select([...fiscalBand].sort((a,b)=>a.policyLoss-b.policyLoss),12)
+   select([...lowerBand].sort((a,b)=>b.q1q4WinnersPct-a.q1q4WinnersPct),8)
+ }
  const pool=[...eligible].sort((a,b)=>a.policyLoss-b.policyLoss)
  select(pool,14)
  select([...eligible].sort((a,b)=>b.q1q4WinnersPct-a.q1q4WinnersPct),18)
