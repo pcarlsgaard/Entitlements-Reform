@@ -111,7 +111,7 @@ function candidate(
  // Only the new fifth rate may jump 12.5–20 pp from an existing 35% band;
  // treat those as extreme sensitivity scenarios rather than coherent defaults.
  if(full.some((r,i)=>i>0&&r-full[i-1]!>(rates.length===4&&i===4?.20000001:.12500001)))return null
- if(rates.length===4 && (Math.abs(rates[3]!-.35)>1e-10 || top<=.35))return null
+ if(rates.length===4 && (Math.abs(rates[3]!-.35)>1e-10 || top<=.35 || rates[2]!>=.35))return null
  return {id,topRate:top,brackets:capBrackets(top,rates,cuts),
   adultCredit:adult,childCredit:child}
 }
@@ -207,11 +207,11 @@ export function searchHighTopRates(
   const cuts=cutsets[Math.floor(rnd()*cutsets.length)]!
   const credit=creditsets[Math.floor(rnd()*creditsets.length)]!
   if(top>.35 && rnd()<.48){
-    const upper=Math.max(c,.35)
+    const penultimate=Math.min(.345,Math.max(c,.315))
     const lowerCut=Math.max(cuts[2]!,310000)
     const highCut=[400000,500000,600000,750000,1000000][Math.floor(rnd()*5)]!
     if(lowerCut<highCut)
-      add(candidate('random-five-'+i,top,[a,b,Math.min(upper,.35),.35],
+      add(candidate('random-five-'+i,top,[a,b,penultimate,.35],
         [cuts[0]!,cuts[1]!,lowerCut,highCut],credit[0]!,credit[1]!))
   } else {
     add(candidate('candidate-'+i,top,[a,b,c],cuts,credit[0]!,credit[1]!))
@@ -229,7 +229,7 @@ export function searchHighTopRates(
         for(const upperCut of [400000,600000,1000000]){
           if(upperCut<=cuts[2]!)continue
           add(candidate('five-local-'+top+'-'+third+'-'+upperCut+'-'+cr[0]+'-'+cuts[2],
-            top,[.185,.275,Math.min(.35,Math.max(.335,third)),.35],
+            top,[.185,.275,Math.min(.345,Math.max(.325,third)),.35],
             [...cuts,upperCut],cr[0]!,cr[1]!))
         }
       }
@@ -265,14 +265,23 @@ export function searchHighTopRates(
  // Full rate sweep gets scored even if far short of balance.
  select(sweep,sweep.length)
  select([baseline],1)
+ // Guarantee that fifth-rate schedules across threshold choices survive
+ // before the extensive four-rate candidate pool can fill the fiscal slots.
+ for(const t of topRates.filter(t=>t>.35)){
+  select(prescreen.filter(x=>x.design.brackets.length===5 && x.design.topRate===t
+      && x.design.id.startsWith('five-compromise-'))
+    .sort((a,b)=>a.policyLoss-b.policyLoss),2)
+ }
  const pool=[...eligible].sort((a,b)=>a.policyLoss-b.policyLoss)
  select(pool,14)
  select([...eligible].sort((a,b)=>b.q1q4WinnersPct-a.q1q4WinnersPct),18)
  select([...eligible].sort((a,b)=>a.q1q4Lose5Pct-b.q1q4Lose5Pct),10)
  const targetBands=[[400,520],[520,600],[600,725],[725,925]]
- for(const [low,high] of targetBands)select(
-  eligible.filter(x=>x.additionalRevenueBillions>=low&&x.additionalRevenueBillions<high)
+ for(const [low,high] of targetBands){
+  if(low===undefined||high===undefined)continue
+  select(eligible.filter(x=>x.additionalRevenueBillions>=low&&x.additionalRevenueBillions<high)
     .sort((a,b)=>a.policyLoss-b.policyLoss),9)
+ }
  for(const t of topRates)select(
    eligible.filter(x=>x.design.topRate===t).sort((a,b)=>a.policyLoss-b.policyLoss),6)
  const fullMax=options.fullFiscalFinalists??85
