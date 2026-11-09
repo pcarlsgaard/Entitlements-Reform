@@ -96,4 +96,21 @@ describe('Temporary 45% top wage/DBCFT rate: 35% statutory glide',()=>{
   }
   console.log('TEMPORARY_45_TO_35_GLIDEPATH_RESULTS_JSON='+JSON.stringify(results))
  },600000)
+ it('tests the same phase-down with the model dynamic-GDP uplift disabled',()=>{
+  const staticPolicy:CombinedPolicy={...policy,dynamic:{...policy.dynamic,enabled:false}}
+  const paths:TopRateGlidepath[]=[
+    {initialRate:.45,floorRate:.35,holdThroughYear:2035,floorYear:2050},
+    {initialRate:.45,floorRate:.35,holdThroughYear:2035,floorYear:2055},
+    {initialRate:.45,floorRate:.35,holdThroughYear:2040,floorYear:2060},
+  ]
+  const results=[
+    fy('static-permanent45',scoreCombined(staticPolicy)),
+    ...paths.map(p=>fy('static-hold'+p.holdThroughYear+'-floor'+p.floorYear,
+      scoreCombined(staticPolicy,'cpi',
+        topRateGlideTaxForYear(staticPolicy.tax,p)),p))
+  ]
+  console.log('TEMPORARY_GLIDE_WITHOUT_GDP_UPLIFT_JSON='+JSON.stringify(results))
+  expect(results.every(x=>Number.isFinite(x.debt.y2095))).toBe(true)
+ },600000)
+
 })
