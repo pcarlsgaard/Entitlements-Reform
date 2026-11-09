@@ -82,4 +82,30 @@ describe('45%→35% matched wage/DBCFT glide after primary balance',()=>{
     rows,
   }))
  },600000)
+ it('stress tests the 45-to-35 glide against hypothetical business-base erosion',()=>{
+  const tested=[.2,.5].map(elasticity=>{
+    const result=evaluateTaxGlides(policy,[2035,2040],[10,20],elasticity)
+    const format=(x:typeof result.constant45)=>({
+      label:x.label,
+      firstCut:x.firstCutYear,years:x.durationYears,first35:x.fullyAt35Year,
+      primary2035Pct:+(x.primary2035GDP*100).toFixed(3),
+      primary2050Pct:+(x.primary2050GDP*100).toFixed(3),
+      debt2095Pct:+(x.debt2095GDP*100).toFixed(2),
+      peakDebtPct:+(x.peakDebtGDP*100).toFixed(2),
+      firstPrimarySurplus:x.firstPrimarySurplusYear,
+      noPrimaryDeficit2035to2055:x.primaryDeficitYears2035to2055===0,
+      passes2035Primary:x.meets2035Primary,
+      passes2095Debt:x.meets2095DebtTarget40,
+    })
+    return {elasticity,constant45:format(result.constant45),
+      immediate35:format(result.immediate35),
+      glides:result.glides.map(format)}
+  })
+  console.log('FORTY_FIVE_TO_THIRTY_FIVE_GLIDE_STRESS_JSON='+JSON.stringify(tested))
+  expect(tested).toHaveLength(2)
+  for(const x of tested){
+    expect(x.glides).toHaveLength(4)
+    expect(x.constant45.debt2095Pct).toBeGreaterThanOrEqual(0)
+  }
+ },600000)
 })
