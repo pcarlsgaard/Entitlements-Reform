@@ -1,4 +1,5 @@
 import type { ReformSettings } from '../tax/model/types'
+import { calculateMacro } from '../tax/model/macro'
 
 /**
  * A transitional, statutory top-rate path.
@@ -48,4 +49,34 @@ export function taxAtTopRate(base: ReformSettings, rate: number):ReformSettings 
 export function topRateGlideTaxForYear(base:ReformSettings, glide:TopRateGlidepath) {
   validateTopRateGlidepath(base,glide)
   return (year:number)=>taxAtTopRate(base,topRateAtYear(glide,year))
+}
+
+/**
+ * One explicit (not empirically calibrated) adverse taxable-business-base
+ * response. Illustrative elasticity is with respect to net-of-tax rate,
+ * normalized to the taxable base at a permanent 35% business tax:
+ *
+ * B(rate) / B(35%) = [(1-rate)/(1-.35)]^elasticity
+ *
+ * The source simulator assumes zero such base erosion. This function returns
+ * a NEGATIVE fraction of 2026 GDP to subtract from simulated annual receipts.
+ * It holds this static GDP-share hit at each year's statutory business rate.
+ * This does not include capital formation feedback, avoidance thresholds,
+ * cross-border adjustment, or the possible gains in revenue when rates fall.
+ */
+export function businessBaseElasticityAdjustmentGDP(
+  base:ReformSettings,
+  statutoryRateForYear:(year:number)=>number,
+  elasticity:number,
+  referenceRate=.35,
+):(year:number)=>number {
+  if(!Number.isFinite(elasticity)||elasticity<0||!Number.isFinite(referenceRate)
+    ||referenceRate<0||referenceRate>=1)throw new Error('Invalid business base sensitivity')
+  const score=calculateMacro(base)
+  return (year:number)=>{
+    const rate=statutoryRateForYear(year)
+    if(rate<0||rate>=1)throw new Error('Invalid annual business rate')
+    const baseFraction=Math.pow((1-rate)/(1-referenceRate),elasticity)
+    return -rate*score.businessTaxableBase*(1-baseFraction)/score.gdp
+  }
 }
