@@ -249,6 +249,61 @@ export function searchHighTopRates(
    }
   }
  }
+
+ // Dedicated 40%-top, four-lower-band targeted optimization.
+ // For each progressively increasing ladder, bisect the adult credit to
+ // land near the minimum extra revenue needed for 2035 primary balance.
+ // Revenue is not a fiscal guarantee: the shortlisted full model checks it.
+ if(options.fiveOnly){
+   if(options.fixedTopRate===undefined)throw new Error('fiveOnly requires fixedTopRate')
+   const targets=options.targetAdditionalRevenueBillions??[480,515,540,565,590,625,675]
+   for(let i=0;i<105;i++){
+     const choose=(v:number[])=>v[Math.floor(rnd()*v.length)]!
+     const r1=choose([.155,.165,.175,.185,.192,.205,.215])
+     const r2=choose([.245,.255,.265,.275,.285,.295,.31])
+     const r3=choose([.31,.325,.335,.345])
+     const c1=choose([45000,55000,65000,70000,80000])
+     const c2=choose([95000,120000,150000,185000,225000])
+     const c3=choose([150000,185000,225000,275000,310000,400000])
+     const c4=choose([175000,200000,225000,250000,310000,400000,500000,750000,1000000])
+     const ch=choose([3200,4200,5000,5400,6000])
+     const make=(a:number)=>candidate('target40-'+i,options.fixedTopRate!,
+       [r1,r2,r3,.35],[c1,c2,c3,c4],a,ch)
+     const zero=make(0),max=make(4200)
+     if(!zero||!max)continue
+     const revenue=(d:HighTopCandidate)=>net(apply(base,d)).netRevenue-referenceRevenue
+     const upper=revenue(zero),lower=revenue(max)
+     for(const target of targets){
+       if(target>upper||target<lower)continue
+       let lo=0,hi=4200
+       for(let k=0;k<7;k++){
+         const mid=(lo+hi)/2
+         const d=make(mid)
+         if(!d)break
+         if(revenue(d)>target)lo=mid
+         else hi=mid
+       }
+       const credit=Math.max(0,Math.min(4200,Math.round(((lo+hi)/2)/100)*100))
+       const d=make(credit)
+       if(d)add({...d,id:'target40-'+i+'-'+target})
+     }
+   }
+   // Mechanism-isolation: preserve the proven 35%-capped lower rates and
+   // vary only where a 40% fifth band starts. This shifts burden mostly to
+   // high-wage tax units but still needs full primary-budget verification.
+   for(const threshold of [175000,200000,225000,250000,310000,400000,500000,750000,1000000]){
+     for(const first of [.175,.185,.20]){
+       for(const second of [.265,.275,.295]){
+         for(const child of [4200,5400,6000]){
+           const cuts=[70000,150000,160000,threshold]
+           const candidate40=candidate('topcut40-'+threshold+'-'+first+'-'+second+'-'+child,
+             .40,[first,second,.335,.35],cuts,3000,child)
+           add(candidate40)
+         }
+       }
+     }
+   }
+ }
  const prescreen:HighTopRow[]=[]
  for(const d of list.values()){
   const p=apply(base,d),m=inc(p.tax),rev=net(p).netRevenue
