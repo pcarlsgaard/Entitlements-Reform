@@ -135,6 +135,8 @@ export function scoreCombined(
   taxIndexingMode: TaxIndexingMode = 'cpi',
   /** Optional annual reform tax settings. Unchanged health and spending policies apply. */
   taxForYear?: (year: number) => ReformSettings,
+  /** GDP-share adjustment to receipts (e.g. explicit business-base elasticity sensitivity). */
+  additionalRevenueGDPForYear?: (year: number) => number,
 ) {
   const assumptions: ModelAssumptions = {
     ...policy.assumptions,
@@ -175,7 +177,8 @@ export function scoreCombined(
   const annualTaxDelta = policy.taxEnabled
     ? taxRevenueChangePath(policy.tax, assumptions, health.totalHealthCreditCostBillions, taxIndexingMode, taxForYear) : new Map<number, number>()
   const revenueDelta = (year: number) => policy.taxEnabled ?
-    (annualTaxDelta.get(year) ?? 0) - replacedRevenueDriftGDP(year, policy.tax) : 0
+    (annualTaxDelta.get(year) ?? 0) - replacedRevenueDriftGDP(year, policy.tax) +
+    (additionalRevenueGDPForYear?.(year) ?? 0) : 0
   const outlaySavingsGDP = policy.taxEnabled
     ? tax.totalFederalSavings / tax.gdp : 0
   const taxFiscalBridge: FiscalBridge = {
