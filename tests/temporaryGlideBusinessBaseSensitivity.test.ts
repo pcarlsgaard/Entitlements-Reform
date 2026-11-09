@@ -50,4 +50,33 @@ describe('Transparency: 45%-35% glide under business cash-flow tax base erosion'
   }
   console.log('TEMPORARY_GLIDE_BUSINESS_BASE_SENSITIVITY_JSON='+JSON.stringify(results))
  },600000)
+ it('tests joint downside: no dynamic GDP uplift plus a smaller business tax base',()=>{
+  const conservative:CombinedPolicy={...base,dynamic:{...base.dynamic,enabled:false}}
+  const results=[]
+  for(const [hold,floor] of [[2035,2055],[2035,2060],[2040,2060],[2045,2065]]){
+   const path:TopRateGlidepath={initialRate:.45,floorRate:.35,
+     holdThroughYear:hold!,floorYear:floor!}
+   const taxForYear=topRateGlideTaxForYear(conservative.tax,path)
+   for(const elasticity of [0,.1,.2,.5]){
+    const rateResponse=businessBaseElasticityAdjustmentGDP(conservative.tax,
+      year=>topRateAtYear(path,year),elasticity)
+    const score=scoreCombined(conservative,'cpi',taxForYear,rateResponse)
+    const y=score.combined.years
+    const get=(year:number)=>y.find(x=>x.year===year)!
+    const p=(year:number)=>get(year).primaryBalance/get(year).nominalGDP
+    results.push({
+      holdThrough:hold,floorYear:floor,elasticity,
+      primary2035GDP:p(2035),primary2040GDP:p(2040),
+      primary2050GDP:p(2050),
+      debt2095GDP:get(2095).endingDebtGDP,
+      peakDebtGDP:Math.max(...y.map(x=>x.endingDebtGDP)),
+      firstSustainedSurplus:y.find((x,i)=>x.primaryBalance>=0
+        &&y.slice(i).every(z=>z.primaryBalance>=0))?.year??null,
+    })
+   }
+  }
+  console.log('TEMPORARY_GLIDE_JOINT_DOWNSIDE_JSON='+JSON.stringify(results))
+  expect(results).toHaveLength(16)
+ },600000)
+
 })
