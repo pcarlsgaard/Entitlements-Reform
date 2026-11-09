@@ -73,8 +73,10 @@ export interface HighTopSearchReport {
   prelimEligible:number
   fiscalScored:number
   baseline:HighTopRow
-  /** Frozen wage brackets and credits; only top wage rate and DBCFT change. */
+  /** Original four-rate plan, then its fifth-rate extensions at each top rate. */
   rateSweep:HighTopRow[]
+  /** Third/fourth wage rate, fifth-rate threshold and business top rate remain explicit. */
+  fiveRateFrontier:HighTopRow[]
   bestByTopRate:(HighTopRow|null)[]
   best2035:HighTopRow|null
   best2032:HighTopRow|null
@@ -102,10 +104,14 @@ function candidate(
   id:string,top:number,rates:number[],cuts:number[],
   adult:number,child:number
 ):HighTopCandidate|null {
- if(top<.35||top>.55||rates.some((r,i)=>r>top||(i>0&&r<rates[i-1]!)||r<0))return null
+ if(top<.35||top>.55||![3,4].includes(rates.length)||cuts.length!==rates.length
+   ||rates.some((r,i)=>r>top||(i>0&&r<rates[i-1]!)||r<0))return null
  if(cuts.some((c,i)=>c<10000||(i>0&&c<=cuts[i-1]!)))return null
  const full=[...rates,top]
- if(full.some((r,i)=>i>0&&r-full[i-1]!>.125))return null
+ // Only the new fifth rate may jump 12.5–20 pp from an existing 35% band;
+ // treat those as extreme sensitivity scenarios rather than coherent defaults.
+ if(full.some((r,i)=>i>0&&r-full[i-1]!>(rates.length===4&&i===4?.20000001:.12500001)))return null
+ if(rates.length===4 && (Math.abs(rates[3]!-.35)>1e-10 || top<=.35))return null
  return {id,topRate:top,brackets:capBrackets(top,rates,cuts),
   adultCredit:adult,childCredit:child}
 }
@@ -162,10 +168,25 @@ export function searchHighTopRates(
  const priorDesign=candidate('debt-only-4rate-35',.35,compromise,compromiseCuts,2700,5400)!
  add(priorDesign)
  for(const top of topRates){
-  add(candidate('fixed-'+top,top,compromise,compromiseCuts,2700,5400))
-  add(candidate('fixed-plus-adult-'+top,top,compromise,compromiseCuts,3100,5400))
-  add(candidate('fixed-upper-earlier-'+top,top,compromise,[70000,185000,225000],2700,5400))
-  add(candidate('saved-'+top,top,[.20,.25,.30],[65000,150000,310000],2700,5400))
+  if(top===.35)continue
+  // Four-rate tests permit a shifting third band but cannot preserve the
+  // original <=35% lower rates above a 47.5% top without huge bracket jumps.
+  add(candidate('four-'+top,top,compromise,compromiseCuts,2700,5400))
+  add(candidate('four-plus-adult-'+top,top,compromise,compromiseCuts,3100,5400))
+  add(candidate('four-earlier-'+top,top,compromise,[70000,185000,225000],2700,5400))
+  add(candidate('four-saved-'+top,top,[.20,.25,.30],[65000,150000,310000],2700,5400))
+  // Fifth rate: exact 18.5/27.5/33.5/35 wage rates stay unchanged.
+  // Only the top band above the fourth per-adult threshold is new.
+  add(candidate('fixed-'+top,top,[...compromise,.35],
+    [70000,185000,310000,500000],2700,5400))
+  for(const highCut of [400000,600000,750000,1000000]){
+   add(candidate('five-compromise-'+top+'-'+highCut,top,[...compromise,.35],
+     [70000,185000,310000,highCut],2700,5400))
+  }
+  add(candidate('five-plus-adult-'+top,top,[...compromise,.35],
+     [70000,185000,310000,500000],3300,5400))
+  add(candidate('five-saved-'+top,top,[.20,.25,.30,.35],
+     [65000,150000,310000,500000],2700,5400))
  }
  // Independent schedule / credit combinations, retaining the 35% DBCFT parity.
  const rnd=rng(options.seed??20261108)
@@ -185,7 +206,16 @@ export function searchHighTopRates(
   const c=third[Math.floor(rnd()*third.length)]!
   const cuts=cutsets[Math.floor(rnd()*cutsets.length)]!
   const credit=creditsets[Math.floor(rnd()*creditsets.length)]!
-  add(candidate('candidate-'+i,top,[a,b,c],cuts,credit[0]!,credit[1]!))
+  if(top>.35 && rnd()<.48){
+    const upper=Math.max(c,.35)
+    const lowerCut=Math.max(cuts[2]!,310000)
+    const highCut=[400000,500000,600000,750000,1000000][Math.floor(rnd()*5)]!
+    if(lowerCut<highCut)
+      add(candidate('random-five-'+i,top,[a,b,Math.min(upper,.35),.35],
+        [cuts[0]!,cuts[1]!,lowerCut,highCut],credit[0]!,credit[1]!))
+  } else {
+    add(candidate('candidate-'+i,top,[a,b,c],cuts,credit[0]!,credit[1]!))
+  }
  }
  // Targeted exact compromise-family top rates with extra Q1–Q4 options.
  for(const top of topRates){
@@ -195,6 +225,14 @@ export function searchHighTopRates(
     for(const cr of [[2700,5400],[3000,5400],[3300,5400],[2700,6000]]){
       add(candidate('local-'+top+'-'+third+'-'+cuts[2]+'-'+cr[0],
         top,[.185,.275,third],cuts,cr[0]!,cr[1]!))
+      if(top>.35 && cuts[2]!<=310000){
+        for(const upperCut of [400000,600000,1000000]){
+          if(upperCut<=cuts[2]!)continue
+          add(candidate('five-local-'+top+'-'+third+'-'+upperCut+'-'+cr[0]+'-'+cuts[2],
+            top,[.185,.275,Math.min(.35,Math.max(.335,third)),.35],
+            [...cuts,upperCut],cr[0]!,cr[1]!))
+        }
+      }
     }
    }
   }
@@ -215,7 +253,8 @@ export function searchHighTopRates(
   prescreen.push(row)
  }
  const baseline=prescreen.find(x=>x.design.id==='debt-only-4rate-35')!
- const sweep=topRates.map(t=>prescreen.find(x=>x.design.id==='fixed-'+t)??(t===.35?baseline:undefined)!)
+ const sweep=topRates.map(t=>t===.35?baseline:prescreen.find(x=>x.design.id==='fixed-'+t)!)
+ if(sweep.some(x=>!x))throw new Error('Missing fifth-rate reference design for a top-rate scenario')
  // Sort pool by both welfare and fiscal plausibility, with a verified
  // representative for each rate bucket / primary deficit cutoff.
  const eligible=prescreen.filter(x=>x.additionalRevenueBillions>=300)
@@ -237,7 +276,11 @@ export function searchHighTopRates(
  for(const t of topRates)select(
    eligible.filter(x=>x.design.topRate===t).sort((a,b)=>a.policyLoss-b.policyLoss),6)
  const fullMax=options.fullFiscalFinalists??85
- const shortlist=[...selected.values()].slice(0,fullMax)
+ // Reserve capacity for fifth-rate designs at every top-rate tier and every
+ // cutoff sensitivity, rather than letting the 4-rate candidate pool dominate.
+ const fifthRows=[...eligible].filter(x=>x.design.brackets.length===5)
+ select(fifthRows.sort((a,b)=>b.q1q4WinnersPct-a.q1q4WinnersPct),18)
+ const shortlist=[...selected.values()].slice(0,Math.max(fullMax,sweep.length))
  const laborRate=base.health.employerFicaPassThroughRate
  for(const r of shortlist){
   const x=apply(base,r.design)
@@ -306,6 +349,7 @@ export function searchHighTopRates(
     (a.fiscal!.firstPrimarySurplusYear??2100)-(b.fiscal!.firstPrimarySurplusYear??2100)
        ||a.policyLoss-b.policyLoss)[0]??null,
   frontier2035:nonDominated(acceptable,18),
+  fiveRateFrontier:nonDominated(acceptable.filter(x=>x.design.brackets.length===5),18),
   frontierDebtOnly:nonDominated(scored.filter(x=>x.fiscal?.meetsDebtTargets),18),
   closestPrimary:[...scored].sort((a,b)=>
     Math.max(0,-a.fiscal!.primary2035GDP)*1000
