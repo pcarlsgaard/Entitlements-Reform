@@ -20,7 +20,14 @@ describe('Higher equal DBCFT and wage top rates: Q1–Q4 winners versus primary 
     for(const r of results.rateSweep){
       expect(r.design.brackets.at(-1)!.rate).toBe(r.design.topRate)
       expect(r.fiscal).not.toBeNull()
+      if(r.design.topRate>.35){
+        expect(r.design.brackets).toHaveLength(5)
+        expect(r.design.brackets[3]!.rate).toBe(.35)
+        expect(r.design.brackets[3]!.upperPerAdult).toBe(500000)
+      }
     }
+    expect(results.rateSweep[0]!.design.brackets).toHaveLength(4)
+    expect(results.rateSweep[8]!.design.topRate).toBe(.55)
     for(const r of [...results.frontier2035,...results.frontierDebtOnly]){
       expect(r.design.brackets.at(-1)!.rate).toBe(r.design.topRate)
       expect(r.fiscal).not.toBeNull()
@@ -51,7 +58,8 @@ describe('Higher equal DBCFT and wage top rates: Q1–Q4 winners versus primary 
       assumptions:results.assumptions,
       counts:{candidates:results.candidateCount,prelimEligible:results.prelimEligible,
         fiscalScored:results.fiscalScored,
-        strictFrontier:results.frontier2035.length},
+        strictFrontier:results.frontier2035.length,
+        fiveRateFrontier:results.fiveRateFrontier.length},
       baseline:slim(results.baseline),
       rateSweep:results.rateSweep.map(slim),
       bestByTopRate:results.bestByTopRate.map(slim),
@@ -59,6 +67,7 @@ describe('Higher equal DBCFT and wage top rates: Q1–Q4 winners versus primary 
       best2032:slim(results.best2032),
       bestFasterThanBaseline:slim(results.bestFasterThanBaseline),
       frontier2035:results.frontier2035.map(slim),
+      fiveRateFrontier:results.fiveRateFrontier.map(slim),
       frontierDebtOnly:results.frontierDebtOnly.slice(0,12).map(slim),
       closestPrimary:results.closestPrimary.slice(0,8).map(slim),
       staticRateSensitivity:results.staticRateSensitivity,
