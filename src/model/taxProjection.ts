@@ -64,14 +64,17 @@ export function taxRevenueChangePath(
   indexingMode: TaxIndexingMode = 'cpi',
   /** Optional schedule of full wage + DBCFT policy for each calendar year. */
   taxForYear?: (year: number) => ReformSettings,
+  /** Hypothetical taxable business base elasticity to the net-of-rate (35% reference). */
+  businessBaseElasticity = 0,
 ): Map<number, number> {
   const result = new Map<number, number>()
   const wageIndexCredits = indexingMode === 'wageCredits' || indexingMode === 'wageBoth'
   for (let year = a.reformYear; year <= a.endYear; year++) {
     const wageFactor = realWageGrowthFactor(year, a)
     const perCapitaGDPFactor = realGDPPerCapitaGrowthFactor(year, a)
+    const annualTax = taxForYear?.(year) ?? tax
     const score = calculateMacro(
-      indexedTaxSettings(taxForYear?.(year) ?? tax, wageFactor, indexingMode),
+      indexedTaxSettings(annualTax, wageFactor, indexingMode),
       { insuranceCreditCost: insuranceCost / (wageIndexCredits ? 1 : wageFactor) },
     )
     const creditScaleToGDP = wageFactor / perCapitaGDPFactor
@@ -79,7 +82,15 @@ export function taxRevenueChangePath(
       score.adultCreditCost + score.childCreditCost + score.insuranceCreditCost
     ) * creditScaleToGDP
     const adjustedNetRevenue = score.grossRevenue - adjustedCreditCost
-    result.set(year, (adjustedNetRevenue - score.targetRevenue) / score.gdp)
+    // This optional sensitivity models taxable business activity moving with
+    // the annual net-of-tax rate. It is NOT an endogenous investment or
+    // behavioral simulation and is additive to existing GDP-level responses.
+    const netOfRate = Math.max(1e-8,1-annualTax.rate)
+    const relativeBusinessBase = businessBaseElasticity>0
+      ? Math.pow(netOfRate/(1-.35),businessBaseElasticity) : 1
+    const lostBusinessReceipts = Math.max(0,
+      annualTax.rate * score.businessTaxableBase * (1-relativeBusinessBase))
+    result.set(year, (adjustedNetRevenue-score.targetRevenue-lostBusinessReceipts)/score.gdp)
   }
   return result
 }
