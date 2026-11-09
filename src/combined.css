@@ -74,6 +74,10 @@
 .game-saved-row { display:flex; align-items:center; gap:7px; padding:7px 0; border-top:1px solid #edf1f4; }
 .game-saved-row span { flex:1; min-width:0; overflow-wrap:anywhere; }
 .game-saved-row small { display:block; color:#75869a; }
+@media (max-width: 850px) {
+  .game-saved-row { flex-wrap: wrap; align-items: flex-start; }
+  .game-saved-row > span { flex: 0 0 100%; }
+}
 .game-tabs { display:grid; grid-template-columns:repeat(4,1fr); gap:5px; margin:22px 0 13px; padding:5px; background:#e8efed; border-radius:13px; } .game-tabs button { padding:13px 9px; border:0; border-radius:10px; background:transparent; color:#536675; font-size:.9rem; font-weight:750; } .game-tabs button.active { background:white; color:#116848; box-shadow:0 2px 10px #17283b12; }
 .game-presets { align-items:center; } .game-presets span { color:#718095; font-size:.75rem; font-weight:750; margin-right:7px; text-transform:uppercase; letter-spacing:.06em; }
 .game-two-col { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:start; gap:18px; } .game-column, .game-results { display:grid; gap:18px; min-width:0; }
