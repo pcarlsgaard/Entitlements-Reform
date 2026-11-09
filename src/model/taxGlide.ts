@@ -111,22 +111,24 @@ function toResult(
 export function evaluateTaxGlides(
   policy:CombinedPolicy,
   starts:number[],durations:number[],
+  /** Illustrative net-of-business-tax-base elasticity: 0 / 0.2 / 0.5. */
+  businessBaseElasticity=0,
 ):GlideExperiment {
   const t=policy.tax
   if(Math.abs(t.rate-.45)>1e-9||t.progressiveWageBrackets?.length!==5||
      Math.abs(t.progressiveWageBrackets[4]!.rate-.45)>1e-9)
     throw new Error('Expected 45% business/top-wage base with five rate bands.')
-  const score45=scoreCombined(policy)
+  const score45=scoreCombined(policy,'cpi',undefined,businessBaseElasticity)
   const constant45=toResult('Constant 45%',score45,()=>.45,null,null)
   const base35={...policy,tax:taxWithMatchedTopRate(t,.35)}
-  const score35=scoreCombined(base35)
+  const score35=scoreCombined(base35,'cpi',undefined,businessBaseElasticity)
   const immediate35=toResult('Immediate permanent 35%',score35,()=>.35,null,null)
   const glides:GlideResult[]=[]
   for(const start of starts){
     for(const duration of durations){
       const rateForYear=(y:number)=>linearTopRate(y,start,duration)
       const annualTax=(y:number)=>taxWithMatchedTopRate(t,rateForYear(y))
-      const score=scoreCombined(policy,'cpi',annualTax)
+      const score=scoreCombined(policy,'cpi',annualTax,businessBaseElasticity)
       glides.push(toResult(
         `First cut ${start}, ${duration}-year glide`,
         score,rateForYear,start,duration))
