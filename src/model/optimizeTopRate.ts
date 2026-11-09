@@ -215,7 +215,7 @@ export function searchHighTopRates(
   prescreen.push(row)
  }
  const baseline=prescreen.find(x=>x.design.id==='debt-only-4rate-35')!
- const sweep=topRates.map(t=>prescreen.find(x=>x.design.id==='fixed-'+t)!)
+ const sweep=topRates.map(t=>prescreen.find(x=>x.design.id==='fixed-'+t)??(t===.35?baseline:undefined)!)
  // Sort pool by both welfare and fiscal plausibility, with a verified
  // representative for each rate bucket / primary deficit cutoff.
  const eligible=prescreen.filter(x=>x.additionalRevenueBillions>=300)
