@@ -135,6 +135,8 @@ export function scoreCombined(
   taxIndexingMode: TaxIndexingMode = 'cpi',
   /** Optional deterministic annual tax policy for fiscal glidepath analysis. */
   annualTaxForYear?: (year: number) => ReformSettings,
+  /** Illustrative taxable-business-base elasticity to annual net-of-rate. */
+  businessBaseElasticity = 0,
 ) {
   const assumptions: ModelAssumptions = {
     ...policy.assumptions,
@@ -173,7 +175,7 @@ export function scoreCombined(
   const netTaxRevenueChangeGDP = policy.taxEnabled
     ? (tax.netRevenue - tax.targetRevenue) / tax.gdp : 0
   const annualTaxDelta = policy.taxEnabled
-    ? taxRevenueChangePath(policy.tax, assumptions, health.totalHealthCreditCostBillions, taxIndexingMode, annualTaxForYear) : new Map<number, number>()
+    ? taxRevenueChangePath(policy.tax, assumptions, health.totalHealthCreditCostBillions, taxIndexingMode, annualTaxForYear, businessBaseElasticity) : new Map<number, number>()
   const revenueDelta = (year: number) => policy.taxEnabled ?
     (annualTaxDelta.get(year) ?? 0) - replacedRevenueDriftGDP(year, policy.tax) : 0
   const outlaySavingsGDP = policy.taxEnabled
