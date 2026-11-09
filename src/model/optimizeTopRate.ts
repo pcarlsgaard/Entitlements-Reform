@@ -19,6 +19,9 @@ export interface HighTopSearchOptions {
   maxCandidates?:number
   fullFiscalFinalists?:number
   minimumBottomFourWinnersPct?:number
+  fixedTopRate?:number
+  fiveOnly?:boolean
+  targetAdditionalRevenueBillions?:number[]
 }
 export interface HighTopCandidate {
   id:string
@@ -162,12 +165,20 @@ export function searchHighTopRates(
  const businessBase=net(base).businessTaxableBase
  const inc=prepareTaxSearchConsumption(base.tax,base.health,base.personalAccounts)
  const list=new Map<string,HighTopCandidate>()
- const add=(x:HighTopCandidate|null)=>{if(x&&!list.has(sig(x)))list.set(sig(x),x)}
+ const rateChoices=options.fixedTopRate===undefined?topRates:[.35,options.fixedTopRate]
+ if(options.fixedTopRate!==undefined&&(!topRates.includes(options.fixedTopRate)||options.fixedTopRate<=.35))
+   throw new Error('Unsupported fixed top rate')
+ const add=(x:HighTopCandidate|null)=>{
+   if(!x)return
+   if(options.fiveOnly&&x.brackets.length!==5&&x.id!=='debt-only-4rate-35')return
+   if(options.fixedTopRate!==undefined&&x.topRate!==options.fixedTopRate&&x.topRate!==.35)return
+   if(!list.has(sig(x)))list.set(sig(x),x)
+ }
  const compromise=[.185,.275,.335],compromiseCuts=[70000,185000,310000]
  // Include both exact known plan and pure top-rate variations.
  const priorDesign=candidate('debt-only-4rate-35',.35,compromise,compromiseCuts,2700,5400)!
  add(priorDesign)
- for(const top of topRates){
+ for(const top of rateChoices){
   if(top===.35)continue
   // Four-rate tests permit a shifting third band but cannot preserve the
   // original <=35% lower rates above a 47.5% top without huge bracket jumps.
@@ -200,16 +211,17 @@ export function searchHighTopRates(
    [3300,6000],[2400,5400],[2700,4600],[3600,5400]]
  const max=options.maxCandidates??520
  for(let i=0;i<max*10&&list.size<max;i++){
-  const top=topRates[Math.floor(rnd()*topRates.length)]!
+  const top=options.fiveOnly&&options.fixedTopRate!==undefined?options.fixedTopRate:rateChoices[Math.floor(rnd()*rateChoices.length)]!
   const a=first[Math.floor(rnd()*first.length)]!
   const b=second[Math.floor(rnd()*second.length)]!
   const c=third[Math.floor(rnd()*third.length)]!
   const cuts=cutsets[Math.floor(rnd()*cutsets.length)]!
   const credit=creditsets[Math.floor(rnd()*creditsets.length)]!
-  if(top>.35 && rnd()<.48){
+  if(top>.35 && (options.fiveOnly||rnd()<.48)){
     const penultimate=Math.min(.345,Math.max(c,.315))
-    const lowerCut=Math.max(cuts[2]!,310000)
-    const highCut=[400000,500000,600000,750000,1000000][Math.floor(rnd()*5)]!
+    const lowerCut=options.fiveOnly?[150000,185000,225000,310000,400000][Math.floor(rnd()*5)]!:Math.max(cuts[2]!,310000)
+    const possibleHighCuts=options.fiveOnly?[200000,250000,310000,400000,500000,750000,1000000]:[400000,500000,600000,750000,1000000]
+    const highCut=possibleHighCuts[Math.floor(rnd()*possibleHighCuts.length)]!
     if(lowerCut<highCut)
       add(candidate('random-five-'+i,top,[a,b,penultimate,.35],
         [cuts[0]!,cuts[1]!,lowerCut,highCut],credit[0]!,credit[1]!))
@@ -218,7 +230,7 @@ export function searchHighTopRates(
   }
  }
  // Targeted exact compromise-family top rates with extra Q1–Q4 options.
- for(const top of topRates){
+ for(const top of rateChoices){
   for(const third of [.325,.335,.345,.36,.375,.395,.415]){
    for(const cuts of [[70000,185000,225000],[70000,185000,310000],
      [70000,185000,400000],[65000,150000,310000]]){
@@ -253,11 +265,11 @@ export function searchHighTopRates(
   prescreen.push(row)
  }
  const baseline=prescreen.find(x=>x.design.id==='debt-only-4rate-35')!
- const sweep=topRates.map(t=>t===.35?baseline:prescreen.find(x=>x.design.id==='fixed-'+t)!)
+ const sweep=rateChoices.map(t=>t===.35?baseline:prescreen.find(x=>x.design.id==='fixed-'+t)!)
  if(sweep.some(x=>!x))throw new Error('Missing fifth-rate reference design for a top-rate scenario')
  // Sort pool by both welfare and fiscal plausibility, with a verified
  // representative for each rate bucket / primary deficit cutoff.
- const eligible=prescreen.filter(x=>x.additionalRevenueBillions>=300)
+ const eligible=prescreen.filter(x=>x.additionalRevenueBillions>=(options.fiveOnly?350:300))
  const selected=new Map<string,HighTopRow>()
  const select=(rows:HighTopRow[],count:number)=>{
   for(const r of rows.slice(0,count))selected.set(sig(r.design),r)
@@ -267,7 +279,7 @@ export function searchHighTopRates(
  select([baseline],1)
  // Guarantee that fifth-rate schedules across threshold choices survive
  // before the extensive four-rate candidate pool can fill the fiscal slots.
- for(const t of topRates.filter(t=>t>.35)){
+ for(const t of rateChoices.filter(t=>t>.35)){
   select(prescreen.filter(x=>x.design.brackets.length===5 && x.design.topRate===t
       && x.design.id.startsWith('five-compromise-'))
     .sort((a,b)=>a.policyLoss-b.policyLoss),2)
@@ -276,19 +288,25 @@ export function searchHighTopRates(
  select(pool,14)
  select([...eligible].sort((a,b)=>b.q1q4WinnersPct-a.q1q4WinnersPct),18)
  select([...eligible].sort((a,b)=>a.q1q4Lose5Pct-b.q1q4Lose5Pct),10)
- const targetBands=[[400,520],[520,600],[600,725],[725,925]]
+ const targetBands=options.fiveOnly?[[350,475],[475,540],[540,590],[590,650],[650,850]]:[[400,520],[520,600],[600,725],[725,925]]
  for(const [low,high] of targetBands){
   if(low===undefined||high===undefined)continue
   select(eligible.filter(x=>x.additionalRevenueBillions>=low&&x.additionalRevenueBillions<high)
     .sort((a,b)=>a.policyLoss-b.policyLoss),9)
  }
- for(const t of topRates)select(
+ for(const t of rateChoices)select(
    eligible.filter(x=>x.design.topRate===t).sort((a,b)=>a.policyLoss-b.policyLoss),6)
  const fullMax=options.fullFiscalFinalists??85
  // Reserve capacity for fifth-rate designs at every top-rate tier and every
  // cutoff sensitivity, rather than letting the 4-rate candidate pool dominate.
  const fifthRows=[...eligible].filter(x=>x.design.brackets.length===5)
  select(fifthRows.sort((a,b)=>b.q1q4WinnersPct-a.q1q4WinnersPct),18)
+ if(options.fiveOnly){
+   const near=eligible.filter(x=>x.additionalRevenueBillions>=515&&x.additionalRevenueBillions<680)
+   select([...near].sort((a,b)=>b.q1q4WinnersPct-a.q1q4WinnersPct),15)
+   select([...near].sort((a,b)=>a.q1q4Lose5Pct-b.q1q4Lose5Pct),12)
+   select([...near].sort((a,b)=>a.policyLoss-b.policyLoss),12)
+ }
  const shortlist=[...selected.values()].slice(0,Math.max(fullMax,sweep.length))
  const laborRate=base.health.employerFicaPassThroughRate
  for(const r of shortlist){
@@ -332,10 +350,10 @@ export function searchHighTopRates(
  const byPolicy=[...acceptable].sort((a,b)=>a.policyLoss-b.policyLoss)
  const earlier=acceptable.filter(x=>x.fiscal!.firstPrimarySurplusYear!==null
    &&x.fiscal!.firstPrimarySurplusYear!<2035)
- const byTop=topRates.map(rate=>
+ const byTop=rateChoices.map(rate=>
    [...fullyFeasible].filter(x=>x.design.topRate===rate)
     .sort((a,b)=>b.q1q4WinnersPct-a.q1q4WinnersPct||a.policyLoss-b.policyLoss)[0]??null)
- const staticRateSensitivity=topRates.map(t=>{
+ const staticRateSensitivity=rateChoices.map(t=>{
    const baseRow=sweep.find(x=>x.design.topRate===t)!
    const adjusted=(e:number)=>{
     const ratio=Math.pow((1-t)/(.65),e)
@@ -345,7 +363,7 @@ export function searchHighTopRates(
      adjustedRevenueDeltaBillions:{e020:adjusted(.2),e050:adjusted(.5),e080:adjusted(.8)}}
  })
  return {
-  assumptions:{topRates,noncompliance:base.tax.noncomplianceRate,
+  assumptions:{topRates:rateChoices,noncompliance:base.tax.noncomplianceRate,
     rothContribution:base.personalAccounts.requiredContributionRate,
     acaTransitionShare:base.health.esiAcaTransitionShare??0,
     businessWageTopParity:true,baselineBusinessTaxableBaseBillions:businessBase,
