@@ -62,6 +62,8 @@ export function taxRevenueChangePath(
   a: ModelAssumptions,
   insuranceCost: number,
   indexingMode: TaxIndexingMode = 'cpi',
+  /** Optional schedule of full wage + DBCFT policy for each calendar year. */
+  taxForYear?: (year: number) => ReformSettings,
 ): Map<number, number> {
   const result = new Map<number, number>()
   const wageIndexCredits = indexingMode === 'wageCredits' || indexingMode === 'wageBoth'
@@ -69,7 +71,7 @@ export function taxRevenueChangePath(
     const wageFactor = realWageGrowthFactor(year, a)
     const perCapitaGDPFactor = realGDPPerCapitaGrowthFactor(year, a)
     const score = calculateMacro(
-      indexedTaxSettings(tax, wageFactor, indexingMode),
+      indexedTaxSettings(taxForYear?.(year) ?? tax, wageFactor, indexingMode),
       { insuranceCreditCost: insuranceCost / (wageIndexCredits ? 1 : wageFactor) },
     )
     const creditScaleToGDP = wageFactor / perCapitaGDPFactor
