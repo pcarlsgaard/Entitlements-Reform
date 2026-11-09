@@ -130,7 +130,14 @@ const householdExamples: { label: string; input: HouseholdInput }[] = [
   { label: 'Family · $100k + 2 children', input: { filingStatus: 'married', cashWage: 65_000, secondaryCashWage: 35_000, children: 2 } },
 ];
 
-export function scoreCombined(policy: CombinedPolicy, taxIndexingMode: TaxIndexingMode = 'cpi') {
+export function scoreCombined(
+  policy: CombinedPolicy,
+  taxIndexingMode: TaxIndexingMode = 'cpi',
+  /** Optional deterministic annual tax policy for fiscal glidepath analysis. */
+  annualTaxForYear?: (year: number) => ReformSettings,
+  /** Illustrative taxable-business-base elasticity to annual net-of-rate. */
+  businessBaseElasticity = 0,
+) {
   const assumptions: ModelAssumptions = {
     ...policy.assumptions,
     fullRetirementAge: policy.benefits.socialSecurityReform
@@ -168,7 +175,7 @@ export function scoreCombined(policy: CombinedPolicy, taxIndexingMode: TaxIndexi
   const netTaxRevenueChangeGDP = policy.taxEnabled
     ? (tax.netRevenue - tax.targetRevenue) / tax.gdp : 0
   const annualTaxDelta = policy.taxEnabled
-    ? taxRevenueChangePath(policy.tax, assumptions, health.totalHealthCreditCostBillions, taxIndexingMode) : new Map<number, number>()
+    ? taxRevenueChangePath(policy.tax, assumptions, health.totalHealthCreditCostBillions, taxIndexingMode, annualTaxForYear, businessBaseElasticity) : new Map<number, number>()
   const revenueDelta = (year: number) => policy.taxEnabled ?
     (annualTaxDelta.get(year) ?? 0) - replacedRevenueDriftGDP(year, policy.tax) : 0
   const outlaySavingsGDP = policy.taxEnabled
@@ -223,16 +230,39 @@ export function scoreCombined(policy: CombinedPolicy, taxIndexingMode: TaxIndexi
   // change in tax base; the X-tax rate changes its capital response only mildly.
   const capitalBaseReplaced = policy.taxEnabled && policy.dynamic.enabled &&
     policy.tax.replacedTaxes.corporateIncome && policy.tax.replacedTaxes.individualIncome
-  const capitalRateFactor = Math.max(0, Math.min(2,
-    1 + policy.dynamic.capitalRateSensitivity * (policy.tax.rate / 0.21 - 1)))
-  const steadyCapitalGDPLevelChange = capitalBaseReplaced ?
-    Math.max(-0.03, Math.min(0.03, policy.dynamic.capitalGDPLevelAtReference * capitalRateFactor)) : 0
+  const capitalSteadyGDPForRate = (rate: number): number => {
+    if(!capitalBaseReplaced) return 0
+    const capitalRateFactor = Math.max(0, Math.min(2,
+      1 + policy.dynamic.capitalRateSensitivity * (rate / 0.21 - 1)))
+    return Math.max(-0.03, Math.min(0.03,
+      policy.dynamic.capitalGDPLevelAtReference * capitalRateFactor))
+  }
+  const steadyCapitalGDPLevelChange = capitalSteadyGDPForRate(policy.tax.rate)
   const steadyCapitalStockChange = steadyCapitalGDPLevelChange * (0.026 / 0.014)
   const steadyCapitalWageChange = steadyCapitalGDPLevelChange * (0.013 / 0.014)
+  // For an annual tax glide, approximate policy-induced GDP dynamics by
+  // re-evaluating the annual marginal wage response and capital reference
+  // response at each *distinct policy top rate*. Other policy choices stay
+  // fixed. The phase-in clock still begins at reform enactment, so this is
+  // a sensitivity, not a forward-looking investment adjustment model.
+  const annualLaborCache = new Map<number, number>()
+  const annualWageLevel = (year: number): number => {
+    if (!annualTaxForYear) return steadyGDPLevelChange
+    const settings = annualTaxForYear(year)
+    const key = settings.rate
+    let level = annualLaborCache.get(key)
+    if (level === undefined) {
+      const labor = calculateLaborResponse(settings, policy.health.employerFicaPassThroughRate)
+      level = Math.max(-0.05, Math.min(0.05,
+        labor.netWageLogChange * policy.dynamic.laborElasticity * policy.dynamic.laborShareGDP)) || 0
+      annualLaborCache.set(key, level)
+    }
+    return level
+  }
   const dynamicGDP = policy.taxEnabled && policy.dynamic.enabled ? (year: number) =>
-    1 + steadyGDPLevelChange * Math.min(1,
+    1 + annualWageLevel(year) * Math.min(1,
       Math.max(0, (year - assumptions.reformYear) / Math.max(1, policy.dynamic.phaseInYears))) +
-      steadyCapitalGDPLevelChange * Math.min(1,
+      capitalSteadyGDPForRate(annualTaxForYear?.(year).rate ?? policy.tax.rate) * Math.min(1,
         Math.max(0, (year - assumptions.reformYear) / Math.max(1, policy.dynamic.capitalPhaseInYears))) : undefined
   const baseline = simulate(comparatorAssumptions, (year) => currentLawRevenueGDP(year), {}, policy.baselineMode)
   const taxOnly = simulate(
