@@ -1,7 +1,7 @@
 import healthData from '../data/health_esi_2025.json';
 import nongroupHealthData from '../data/health_nongroup_2025.json';
 import baseline2025 from '../data/baseline_2025.json';
-import { acaApplicableRate2026, acaPremiumTaxCredit2026, greaterOfAcaUniversal } from './aca2026';
+import { acaApplicableRate2026, acaPremiumTaxCredit2026, acaApplicableRateRestored2024, acaPremiumTaxCreditRestored2024, greaterOfAcaUniversal } from './aca2026';
 import { calculateAdultCredit, calculateCurrentLaw, calculateReformWageTax } from './household';
 import { calculateMacro } from './macro';
 import type { FilingStatus, HouseholdInput, ReformSettings, TaxBreakdown } from './types';
@@ -23,6 +23,8 @@ export interface HealthPolicySettings {
   replaceAcaAptc?: boolean;
   /** Share of ESI policyholders moving to Marketplace coverage (for ACA top-up sensitivity). */
   esiAcaTransitionShare?: number;
+  /** Analysis-only: compare permanent restoration of 2024 enhanced PTC to 2026 law. */
+  esiAcaScheduleScenario?: 'current2026' | 'restored2024';
   redistributionRule: HealthRedistributionRule;
   recipientScope: HealthRecipientScope;
   /** Continue family coverage is the default. Exclusion is an incidence-only diagnostic. */
@@ -382,10 +384,13 @@ function calculateCell(
   // there is no need to recalculate hypothetical eligibility for them.
   const needAca = cell.policyholderWorkers > 0
     && (primaryWageDelta === 0 || clampShare(policy.esiAcaTransitionShare ?? 0) > 0);
+  const restored2024 = policy.esiAcaScheduleScenario === 'restored2024';
   const acaRate = needAca
-    ? acaApplicableRate2026(incomeProxy, familySize) : null;
+    ? (restored2024 ? acaApplicableRateRestored2024(incomeProxy, familySize)
+      : acaApplicableRate2026(incomeProxy, familySize)) : null;
   const acaCredit = acaRate === null ? 0
-    : acaPremiumTaxCredit2026(incomeProxy, familySize, benchmarkPremium);
+    : (restored2024 ? acaPremiumTaxCreditRestored2024(incomeProxy, familySize, benchmarkPremium)
+      : acaPremiumTaxCredit2026(incomeProxy, familySize, benchmarkPremium));
   const greaterOf = greaterOfAcaUniversal(acaCredit, universalHealthCredit, benchmarkPremium);
   const acaEsiPotentialTopUp = cell.policyholderWorkers > 0 ? greaterOf.topUpOverUniversal : 0;
   const acaEsiLowIncomeTopUp = acaRate !== null

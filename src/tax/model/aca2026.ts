@@ -41,3 +41,30 @@ export function greaterOfAcaUniversal(
   const allowed=Math.max(flat,aca)
   return {allowed,topUpOverUniversal:allowed-flat}
 }
+
+/**
+ * Counterfactual: extend the enhanced 2024 ACA premium-tax-credit schedule
+ * (ARPA/IRA) into 2026 and beyond while continuing to use the 2025 poverty
+ * guidelines applicable to 2026 plans. The ARPA enhancements eliminate the
+ * 400%-of-FPL eligibility cap and set the benchmark contribution to zero
+ * for otherwise eligible households with 100-150% FPL income.
+ * IRS Rev. Proc. 2023-29, 2023-37 IRB, section 2.01.
+ */
+export function acaApplicableRateRestored2024(income:number,familySize:number):number|null{
+  if(!Number.isFinite(income)||!Number.isFinite(familySize)||familySize<1)return null
+  const ratio=100*Math.max(0,income)/povertyGuideline2025Contiguous(familySize)
+  if(ratio<100)return null
+  if(ratio<150)return 0
+  if(ratio<200)return .02*(ratio-150)/50
+  if(ratio<250)return .02+.02*(ratio-200)/50
+  if(ratio<300)return .04+.02*(ratio-250)/50
+  if(ratio<400)return .06+.025*(ratio-300)/100
+  return .085
+}
+export function acaPremiumTaxCreditRestored2024(
+  income:number,familySize:number,benchmark:number
+):number{
+  const rate=acaApplicableRateRestored2024(income,familySize)
+  return rate===null?0:Math.min(Math.max(0,benchmark),
+    Math.max(0,Math.max(0,benchmark)-Math.max(0,income)*rate))
+}

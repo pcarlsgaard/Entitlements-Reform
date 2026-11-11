@@ -14,7 +14,7 @@ import microJson from '../data/microdata_2025.json'
 import baselineJson from '../data/baseline_2025.json'
 import { calculateAdultCredit, calculateCurrentLaw, calculateReformWageTax } from './household'
 import { calculateChildCredit } from './childCredits'
-import { acaPremiumTaxCredit2026, greaterOfAcaUniversal } from './aca2026'
+import { acaPremiumTaxCredit2026, acaPremiumTaxCreditRestored2024, greaterOfAcaUniversal } from './aca2026'
 import type { TaxBreakdown, ReformSettings, FilingStatus } from './types'
 import type { HealthPolicySettings } from './health'
 import type { PersonalAccountSettings } from '../../model/personalAccountReform'
@@ -232,8 +232,12 @@ function sampleOutcome(row:Row,t:ReformSettings,h:HealthPolicySettings,accounts:
   // For partial shares this represents a weighted expected benefit; it does
   // not identify which actual tax units leave employer coverage.
   const acaEsiCredit=row.coverage==='policyholder'
-    ? acaPremiumTaxCredit2026(row.w+fica+healthWageCash,
-        Math.max(1,row.adults+row.children),replacementPremium):0
+    ? (h.esiAcaScheduleScenario === 'restored2024'
+      ? acaPremiumTaxCreditRestored2024(row.w+fica+healthWageCash,
+          Math.max(1,row.adults+row.children),replacementPremium)
+      : acaPremiumTaxCredit2026(row.w+fica+healthWageCash,
+          Math.max(1,row.adults+row.children),replacementPremium))
+    :0
   const acaEsiTopUp=greaterOfAcaUniversal(acaEsiCredit,healthCredit,replacementPremium)
     .topUpOverUniversal*limit01(h.esiAcaTransitionShare??0)
   const healthChange=healthComp + row.premium + healthCredit

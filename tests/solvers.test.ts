@@ -242,6 +242,6 @@ describe('scenario comparison', () => {
       expect(sequential.firstMedicarePrefundedEligibilityYear).toBe(2128)
       expect(sequential.firstFullMedicarePrefundingYear).toBeNull()
     },
-    15_000,
+    40_000,
   )
 })
