@@ -64,6 +64,9 @@ export interface LaborResponseResult {
   /** Survey-weighted worker shares with a higher marginal rate; no participation effects. */
   workerShareHigherWedge: number
   workerShareHigherPersonalRate: number
+  /** Cash-liquidity rate includes mandatory Roth deposit (an asset, not a tax). */
+  weightedReformLiquidMarginalRate: number
+  workerShareHigherLiquidRate: number
   /** Shares of marginal labor compensation associated with increased rates. */
   compensationShareHigherWedge: number
   compensationShareHigherPersonalRate: number
@@ -266,8 +269,11 @@ interface Accumulator {
   workerWeight: number
   higherWedgeWorkerWeight: number
   higherPersonalWorkerWeight: number
+  higherLiquidWorkerWeight: number
+  reformLiquid: number
   higherWedgeLaborWeight: number
   higherPersonalLaborWeight: number
+  higherLiquidLaborWeight: number
   logChange: number
   boundedWeight: number
   observations: number
@@ -276,7 +282,8 @@ interface Accumulator {
 function emptyAccumulator(): Accumulator {
   return { weight: 0, currentMtr: 0, reformMtr: 0, currentPersonal: 0, reformPersonal: 0,
     workerWeight: 0, higherWedgeWorkerWeight: 0, higherPersonalWorkerWeight: 0,
-    higherWedgeLaborWeight: 0, higherPersonalLaborWeight: 0,
+    higherLiquidWorkerWeight:0,reformLiquid:0,
+    higherWedgeLaborWeight: 0, higherPersonalLaborWeight: 0,higherLiquidLaborWeight:0,
     logChange: 0, boundedWeight: 0, observations: 0 }
 }
 
@@ -286,6 +293,7 @@ function addEarner(
   earner: EarnerPrepared | null,
   settings: ReformSettings,
   employerFicaPassThroughRate: number,
+  mandatoryRothRate: number,
 ): void {
   if (!earner || earner.laborWeight <= 0) return
   const deltaCompensation = earner.up.employerCompensation - earner.down.employerCompensation
@@ -303,6 +311,16 @@ function addEarner(
     ? (reformTax(earner.up, cell, settings, employerFicaPassThroughRate)
       - reformTax(earner.down, cell, settings, employerFicaPassThroughRate)
       - reformEmployerPayroll) / deltaReformCash : 0
+  // This diagnostic measures the liquidity effect of required private saving;
+  // it is NOT part of the employer-inclusive economic tax wedge above.
+  // Fixed employer ESI transfers are not allocated across earners here.
+  const centerWage=earner===cell.primary?cell.primaryCashWage:cell.secondaryCashWage
+  const accountBase=(w:number)=>Math.min(184_500,
+    Math.max(0,w+passThrough*employerPayrollTaxForEarner(Math.max(0,w))))
+  const deltaSaving=clampShare(mandatoryRothRate)*(
+    accountBase(centerWage+HALF_WINDOW)-accountBase(Math.max(0,centerWage-HALF_WINDOW)))
+  const reformLiquidMarginalRate=reformPersonalRate+
+    (deltaReformCash>0?deltaSaving/deltaReformCash:0)
   const currentNet = safeNetOfTaxRate(earner.currentMarginalRate)
   const reformNet = safeNetOfTaxRate(reformMarginalRate)
   const weight = earner.laborWeight
@@ -311,6 +329,7 @@ function addEarner(
   accumulator.reformMtr += weight * reformMarginalRate
   accumulator.currentPersonal += weight * earner.currentPersonalMarginalRate
   accumulator.reformPersonal += weight * reformPersonalRate
+  accumulator.reformLiquid += weight * reformLiquidMarginalRate
   accumulator.workerWeight += cell.taxUnitWeight
   if (reformMarginalRate > earner.currentMarginalRate + 1e-7) {
     accumulator.higherWedgeWorkerWeight += cell.taxUnitWeight
@@ -319,6 +338,10 @@ function addEarner(
   if (reformPersonalRate > earner.currentPersonalMarginalRate + 1e-7) {
     accumulator.higherPersonalWorkerWeight += cell.taxUnitWeight
     accumulator.higherPersonalLaborWeight += weight
+  }
+  if(reformLiquidMarginalRate>earner.currentPersonalMarginalRate+1e-7){
+    accumulator.higherLiquidWorkerWeight+=cell.taxUnitWeight
+    accumulator.higherLiquidLaborWeight+=weight
   }
   accumulator.logChange += weight * Math.log(reformNet.value / currentNet.value)
   if (currentNet.bounded || reformNet.bounded) accumulator.boundedWeight += weight
@@ -347,15 +370,16 @@ function average(value: number, weight: number): number {
 export function calculateLaborResponse(
   settings: ReformSettings,
   employerFicaPassThroughRate = 1,
+  mandatoryRothRate = 0,
 ): LaborResponseResult {
   const all = emptyAccumulator()
   const primary = emptyAccumulator()
   const secondary = emptyAccumulator()
   for (const cell of preparedCells()) {
-    addEarner(all, cell, cell.primary, settings, employerFicaPassThroughRate)
-    addEarner(primary, cell, cell.primary, settings, employerFicaPassThroughRate)
-    addEarner(all, cell, cell.secondary, settings, employerFicaPassThroughRate)
-    addEarner(secondary, cell, cell.secondary, settings, employerFicaPassThroughRate)
+    addEarner(all, cell, cell.primary, settings, employerFicaPassThroughRate, mandatoryRothRate)
+    addEarner(primary, cell, cell.primary, settings, employerFicaPassThroughRate, mandatoryRothRate)
+    addEarner(all, cell, cell.secondary, settings, employerFicaPassThroughRate, mandatoryRothRate)
+    addEarner(secondary, cell, cell.secondary, settings, employerFicaPassThroughRate, mandatoryRothRate)
   }
   return {
     sourceTaxUnits: snapshot.sample.taxUnits,
@@ -367,6 +391,8 @@ export function calculateLaborResponse(
     weightedReformPersonalMarginalRate: average(all.reformPersonal, all.weight),
     workerShareHigherWedge: average(all.higherWedgeWorkerWeight, all.workerWeight),
     workerShareHigherPersonalRate: average(all.higherPersonalWorkerWeight, all.workerWeight),
+    weightedReformLiquidMarginalRate: average(all.reformLiquid, all.weight),
+    workerShareHigherLiquidRate: average(all.higherLiquidWorkerWeight,all.workerWeight),
     compensationShareHigherWedge: average(all.higherWedgeLaborWeight, all.weight),
     compensationShareHigherPersonalRate: average(all.higherPersonalLaborWeight, all.weight),
     netWageLogChange: average(all.logChange, all.weight),

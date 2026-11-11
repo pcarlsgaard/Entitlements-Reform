@@ -1,0 +1,48 @@
+name: X-tax Pareto optimizer
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  optimize:
+    name: Evaluate 2026 saved X-tax optimization frontier
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Run exact-microdata and full-fiscal Pareto optimization
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test -- tests/paretoTaxOptimizer.test.ts 2>&1 | tee tax-optimizer-run.log
+      - name: Extract structured results
+        if: always()
+        shell: python
+        run: |
+          import json, pathlib
+          text = pathlib.Path("tax-optimizer-run.log").read_text(errors="replace")
+          marker = "PARETO_OPTIMIZER_2026_RESULTS_JSON="
+          if marker in text:
+              raw = text.split(marker)[-1]
+              result, _ = json.JSONDecoder().raw_decode(raw)
+              pathlib.Path("tax-optimizer-results.json").write_text(
+                  json.dumps(result, indent=2) + "\n"
+              )
+              print("Extracted tax-optimizer-results.json")
+          else:
+              print("Search did not emit a complete report; consult the run log")
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: x-tax-pareto-2026-report
+          path: |
+            tax-optimizer-results.json
+            tax-optimizer-run.log
+          retention-days: 90
