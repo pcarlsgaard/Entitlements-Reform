@@ -3,6 +3,7 @@ import { defaultCombinedPolicy, scoreCombined } from '../src/model/combined'
 import { universalHealthForYear } from '../src/model/universalHealth'
 import { primaryComponentSum } from '../src/model/simulate'
 import { parseConfiguration } from '../src/model/savedConfigurations'
+import { exampleHouseholds } from '../src/model/householdScenario'
 
 const base = defaultCombinedPolicy
 const universal = {
@@ -105,7 +106,7 @@ describe('Advantage for All alternative to health purchase credits', () => {
       id: 'old-config', name: 'Saved tax credits', savedAt:'2026-11-01T00:00:00.000Z',
       scenario: {
         policy:{...base,health:{...base.health}},
-        householdProfiles:[], householdYear:2026, householdSelectedId:'none',
+        householdProfiles:structuredClone(exampleHouseholds), householdYear:2026, householdSelectedId:exampleHouseholds[0]!.id,
       }
     }
     const health = payload.scenario.policy.health as Record<string, unknown>
