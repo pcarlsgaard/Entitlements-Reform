@@ -123,6 +123,12 @@ export default function UniversalHealthPanel({settings, onChange, opening, incre
       not estimated outcomes of a new auction. The default $202.90 contribution
       equals the 2026 standard Part B premium; the contribution is paid to
       insurers and earns no investment return in this PAYGO version. Current-law
-      state Medicaid spending is not counted as federal savings.</small>
+      state Medicaid spending is not counted as federal savings. The provisional
+      fiscal score assumes the new plan also displaces all existing federal
+      Medicaid/CHIP/Marketplace outlays. Because HIPM premiums do not directly
+      price Medicaid long-term services, and the nonelderly high-risk/disabled
+      population may be more costly than the privately insured benchmark,
+      those obligations still require explicit reconciliation before treating
+      this as a comprehensive actuarial budget score.</small>
   </>
 }
