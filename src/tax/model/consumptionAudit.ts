@@ -78,6 +78,8 @@ export interface ConsumptionHistogramBin {
 }
 
 export interface ConsumptionAuditResult {
+  pathway: HealthPolicySettings['pathway']
+
   histogram: ConsumptionHistogramBin[]
   mode: HealthPolicySettings['nonPolicyholderTreatment']
   taxUnitsMillions: number
@@ -199,8 +201,9 @@ function sampleOutcome(row:Row,t:ReformSettings,h:HealthPolicySettings,accounts:
     -previousTax.employeePayrollTax-row.premium
   const fica=t.replacedTaxes.payroll
     ? previousTax.employerPayrollTax*limit01(h.employerFicaPassThroughRate):0
+  const universal = h.pathway === 'advantageForAll'
   const healthComp=row.healthWage*limit01(h.employerHealthPassThroughRate)
-    +row.employerContribution*(1-limit01(h.employerHealthPassThroughRate))
+    +(universal?0:row.employerContribution*(1-limit01(h.employerHealthPassThroughRate)))
   const healthWageCash=row.healthWage*limit01(h.employerHealthPassThroughRate)
   const pension=row.w*PENSION_PER_CASH
   const reformComp=row.w+fica+healthComp+pension
@@ -222,8 +225,12 @@ function sampleOutcome(row:Row,t:ReformSettings,h:HealthPolicySettings,accounts:
   const taxChange=fica + previousTax.individualIncomeTax + previousTax.employeePayrollTax
     -reformWageTax-retainedCurrentTaxes+adultCredit+childCredit
   // Annual 2024 HIPM SLCSP benchmark, scaled by the selected policy factor.
-  const replacementPremium=row.benchmark2024*Math.max(0,h.benchmarkPremiumScale)
-  const healthCredit=Math.min(replacementPremium,
+  // Only ESI policyholders have linked current-law employee premiums. No
+  // unmatched non-ESI premium changes are inferred from this wage survey.
+  const replacementPremium=universal
+    ? (row.coverage==='policyholder' ? row.coveredPeople*12*Math.max(0,h.universalMemberPremiumMonthly2026) : 0)
+    : row.benchmark2024*Math.max(0,h.benchmarkPremiumScale)
+  const healthCredit=universal ? 0 : Math.min(replacementPremium,
     Math.max(0,h.adultHealthCredit)*row.coveredAdults
     +Math.max(0,h.childHealthCredit)*Math.max(0,row.coveredPeople-row.coveredAdults))
   // ESI exit option: the ACA PTC is a floor over the universal credit, not
@@ -231,10 +238,10 @@ function sampleOutcome(row:Row,t:ReformSettings,h:HealthPolicySettings,accounts:
   // assumed Marketplace transition can earn this additional amount.
   // For partial shares this represents a weighted expected benefit; it does
   // not identify which actual tax units leave employer coverage.
-  const acaEsiCredit=row.coverage==='policyholder'
+  const acaEsiCredit=!universal && row.coverage==='policyholder'
     ? acaPremiumTaxCredit2026(row.w+fica+healthWageCash,
         Math.max(1,row.adults+row.children),replacementPremium):0
-  const acaEsiTopUp=greaterOfAcaUniversal(acaEsiCredit,healthCredit,replacementPremium)
+  const acaEsiTopUp=universal ? 0 : greaterOfAcaUniversal(acaEsiCredit,healthCredit,replacementPremium)
     .topUpOverUniversal*limit01(h.esiAcaTransitionShare??0)
   const healthChange=healthComp + row.premium + healthCredit
     +acaEsiTopUp - replacementPremium
@@ -360,7 +367,7 @@ export function calculateConsumptionAudit(
   }
   const observed=rows.map(r=>sampleOutcome(r,tax,health,accounts))
   const mode=health.nonPolicyholderTreatment??'continueFamilyPolicy'
-  return{mode,taxUnitsMillions:total/1e6,quintileWageBoundaries:boundaries,
+  return{mode,pathway:health.pathway,taxUnitsMillions:total/1e6,quintileWageBoundaries:boundaries,
     histogram:consumptionHistogram(observed),
     total:band('All wage-earning tax units',observed),
     byWageQuintile:[0,1,2,3,4].map(q=>band('Q'+(q+1),observed.filter(r=>r.quintile===q))),
