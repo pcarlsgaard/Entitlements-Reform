@@ -1,6 +1,8 @@
 import healthData from '../data/health_esi_2025.json';
 import nongroupHealthData from '../data/health_nongroup_2025.json';
 import baseline2025 from '../data/baseline_2025.json';
+import { defaultAssumptions } from '../../model/defaults';
+import { universalHealthForYear } from '../../model/universalHealth';
 import { acaApplicableRate2026, acaPremiumTaxCredit2026, greaterOfAcaUniversal } from './aca2026';
 import { calculateAdultCredit, calculateCurrentLaw, calculateReformWageTax } from './household';
 import { calculateMacro } from './macro';
@@ -378,6 +380,7 @@ function calculateCell(
   settings: ReformSettings,
   policy: HealthPolicySettings,
   primaryWageDelta = 0,
+  derivedUniversalBenchmarkMonthly = 0,
 ): CellResult {
   const wageScale = healthSnapshot.calibration.cashWageScaleToBea2025;
   const primaryWage = Math.max(0, cell.primaryCashWage * wageScale + primaryWageDelta);
@@ -429,8 +432,7 @@ function calculateCell(
   // dependents are not separately billed. Other populations are scored in the
   // all-person fiscal model, not imputed to these ESI records.
   const memberCount = cell.policyholderWorkers > 0 ? cell.coveredPeople : 0;
-  const universalBenchmarkMonthly = policy.universalAverageBidMonthly2026
-    * (policy.universalBenchmark === 'secondLowest' ? policy.universalSecondLowestBidFactor : 1);
+  const universalBenchmarkMonthly = derivedUniversalBenchmarkMonthly;
   const benchmarkPremium = universal
     ? memberCount * Math.max(0, universalBenchmarkMonthly) * 12
     : cell.benchmarkPremium2024 * Math.max(0, policy.benchmarkPremiumScale);
@@ -680,9 +682,11 @@ export function calculateHealthAnalysis(
   const includedCells = mode === 'exclude'
     ? cells.filter(cell => cell.policyholderWorkers > 0)
     : mode === 'continueFamilyPolicy' ? cells.map(continuationCell) : cells;
-  const rows = includedCells.map((cell) => calculateCell(cell, settings, policy));
-  const downRows = includedCells.map((cell) => calculateCell(cell, settings, policy, -500));
-  const upRows = includedCells.map((cell) => calculateCell(cell, settings, policy, 500));
+  const universalMonthly = policy.pathway === 'advantageForAll'
+    ? universalHealthForYear(2026, defaultAssumptions, policy).benchmarkMonthly : 0;
+  const rows = includedCells.map((cell) => calculateCell(cell, settings, policy, 0, universalMonthly));
+  const downRows = includedCells.map((cell) => calculateCell(cell, settings, policy, -500, universalMonthly));
+  const upRows = includedCells.map((cell) => calculateCell(cell, settings, policy, 500, universalMonthly));
   const macro = calculateMacro(settings);
   let taxUnits = 0;
   let coveredPeople = 0;
