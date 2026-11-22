@@ -15,6 +15,8 @@ import baselineJson from '../data/baseline_2025.json'
 import { calculateAdultCredit, calculateCurrentLaw, calculateReformWageTax } from './household'
 import { calculateChildCredit } from './childCredits'
 import { acaPremiumTaxCredit2026, greaterOfAcaUniversal } from './aca2026'
+import { universalHealthForYear } from '../../model/universalHealth'
+import { defaultAssumptions } from '../../model/defaults'
 import type { TaxBreakdown, ReformSettings, FilingStatus } from './types'
 import type { HealthPolicySettings } from './health'
 import type { PersonalAccountSettings } from '../../model/personalAccountReform'
@@ -190,7 +192,7 @@ function reformTaxBase(
     +pension*(1-limit01(t.employerPensionOtherInsuranceExemptionShare))
 }
 
-function sampleOutcome(row:Row,t:ReformSettings,h:HealthPolicySettings,accounts:PersonalAccountSettings): Observation {
+function sampleOutcome(row:Row,t:ReformSettings,h:HealthPolicySettings,accounts:PersonalAccountSettings,universalBenchmarkMonthly=0): Observation {
   const pretaxPremium = Math.min(row.w,row.premium*limit01(h.employeePremiumPreTaxShare))
   const ratio = row.w>0 ? (row.w-pretaxPremium)/row.w : 1
   const pastPrimary=row.p*ratio,pastSecondary=row.s*ratio
@@ -228,7 +230,8 @@ function sampleOutcome(row:Row,t:ReformSettings,h:HealthPolicySettings,accounts:
   // Only ESI policyholders have linked current-law employee premiums. No
   // unmatched non-ESI premium changes are inferred from this wage survey.
   const replacementPremium=universal
-    ? (row.coverage==='policyholder' ? row.coveredPeople*12*Math.max(0,h.universalMemberPremiumMonthly2026) : 0)
+    ? (row.coverage==='policyholder' ? row.coveredPeople*12*Math.min(
+        Math.max(0,h.universalMemberPremiumMonthly2026), universalBenchmarkMonthly) : 0)
     : row.benchmark2024*Math.max(0,h.benchmarkPremiumScale)
   const healthCredit=universal ? 0 : Math.min(replacementPremium,
     Math.max(0,h.adultHealthCredit)*row.coveredAdults
@@ -365,7 +368,9 @@ export function calculateConsumptionAudit(
     r.quintile=index
     cum+=r.weight
   }
-  const observed=rows.map(r=>sampleOutcome(r,tax,health,accounts))
+  const universalBenchmarkMonthly=health.pathway==='advantageForAll'
+    ? universalHealthForYear(2026,defaultAssumptions,health).benchmarkMonthly : 0
+  const observed=rows.map(r=>sampleOutcome(r,tax,health,accounts,universalBenchmarkMonthly))
   const mode=health.nonPolicyholderTreatment??'continueFamilyPolicy'
   return{mode,pathway:health.pathway,taxUnitsMillions:total/1e6,quintileWageBoundaries:boundaries,
     histogram:consumptionHistogram(observed),
