@@ -87,7 +87,7 @@ export function parseConfiguration(json: string): SavedConfiguration {
       // Existing saved configurations remain on the historical credit pathway.
       const health = scenario.policy.health
       for (const key of [
-        'pathway', 'universalBenchmark', 'universalAverageBidMonthly2026',
+        'pathway', 'universalBenchmark', 'universalBidMultiplier', 'universalTargetActuarialValue',
         'universalSecondLowestBidFactor', 'universalMemberPremiumMonthly2026',
         'universalBidRealGrowth', 'universalRuralSupportBillions2026',
       ] as const) {
@@ -162,7 +162,8 @@ export function parseConfiguration(json: string): SavedConfiguration {
   oneOf(policy.tax.adultCreditEarningsBase, ['cash', 'compensation'], 'earnings base')
   oneOf(policy.health.pathway, ['purchaseCredits', 'advantageForAll'], 'health coverage pathway')
   oneOf(policy.health.universalBenchmark, ['average', 'secondLowest'], 'universal benchmark')
-  within(policy.health.universalAverageBidMonthly2026, 0, 10000, 'average monthly plan bid')
+  within(policy.health.universalBidMultiplier, 0.5, 2, 'gross plan bid multiplier')
+  within(policy.health.universalTargetActuarialValue, 0.7, 1, 'standard plan actuarial value')
   within(policy.health.universalSecondLowestBidFactor, 0.5, 1, 'second-lowest bid factor')
   within(policy.health.universalMemberPremiumMonthly2026, 0, 10000, 'monthly member premium')
   within(policy.health.universalBidRealGrowth, -0.03, 0.10, 'real health-plan bid growth')
