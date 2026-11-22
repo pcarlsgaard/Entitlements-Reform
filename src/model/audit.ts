@@ -5,6 +5,7 @@ export function primaryComponentsFromYear(
   row: SimulationYear,
 ): PrimaryComponents {
   return {
+    universalHealthPremiumSupport: row.universalHealthPremiumSupport,
     legacySocialSecurity: row.legacySocialSecurity,
     flatSocialSecurityPaygo: row.flatSocialSecurityPaygo,
     otherOASDI: row.otherOASDI,

@@ -12,6 +12,7 @@ import type { TransferReplacementSettings } from '../tax/model/types'
 import type { HouseholdInput, ReformSettings } from '../tax/model/types'
 import { currentLawRetirementAge, defaultAssumptions } from './defaults'
 import { simulate } from './simulate'
+import { universalHealthForYear } from './universalHealth'
 import { defaultPersonalAccountSettings, projectAccountReform } from './personalAccountReform'
 import type { PersonalAccountSettings } from './personalAccountReform'
 import type { BenefitPolicySelection, FiscalBridge } from './simulate'
@@ -131,15 +132,20 @@ const householdExamples: { label: string; input: HouseholdInput }[] = [
 ];
 
 export function scoreCombined(policy: CombinedPolicy, taxIndexingMode: TaxIndexingMode = 'cpi') {
+  const universalActive = policy.taxEnabled && policy.health.pathway === 'advantageForAll'
+  // A universal all-age pathway replaces, rather than stacks on top of, the
+  // cohort Medicare benefit. The user may retain old settings for switching back.
+  const effectiveBenefits: BenefitPolicySelection = universalActive
+    ? { ...policy.benefits, medicareReform: false } : policy.benefits
   const assumptions: ModelAssumptions = {
     ...policy.assumptions,
-    fullRetirementAge: policy.benefits.socialSecurityReform
+    fullRetirementAge: effectiveBenefits.socialSecurityReform
       ? policy.assumptions.fullRetirementAge : currentLawRetirementAge,
-    medicareEligibilityAge: policy.benefits.medicareReform
+    medicareEligibilityAge: effectiveBenefits.medicareReform
       ? policy.assumptions.medicareEligibilityAge : defaultAssumptions.medicareEligibilityAge,
-    socialSecurityBenefitCap2026: policy.benefits.socialSecurityReform
+    socialSecurityBenefitCap2026: effectiveBenefits.socialSecurityReform
       ? policy.assumptions.socialSecurityBenefitCap2026 : null,
-    fundingStrategy: !policy.personalAccounts.enabled && policy.benefits.socialSecurityReform && policy.benefits.medicareReform &&
+    fundingStrategy: !policy.personalAccounts.enabled && effectiveBenefits.socialSecurityReform && effectiveBenefits.medicareReform &&
       policy.assumptions.socialSecurityBenefitCap2026 === null
       ? policy.assumptions.fundingStrategy : 'paygo',
     endYear: policy.assumptions.reformYear + 69,
@@ -159,16 +165,20 @@ export function scoreCombined(policy: CombinedPolicy, taxIndexingMode: TaxIndexi
   }:{}
   const health = calculateHealthAnalysis(policy.tax, policy.health)
   const programSavingsBillions = calculateFederalProgramSavings(policy.transfers)
+  const universal2026 = universalActive ? universalHealthForYear(2026, assumptions, policy.health) : null
+  const universalOutlay = universalActive
+    ? (year: number) => universalHealthForYear(year, assumptions, policy.health).federalOutlayBillions
+    : undefined
   const tax = calculateMacro(policy.tax, {
-    insuranceCreditCost: health.totalHealthCreditCostBillions,
-    federalTransferSavings: programSavingsBillions + health.estimatedExistingAptcSavingsBillions,
+    insuranceCreditCost: universalActive ? 0 : health.totalHealthCreditCostBillions,
+    federalTransferSavings: programSavingsBillions + (universalActive ? 0 : health.estimatedExistingAptcSavingsBillions),
   })
   // CPI-indexed dollar rules are rescored annually as real incomes change.
   // Receipts and refundable credit outlay savings remain separate in the ledger.
   const netTaxRevenueChangeGDP = policy.taxEnabled
     ? (tax.netRevenue - tax.targetRevenue) / tax.gdp : 0
   const annualTaxDelta = policy.taxEnabled
-    ? taxRevenueChangePath(policy.tax, assumptions, health.totalHealthCreditCostBillions, taxIndexingMode) : new Map<number, number>()
+    ? taxRevenueChangePath(policy.tax, assumptions, universalActive ? 0 : health.totalHealthCreditCostBillions, taxIndexingMode) : new Map<number, number>()
   const revenueDelta = (year: number) => policy.taxEnabled ?
     (annualTaxDelta.get(year) ?? 0) - replacedRevenueDriftGDP(year, policy.tax) : 0
   const outlaySavingsGDP = policy.taxEnabled
@@ -176,7 +186,8 @@ export function scoreCombined(policy: CombinedPolicy, taxIndexingMode: TaxIndexi
   const taxFiscalBridge: FiscalBridge = {
     savingsScaleForYear: (year: number) => 1 / realGDPPerCapitaGrowthFactor(year, assumptions),
     otherMandatorySavingsGDP: policy.taxEnabled ? (tax.refundableTaxCreditOutlaySavings + programSavingsBillions) / tax.gdp : 0,
-    medicaidMarketplaceSavingsGDP: policy.taxEnabled ? health.estimatedExistingAptcSavingsBillions / tax.gdp : 0,
+    medicaidMarketplaceSavingsGDP: policy.taxEnabled && !universalActive ? health.estimatedExistingAptcSavingsBillions / tax.gdp : 0,
+    ...(universalOutlay ? { universalHealthPremiumSupportBillionsForYear: universalOutlay } : {}),
   }
   const defenseNominalGrowth = policy.spendingEnabled
     ? discretionaryNominalGrowth(policy.otherSpending.defenseMode, policy.otherSpending.defenseCustomNominalGrowth)
@@ -241,7 +252,7 @@ export function scoreCombined(policy: CombinedPolicy, taxIndexingMode: TaxIndexi
     {}, policy.baselineMode, undefined,
     taxFiscalBridge, dynamicGDP,
   )
-  const benefitsOnly = simulate(assumptions, (year) => currentLawRevenueGDP(year), {}, policy.baselineMode, policy.benefits,
+  const benefitsOnly = simulate(assumptions, (year) => currentLawRevenueGDP(year), {}, policy.baselineMode, effectiveBenefits,
     {otherMandatorySavingsGDP:0,...personalAccountFiscalBridge})
   const spendingOnly = simulate(
     comparatorAssumptions,
@@ -252,18 +263,18 @@ export function scoreCombined(policy: CombinedPolicy, taxIndexingMode: TaxIndexi
   const staticCombined = simulate(
     assumptions,
     (year) => currentLawRevenueGDP(year) + revenueDelta(year),
-    {}, policy.baselineMode, policy.benefits,
+    {}, policy.baselineMode, effectiveBenefits,
     combinedFiscalBridge,
   )
   const combined = dynamicGDP ? simulate(
     assumptions,
     (year) => currentLawRevenueGDP(year) + revenueDelta(year),
-    {}, policy.baselineMode, policy.benefits, combinedFiscalBridge, dynamicGDP,
+    {}, policy.baselineMode, effectiveBenefits, combinedFiscalBridge, dynamicGDP,
   ) : staticCombined
   const goal = (extraRevenueGDP: number) => simulate(
     assumptions,
     (year) => currentLawRevenueGDP(year) + revenueDelta(year) + extraRevenueGDP,
-    {}, policy.baselineMode, policy.benefits, combinedFiscalBridge, dynamicGDP,
+    {}, policy.baselineMode, effectiveBenefits, combinedFiscalBridge, dynamicGDP,
   )
   // Minimum permanent fiscal adjustment that satisfies both debt constraints.
   // This is an equivalent revenue rate; spending cuts could supply the same amount.
@@ -283,6 +294,12 @@ export function scoreCombined(policy: CombinedPolicy, taxIndexingMode: TaxIndexi
   return {
     tax,
     health,
+    universal2026,
+    universalFederalIncrement2026Billions: universal2026
+      ? universal2026.federalOutlayBillions - (
+        baseline.years[0]!.legacySeniorMedicare + baseline.years[0]!.premiumSupportPaygo +
+        baseline.years[0]!.under65Medicare + baseline.years[0]!.medicaidChipMarketplace
+      ) : 0,
     programSavingsBillions,
     baseline,
     taxOnly,
@@ -311,7 +328,9 @@ export function scoreCombined(policy: CombinedPolicy, taxIndexingMode: TaxIndexi
       : 0,
     household,
     combinedOpeningRevenueGDP: combined.years[0]!.revenueRate,
-    openingFiscalImprovementGDP: netTaxRevenueChangeGDP + outlaySavingsGDP + otherSpendingPolicySavingsGDP,
+    openingFiscalImprovementGDP: netTaxRevenueChangeGDP +
+      (baseline.years[0]!.totalPrimarySpending - taxOnly.years[0]!.totalPrimarySpending) / baseline.years[0]!.nominalGDP +
+      otherSpendingPolicySavingsGDP,
     additionalFiscalAdjustmentGDP,
   }
 }

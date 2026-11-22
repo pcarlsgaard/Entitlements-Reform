@@ -9,6 +9,7 @@ const money=(x:number)=>(x<0?'−':'')+'$'+Math.abs(Math.round(x)).toLocaleStrin
 export default function ConsumptionAuditPanel({audit}:{audit:ConsumptionAuditResult}) {
   return <section className="game-card" aria-label="2026 premium and consumption audit">
     <h2>2026 tax-unit consumption and ESI premium audit</h2>
+    {audit.pathway==='advantageForAll' && <p><strong>Universal coverage caution:</strong> Only existing ESI policyholders have observed pre-reform employee premiums. Their new per-covered-person member contribution replaces those premiums while employer-plan spending can pass through to cash wages. Non-ESI wage tax units have no linked baseline premiums, so the audit does not assign them a synthetic net premium change. These tax-unit results are not a comprehensive distributional score for universal healthcare.</p>}
     <p>The tables update with the selected tax, insurance, ESI-dependent, and Roth settings. Both the ESI and residual wage samples are weighted tax units—not a linked household panel. Mandatory retirement deposits are subtracted from current spending, but remain privately owned savings.</p>
     <h3>Distribution of 2026 consumption gains and losses</h3>
     <p>Population-weighted percentage change in current spendable income against current law. Negative values are losses; positive values are gains. Open-ended tails include all changes beyond the labeled cutoff.</p>
@@ -56,7 +57,7 @@ export default function ConsumptionAuditPanel({audit}:{audit:ConsumptionAuditRes
       </table></div>
       <small>Components sum to each tax unit's modeled change: tax and credits (including the FICA cash pass-through and tax on health wages), direct health cash flows, and compulsory Roth contributions. These categories are accounting assignments, not causal estimates. Among all tax units, {millions(audit.total.loss5AvoidedWithoutRothMillions)} would no longer lose over 5% if required new Roth contributions remained spendable; this comparison does not assign zero value to their saved assets.</small>
     </details>
-    <details className="game-more">
+{audit.pathway==='purchaseCredits' && <details className="game-more">
       <summary>Audit age- and plan-tier-specific ESI replacement premiums</summary>
       <p>The replacement premium is the Census HIPM 2024 age/location second-lowest-cost Silver benchmark, adjusted by the selected benchmark multiplier. It is <strong>not the existing employer-plan premium</strong>. Old ESI employee + employer contributions and new Silver benchmark pricing may represent different coverage; there are no insurance contract identifiers to validate family allocations.</p>
       <div className="game-table-wrap"><table className="game-table">
@@ -81,7 +82,7 @@ export default function ConsumptionAuditPanel({audit}:{audit:ConsumptionAuditRes
           <td>{millions(b.unitsMillions)}</td><td>{money(b.meanHealthTransitionChangeDollars)}</td>
           <td>{money(b.meanRothSavingDollars)}</td><td>{money(b.meanTaxCreditChangeDollars)}</td></tr>)}</tbody>
       </table></div>
-    </details>
+    </details>}
     <small>Important limits: non-ESI tax units have no matched individual-market/Medicaid/ACA premiums or health credits. ESI microdata lack children's under-six counts; those ESI tax units receive zero under-six supplement in this audit. The survey's own family-tier labels cannot link dependents across tax units. This audit is strictly distributional, has no independent effect on federal receipts/debt, and is not a validated prediction of household consumption.</small>
   </section>
 }

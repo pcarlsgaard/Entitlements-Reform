@@ -17,6 +17,23 @@ export interface SourceRecord {
 
 export const sources: readonly SourceRecord[] = [
   {
+    id: 'cms-part-b-beneficiary-premium-2026', kind: 'empirical input',
+    agency: 'Centers for Medicare & Medicaid Services',
+    datasetOrReport: '2026 Medicare Parts A and B Premiums and Deductibles',
+    publicationDate: '2025-11', relevantTable: 'Standard 2026 Part B monthly premium',
+    url: 'https://www.cms.gov/newsroom/fact-sheets/2026-medicare-parts-b-premiums-deductibles',
+    notes: 'The $202.90/month Medicare Part B member premium is used solely as the default universal Advantage for All household contribution. It does not approximate the full gross Medicare Advantage capitated plan payment. The policy extends the same flat contribution to children from birth, indexed by CPI.',
+  },
+  {
+    id: 'universal-advantage-premium-scenario-2026', kind: 'modeling assumption',
+    agency: 'Entitlements Reform simulator (illustrative scenario)',
+    datasetOrReport: 'Advantage for All benchmark and financing sensitivity',
+    publicationDate: '2026-11-22', relevantTable: 'hypothetical average standardized bid and second-lowest reference',
+    url: 'https://www.cms.gov/data-research/statistics-trends-and-reports/national-health-expenditure-data/projected',
+    notes: 'Under-65 2026 gross reference bids are built from the existing weighted Census HIPM 2024 ESI/nongroup second-lowest Silver prices, projected using the shared benchmark scale and CPI, adjusted from 70% Silver AV to an editable 90% default standardized benefit, and given an editable 1% real trend. Over-65 reference cost uses the existing CBO/2026 Medicare Trustees calibrated scheduled-current-law net federal Medicare per enrollee, plus $202.90/month of beneficiary Part B financing as a gross-up, then applies a shared gross-bid multiplier. The 0.96 second-lowest/average bidding factor and $70 billion rural supplement are UNVERIFIED exploratory assumptions, not measured universal bidding effects. The Medicare gross-up excludes some patient and supplemental payments; the HIPM under-65 population risk mix differs from the actual full U.S. population. Risk adjustment/reinsurance are assumed internal to all-in insurer bids, not an additional fiscal line. Federal Medicare and Medicaid/CHIP/Marketplace outlays are replaced; state Medicaid budget savings are not counted as federal receipts. Household premiums are matched only for ESI policyholders; universal prefunding reserves and state offsets are not modeled.',
+  },
+
+  {
     id: 'ssa-2026-projected-demographics', kind: 'empirical input', agency: 'Social Security Administration',
     datasetOrReport: '2026 Trustees Alternative II death probabilities and Social Security area population',
     publicationDate: '2026', relevantTable: 'DeathProbsE_M/F_Alt2_TR2026 and SSPopJul_Alt2_TR2026',

@@ -1,6 +1,8 @@
 import healthData from '../data/health_esi_2025.json';
 import nongroupHealthData from '../data/health_nongroup_2025.json';
 import baseline2025 from '../data/baseline_2025.json';
+import { defaultAssumptions } from '../../model/defaults';
+import { universalHealthForYear } from '../../model/universalHealth';
 import { acaApplicableRate2026, acaPremiumTaxCredit2026, greaterOfAcaUniversal } from './aca2026';
 import { calculateAdultCredit, calculateCurrentLaw, calculateReformWageTax } from './household';
 import { calculateMacro } from './macro';
@@ -10,9 +12,24 @@ export type HealthRedistributionRule = 'nationalEqual' | 'employerCellEqual' | '
 export type HealthRecipientScope = 'policyholders' | 'coveredWorkers';
 /** Attribution for dependents covered by a policy outside their own tax unit. */
 export type EsiNonPolicyholderTreatment = 'continueFamilyPolicy' | 'asModeled' | 'exclude';
+export type HealthPathway = 'purchaseCredits' | 'advantageForAll';
+export type UniversalBenchmark = 'average' | 'secondLowest';
 
 export interface HealthPolicySettings {
-  adultHealthCredit: number;
+  pathway: HealthPathway;
+  universalBenchmark: UniversalBenchmark;
+  /** Sensitivity multiplier on premium references derived from existing health cost engines. */
+  universalBidMultiplier: number;
+  /** Standardized plan actuarial value; HIPM source Silver is approximately 70%. */
+  universalTargetActuarialValue: number;
+  /** Relative reference price for a second-lowest bid versus mean bid. */
+  universalSecondLowestBidFactor: number;
+  /** Per resident (including children) contribution, indexed by CPI; not government revenue. */
+  universalMemberPremiumMonthly2026: number;
+  /** Annual real increase in nonelderly benchmark prices; seniors follow CBO/Medicare Trustees. */
+  universalBidRealGrowth: number;
+  /** Supplemental federal payment for essential rural capacity; separate from the bid. */
+  universalRuralSupportBillions2026: number;  adultHealthCredit: number;
   childHealthCredit: number;
   uninsuredTakeUpRate: number;
   employerHealthPassThroughRate: number;
@@ -224,9 +241,52 @@ interface CellResult {
 
 export const healthSnapshot = healthData as unknown as HealthSnapshot;
 export const nongroupHealthSnapshot = nongroupHealthData as unknown as NongroupHealthSnapshot;
+/**
+ * Returns the existing 2024 HIPM age/location Silver benchmark, weighted
+ * across ESI covered lives and CBO-calibrated nongroup insured lives. The ESI
+ * benchmark is already a sum over people covered by the ESI tax unit.
+ *
+ * This is a MARKET PREMIUM reference, not medical claims, and is intentionally
+ * kept separate from the current-law ESI employee/employer contributions.
+ * Medicaid/CHIP, uninsured risk, plan AV and bidding dynamics remain explicit
+ * coverage-model assumptions rather than invented microdata observations.
+ */
+export function nonelderlySilverBenchmarkPerPerson2024(): {
+  esiCoveredMillions: number
+  nongroupCoveredMillions: number
+  annualPremiumPerPerson: number
+} {
+  const esiCoveredMillions = healthSnapshot.browserReconciliation.weightedEsiCoveredPeopleMillions
+  const esiBenchmarkBillions = healthSnapshot.browserReconciliation.benchmarkPremium2024Billions
+  let nongroupCovered = 0
+  let nongroupPremium = 0
+  for (const [status, adults, children, benchmark, , weight] of nongroupHealthSnapshot.distribution) {
+    if (status !== 1 && status !== 2) continue
+    const calibratedWeight = weight! * (nongroupHealthSnapshot.statusWeightScales[String(status)] ?? 1)
+    nongroupCovered += (adults! + children!) * calibratedWeight
+    nongroupPremium += benchmark! * calibratedWeight
+  }
+  const nongroupCoveredMillions = nongroupCovered / 1e6
+  const totalCoveredMillions = esiCoveredMillions + nongroupCoveredMillions
+  return {
+    esiCoveredMillions,
+    nongroupCoveredMillions,
+    annualPremiumPerPerson: totalCoveredMillions > 0
+      ? (esiBenchmarkBillions * 1e9 + nongroupPremium) / (totalCoveredMillions * 1e6)
+      : 0,
+  }
+}
+
 
 export const defaultHealthPolicySettings: HealthPolicySettings = {
-  adultHealthCredit: 3250,
+  pathway: 'purchaseCredits',
+  universalBenchmark: 'secondLowest',
+  universalBidMultiplier: 1,
+  universalTargetActuarialValue: 0.90,
+  universalSecondLowestBidFactor: 0.96,
+  universalMemberPremiumMonthly2026: 202.90,
+  universalBidRealGrowth: 0.01,
+  universalRuralSupportBillions2026: 70,  adultHealthCredit: 3250,
   childHealthCredit: 750,
   uninsuredTakeUpRate: 0.15,
   employerHealthPassThroughRate: 1,
@@ -320,6 +380,7 @@ function calculateCell(
   settings: ReformSettings,
   policy: HealthPolicySettings,
   primaryWageDelta = 0,
+  derivedUniversalBenchmarkMonthly = 0,
 ): CellResult {
   const wageScale = healthSnapshot.calibration.cashWageScaleToBea2025;
   const primaryWage = Math.max(0, cell.primaryCashWage * wageScale + primaryWageDelta);
@@ -341,10 +402,11 @@ function calculateCell(
   const employerFicaPassThrough = payrollIsReplaced
     ? currentTax.employerPayrollTax * clampShare(policy.employerFicaPassThroughRate)
     : 0;
+  const universal = policy.pathway === 'advantageForAll';
   const healthWage = selectedHealthWage(cell, policy) * clampShare(policy.employerHealthPassThroughRate);
   // Employer-paid coverage remains compensation when the employer keeps paying the insurer.
   // It is counted once, whether delivered as ESI or converted into cash wages.
-  const retainedEmployerCoverage = cell.employerContribution
+  const retainedEmployerCoverage = universal ? 0 : cell.employerContribution
     * (1 - clampShare(policy.employerHealthPassThroughRate));
   const taxableHealthCompensation = healthWage + retainedEmployerCoverage;
   const reformPrimaryWage = primaryWage + employerFicaPassThrough + healthWage;
@@ -365,8 +427,19 @@ function calculateCell(
     cell.creditAdults, settings,
   );
   const childCredit = cell.children * settings.childCredit;
-  const benchmarkPremium = cell.benchmarkPremium2024 * Math.max(0, policy.benchmarkPremiumScale);
-  const universalHealthCredit = Math.min(
+  // The ESI snapshot is a tax-unit sample, not a national insurance roster.
+  // Bill once on the in-unit policyholder's covered contract; outside-tax-unit
+  // dependents are not separately billed. Other populations are scored in the
+  // all-person fiscal model, not imputed to these ESI records.
+  const memberCount = cell.policyholderWorkers > 0 ? cell.coveredPeople : 0;
+  const universalBenchmarkMonthly = derivedUniversalBenchmarkMonthly;
+  const benchmarkPremium = universal
+    ? memberCount * Math.max(0, universalBenchmarkMonthly) * 12
+    : cell.benchmarkPremium2024 * Math.max(0, policy.benchmarkPremiumScale);
+  const universalMemberPremium = universal
+    ? Math.min(benchmarkPremium, memberCount * Math.max(0, policy.universalMemberPremiumMonthly2026) * 12)
+    : 0;
+  const universalHealthCredit = universal ? 0 : Math.min(
     benchmarkPremium,
     Math.max(0, policy.adultHealthCredit) * cell.coveredAdults
       + Math.max(0, policy.childHealthCredit) * Math.max(0, cell.coveredPeople - cell.coveredAdults),
@@ -380,7 +453,7 @@ function calculateCell(
   const familySize = Math.max(1, cell.scheduleAdults + cell.children);
   // The two +/-$500 rows are MTR derivatives; when ACA transition is off,
   // there is no need to recalculate hypothetical eligibility for them.
-  const needAca = cell.policyholderWorkers > 0
+  const needAca = !universal && cell.policyholderWorkers > 0
     && (primaryWageDelta === 0 || clampShare(policy.esiAcaTransitionShare ?? 0) > 0);
   const acaRate = needAca
     ? acaApplicableRate2026(incomeProxy, familySize) : null;
@@ -391,7 +464,7 @@ function calculateCell(
   const acaEsiLowIncomeTopUp = acaRate !== null
     && incomeProxy / (15_650 + 5_500 * (familySize - 1)) < 1.38
     ? acaEsiPotentialTopUp : 0;
-  const healthCredit = universalHealthCredit
+  const healthCredit = universal ? 0 : universalHealthCredit
     + acaEsiPotentialTopUp * clampShare(policy.esiAcaTransitionShare ?? 0);
   const reformDisposableBeforeHealthCredit = reformGrossResources
     - reformWageTax
@@ -399,7 +472,7 @@ function calculateCell(
     + retainedCredits
     + adultCredit
     + childCredit
-    - benchmarkPremium;
+    - (universal ? universalMemberPremium : benchmarkPremium);
   const reformDisposable = reformDisposableBeforeHealthCredit + healthCredit;
   const baseChangeBeforeHealthCredit = reformDisposableBeforeHealthCredit - currentDisposable;
   const requiredHealthCredit = Math.max(0, -baseChangeBeforeHealthCredit);
@@ -603,15 +676,17 @@ export function calculateHealthAnalysis(
   const noPolicyholderTaxUnitsMillions = unlinked.reduce((sum, cell) => sum + cell.weight, 0) / 1e6;
   const noPolicyholderWageTaxUnitsMillions = unlinked.reduce((sum, cell) =>
     sum + (cell.primaryCashWage + cell.secondaryCashWage > 0 ? cell.weight : 0), 0) / 1e6;
-  const unlinkedFamilyCreditPoolBillions = unlinked.reduce((sum, cell) =>
+  const unlinkedFamilyCreditPoolBillions = policy.pathway === 'advantageForAll' ? 0 : unlinked.reduce((sum, cell) =>
     sum + cell.weight * healthPurchaseCredit(cell, policy), 0) / 1e9;
   // Excluding records affects the incidence sample only, not the budget.
   const includedCells = mode === 'exclude'
     ? cells.filter(cell => cell.policyholderWorkers > 0)
     : mode === 'continueFamilyPolicy' ? cells.map(continuationCell) : cells;
-  const rows = includedCells.map((cell) => calculateCell(cell, settings, policy));
-  const downRows = includedCells.map((cell) => calculateCell(cell, settings, policy, -500));
-  const upRows = includedCells.map((cell) => calculateCell(cell, settings, policy, 500));
+  const universalMonthly = policy.pathway === 'advantageForAll'
+    ? universalHealthForYear(2026, defaultAssumptions, policy).benchmarkMonthly : 0;
+  const rows = includedCells.map((cell) => calculateCell(cell, settings, policy, 0, universalMonthly));
+  const downRows = includedCells.map((cell) => calculateCell(cell, settings, policy, -500, universalMonthly));
+  const upRows = includedCells.map((cell) => calculateCell(cell, settings, policy, 500, universalMonthly));
   const macro = calculateMacro(settings);
   let taxUnits = 0;
   let coveredPeople = 0;
@@ -680,7 +755,9 @@ export function calculateHealthAnalysis(
     ? 0 : unlinkedFamilyCreditPoolBillions;
   const healthCreditCostBillions = healthCredits / 1e9
     + creditsHeldForFamilyPolicyReconciliationBillions;
-  const nongroup = calculateNongroupCreditCosts(policy);
+  const nongroup = policy.pathway === 'advantageForAll'
+    ? { noAptc:0, aptcFloorTopUp:0, existingAptc:0, uninsuredFullTakeUp:0, uninsuredInducedEnrollment:0 }
+    : calculateNongroupCreditCosts(policy);
   const nongroupExtensionCostBillions = nongroup.noAptc
     + nongroup.aptcFloorTopUp + nongroup.uninsuredInducedEnrollment;
   const totalHealthCreditCostBillions = healthCreditCostBillions + nongroupExtensionCostBillions;
@@ -720,7 +797,7 @@ export function calculateHealthAnalysis(
     esiAcaPositivePolicyholderTaxUnitsMillions: esiAcaPositiveTaxUnits / 1e6,
     esiAcaFullTransitionTopUpExcluding100To138FplBillions:
       (esiAcaPotentialTopUps - esiAcaLowIncomePotentialTopUps) / 1e9,
-    estimatedExistingAptcSavingsBillions: policy.replaceAcaAptc ? nongroup.existingAptc : 0,
+    estimatedExistingAptcSavingsBillions: policy.pathway === 'advantageForAll' ? 0 : (policy.replaceAcaAptc ? nongroup.existingAptc : 0),
     uninsuredFullTakeUpCostBillions: nongroup.uninsuredFullTakeUp,
     uninsuredInducedEnrollmentCostBillions: nongroup.uninsuredInducedEnrollment,
     nongroupExtensionCostBillions,

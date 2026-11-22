@@ -1,6 +1,7 @@
 import { defaultAssumptions } from './defaults'
 import { eligiblePopulationMillions } from './demographics'
 import { defaultCombinedPolicy } from './combined'
+import { defaultHealthPolicySettings } from '../tax/model/health'
 import { defaultPersonalAccountSettings } from './personalAccountReform'
 import type { CombinedPolicy } from './combined'
 import { exampleHouseholds } from './householdScenario'
@@ -82,6 +83,17 @@ export function parseConfiguration(json: string): SavedConfiguration {
       scenario.policy.health.nonPolicyholderTreatment = 'continueFamilyPolicy'
     if (record(scenario.policy.health) && scenario.policy.health.esiAcaTransitionShare === undefined)
       scenario.policy.health.esiAcaTransitionShare = 0
+    if (record(scenario.policy.health)) {
+      // Existing saved configurations remain on the historical credit pathway.
+      const health = scenario.policy.health
+      for (const key of [
+        'pathway', 'universalBenchmark', 'universalBidMultiplier', 'universalTargetActuarialValue',
+        'universalSecondLowestBidFactor', 'universalMemberPremiumMonthly2026',
+        'universalBidRealGrowth', 'universalRuralSupportBillions2026',
+      ] as const) {
+        if (health[key] === undefined) health[key] = defaultHealthPolicySettings[key]
+      }
+    }
     if (scenario.policy.spendingEnabled === undefined) scenario.policy.spendingEnabled = false
     if (scenario.policy.otherSpending === undefined)
       scenario.policy.otherSpending = structuredClone(defaultOtherSpendingPolicy)
@@ -148,6 +160,14 @@ export function parseConfiguration(json: string): SavedConfiguration {
   oneOf(policy.tax.wageTaxMode, ['flat', 'progressive'], 'wage tax mode')
   oneOf(policy.tax.adultCreditMode, ['earned', 'universal'], 'adult credit mode')
   oneOf(policy.tax.adultCreditEarningsBase, ['cash', 'compensation'], 'earnings base')
+  oneOf(policy.health.pathway, ['purchaseCredits', 'advantageForAll'], 'health coverage pathway')
+  oneOf(policy.health.universalBenchmark, ['average', 'secondLowest'], 'universal benchmark')
+  within(policy.health.universalBidMultiplier, 0.5, 2, 'gross plan bid multiplier')
+  within(policy.health.universalTargetActuarialValue, 0.7, 1, 'standard plan actuarial value')
+  within(policy.health.universalSecondLowestBidFactor, 0.5, 1, 'second-lowest bid factor')
+  within(policy.health.universalMemberPremiumMonthly2026, 0, 10000, 'monthly member premium')
+  within(policy.health.universalBidRealGrowth, -0.03, 0.10, 'real health-plan bid growth')
+  within(policy.health.universalRuralSupportBillions2026, 0, 500, 'rural capacity support')
   oneOf(policy.health.redistributionRule, ['nationalEqual', 'employerCellEqual', 'ownContribution'], 'redistribution')
   oneOf(policy.health.recipientScope, ['policyholders', 'coveredWorkers'], 'recipient scope')
   oneOf(policy.health.nonPolicyholderTreatment, ['continueFamilyPolicy', 'asModeled', 'exclude'], 'ESI non-policyholder treatment')

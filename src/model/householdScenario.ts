@@ -4,6 +4,7 @@ import { accountAnnuityFactor, accountBalanceAtClaim, personalAccountYearlyMatch
 import { flatBenefitReal, legacySocialSecurityBenefitNominal, socialSecurityBenefitShares } from './socialSecurity'
 import { annualWorkCredit, actuarialClaimFactor, currentLawClaimFactor, workCreditFraction } from './claiming'
 import { premiumSupportPerPersonNominal } from './medicare'
+import { universalHealthForYear } from './universalHealth'
 import { nominalGDPBillionsForYear } from './budget'
 import { individualNominalEarnings, individualScheduledSocialSecurity } from './individualEarnings'
 import type { IndividualWageScenario } from './individualEarnings'
@@ -178,6 +179,9 @@ export interface HouseholdYearScore {
   baselineInKindTransferValue: number
   reformInKindTransferValue: number
   healthCreditGross: number
+  /** Display-only premium; kept out of cash comparisons without baseline premiums. */
+  universalMemberContributionAnnual: number
+  universalFederalBenchmarkAnnual: number
   baselineMedicarePayment: number
   reformMedicarePayment: number
   medicarePaymentChange: number
@@ -200,6 +204,9 @@ export function scoreExampleHousehold(profile: ExampleHousehold, year: number, p
   baseline: SimulationResult, combined: SimulationResult): HouseholdYearScore | null {
   if (!Number.isInteger(year) || year < policy.assumptions.reformYear || year > policy.assumptions.reformYear + 69) return null
   const elapsed = year - policy.assumptions.reformYear
+  const universalActive = policy.taxEnabled && policy.health.pathway === 'advantageForAll'
+  const universalYear = universalActive
+    ? universalHealthForYear(year, policy.assumptions, policy.health) : null
   const ages = [profile.primaryAge2026, ...(profile.filingStatus === 'married' ? [profile.spouseAge2026] : [])].map(age => age + elapsed)
   if (ages.some(age => age > policy.assumptions.maxModeledAge)) return null
   const childAges = profile.childAges2026.map(age => age + elapsed).filter(age => age < 18)
@@ -274,7 +281,7 @@ export function scoreExampleHousehold(profile: ExampleHousehold, year: number, p
       accountBalanceAtClaim:accountBalance,
       accountClaimYear:birthYear+claim,
       baselineMedicare: annualMedicarePayment(baseline, year, age, policy.baselineMode),
-      reformMedicare: annualMedicarePayment(combined, year, age, policy.baselineMode),
+      reformMedicare: universalActive ? 0 : annualMedicarePayment(combined, year, age, policy.baselineMode),
     }
   })
   const baselineSocialSecurity = adults.reduce((sum, adult) => sum + adult.baselineSS, 0)
@@ -297,10 +304,16 @@ export function scoreExampleHousehold(profile: ExampleHousehold, year: number, p
   const eligiblePeople = [...ages, ...childAges].filter(age => age < healthUpperAge)
   const healthTakeUp = profile.coverage === 'public' ? 0 : profile.coverage === 'uninsured' ?
     policy.health.uninsuredTakeUpRate : 1
-  const healthCreditGross = policy.taxEnabled ? healthTakeUp * (
+  const healthCreditGross = policy.taxEnabled && !universalActive ? healthTakeUp * (
     ages.filter(age => age < healthUpperAge).length * policy.health.adultHealthCredit +
     childAges.length * policy.health.childHealthCredit) * inflationFactor : 0
+  const universalCoveredCount = ages.length + childAges.length
+  const universalMemberContributionAnnual = universalYear
+    ? universalCoveredCount * universalYear.memberPremiumMonthly * 12 : 0
+  const universalFederalBenchmarkAnnual = universalYear
+    ? universalCoveredCount * (universalYear.benchmarkMonthly - universalYear.memberPremiumMonthly) * 12 : 0
   return {
+    universalMemberContributionAnnual, universalFederalBenchmarkAnnual,
     year, ages, childAges, annualWages: (wages[0]! + wages[1]!) * inflationFactor,
     currentCash, reformCash: currentCash + cashChange, cashChange, taxCashChange, cashTransferChange,
     socialSecurityChange, mandatoryAccountSaving, federalAccountMatch,privateAccountRetirementIncome,

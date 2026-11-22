@@ -63,6 +63,8 @@ export interface FiscalBridge {
   savingsScaleForYear?: (year: number) => number
   otherMandatorySavingsGDP: number
   medicaidMarketplaceSavingsGDP?: number
+  /** Universal coverage federal outlays, net of members' premiums, in billions. */
+  universalHealthPremiumSupportBillionsForYear?: (year: number) => number
   /** Independent policy savings in other mandatory programs, held as a baseline-GDP share. */
   otherMandatoryPolicySavingsGDP?: number
   /** Optional CRFB-calibrated savings against baseline defense outlays, as a share of baseline GDP. */
@@ -77,6 +79,7 @@ export interface FiscalBridge {
 
 export function primaryComponentSum(components: PrimaryComponents): number {
   return (
+    components.universalHealthPremiumSupport +
     components.legacySocialSecurity +
     components.flatSocialSecurityPaygo +
     components.otherOASDI +
@@ -203,19 +206,19 @@ export function simulate(
     socialSecurityByYear.set(year, socialSecurity)
     medicareByYear.set(year, medicare)
 
+    const universal = fiscalBridge?.universalHealthPremiumSupportBillionsForYear !== undefined
     const components: PrimaryComponents = {
+      universalHealthPremiumSupport: fiscalBridge?.universalHealthPremiumSupportBillionsForYear?.(year) ?? 0,
       legacySocialSecurity:
         fiscalBridge?.socialSecurityRetirementPublicTopupBillionsForYear?.(year) ??
           socialSecurity.legacyBillions * deliveryShares.socialSecurity,
       flatSocialSecurityPaygo: fiscalBridge?.socialSecurityRetirementPublicTopupBillionsForYear ? 0 : socialSecurity.flatPaygoBillions,
       otherOASDI: assumptions.otherOASDIGDP * baselineNominalGDP,
-      legacySeniorMedicare:
-        medicare.legacyBillions * deliveryShares.seniorMedicare,
-      premiumSupportPaygo: medicare.premiumSupportPaygoBillions,
-      under65Medicare: assumptions.under65MedicareGDP * baselineNominalGDP,
-      medicaidChipMarketplace: medicaidChipMarketplaceBillions(
-        year,
-        assumptions,
+      legacySeniorMedicare: universal ? 0 : medicare.legacyBillions * deliveryShares.seniorMedicare,
+      premiumSupportPaygo: universal ? 0 : medicare.premiumSupportPaygoBillions,
+      under65Medicare: universal ? 0 : assumptions.under65MedicareGDP * baselineNominalGDP,
+      medicaidChipMarketplace: universal ? 0 : medicaidChipMarketplaceBillions(
+        year, assumptions,
       ) - (fiscalBridge?.medicaidMarketplaceSavingsGDP ?? 0) * baselineNominalGDP * (fiscalBridge?.savingsScaleForYear?.(year) ?? 1),
       otherMandatory: otherMandatoryBillions(year, assumptions) -
         (fiscalBridge?.otherMandatorySavingsGDP ?? 0) * baselineNominalGDP * (fiscalBridge?.savingsScaleForYear?.(year) ?? 1) -
