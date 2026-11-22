@@ -21,8 +21,10 @@ describe('Advantage for All alternative to health purchase credits', () => {
 
   it('quotes a transparent gross bid, member premium and federal residual', () => {
     const y = universalHealthForYear(2026, base.assumptions, universal.health)
-    expect(y.averageBidMonthly).toBe(1092)
-    expect(y.benchmarkMonthly).toBeCloseTo(1092 * .96, 10)
+    expect(y.averageBidMonthly).toBeGreaterThan(0)
+    expect(y.nonelderlyGrossAnnualPerPerson).toBeGreaterThan(y.sourceSilverAnnualPerPerson2024)
+    expect(y.seniorGrossAnnualPerPerson).toBeGreaterThan(0)
+    expect(y.benchmarkMonthly).toBeCloseTo(y.averageBidMonthly * .96, 10)
     expect(y.memberPremiumMonthly).toBeCloseTo(202.90, 10)
     expect(y.grossBenchmarkBillions - y.memberContributionsBillions)
       .toBeCloseTo(y.publicBenchmarkBillions, 8)
@@ -56,6 +58,13 @@ describe('Advantage for All alternative to health purchase credits', () => {
       { ...universal.health, universalBenchmark: 'average' })
     expect(average.benchmarkMonthly).toBeGreaterThan(low.benchmarkMonthly)
     expect(average.federalOutlayBillions).toBeGreaterThan(low.federalOutlayBillions)
+    const cheaperSource = universalHealthForYear(2026, base.assumptions,
+      { ...universal.health, universalBidMultiplier: 0.95 })
+    expect(cheaperSource.averageBidMonthly).toBeLessThan(low.averageBidMonthly)
+    const higherAV = universalHealthForYear(2026, base.assumptions,
+      { ...universal.health, universalTargetActuarialValue: 0.95 })
+    expect(higherAV.nonelderlyGrossAnnualPerPerson).toBeGreaterThan(low.nonelderlyGrossAnnualPerPerson)
+    expect(higherAV.seniorGrossAnnualPerPerson).toBeCloseTo(low.seniorGrossAnnualPerPerson, 8)
     const higherMember = universalHealthForYear(2026, base.assumptions,
       { ...universal.health, universalMemberPremiumMonthly2026: 302.90 })
     expect(higherMember.grossBenchmarkBillions).toBeCloseTo(low.grossBenchmarkBillions, 8)
@@ -101,7 +110,7 @@ describe('Advantage for All alternative to health purchase credits', () => {
     }
     const health = payload.scenario.policy.health as Record<string, unknown>
     for(const key of [
-      'pathway', 'universalBenchmark', 'universalAverageBidMonthly2026',
+      'pathway', 'universalBenchmark', 'universalBidMultiplier', 'universalTargetActuarialValue',
       'universalSecondLowestBidFactor', 'universalMemberPremiumMonthly2026',
       'universalBidRealGrowth', 'universalRuralSupportBillions2026',
     ]) delete health[key]
