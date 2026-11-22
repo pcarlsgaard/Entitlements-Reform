@@ -171,6 +171,8 @@ export interface AnnualFundingPlan {
 }
 
 export interface PrimaryComponents {
+  /** Net federal premium support for all ages; replaces Medicare and Medicaid/Marketplace. */
+  universalHealthPremiumSupport: number
   /** Government matching grants in individually owned retirement accounts. */
   personalAccountMatching?:number
   legacySocialSecurity: number
