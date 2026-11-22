@@ -25,7 +25,12 @@ export const hipmSilverReferenceActuarialValue = 0.70
 
 // Derive the source reference ONCE from the app's existing ESI/nongroup
 // calibration, rather than using an unrelated nationwide flat premium.
-const under65Source = nonelderlySilverBenchmarkPerPerson2024()
+let cachedUnder65Source: ReturnType<typeof nonelderlySilverBenchmarkPerPerson2024> | null = null
+function under65Source() {
+  // Lazy initialization prevents a module cycle when the ESI incidence
+  // engine calls this pricing module for its contribution cap.
+  return cachedUnder65Source ?? (cachedUnder65Source = nonelderlySilverBenchmarkPerPerson2024())
+}
 
 export interface UniversalHealthYear {
   year: number
@@ -52,6 +57,7 @@ export interface UniversalHealthYear {
 export function universalHealthForYear(
   year: number, assumptions: ModelAssumptions, settings: HealthPolicySettings,
 ): UniversalHealthYear {
+  const source = under65Source()
   const elapsed = year - assumptions.reformYear
   const cpi = (1 + assumptions.inflation) ** elapsed
   const nonelderlyGrowth = (1 + settings.universalBidRealGrowth) ** elapsed
@@ -62,7 +68,7 @@ export function universalHealthForYear(
 
   // The existing HIPM benchmark scale projects its source 2024 cost to 2025;
   // one further annual inflation adjustment projects it into 2026.
-  const nonelderlySilver2026 = under65Source.annualPremiumPerPerson *
+  const nonelderlySilver2026 = source.annualPremiumPerPerson *
     Math.max(0, settings.benchmarkPremiumScale) * (1 + assumptions.inflation)
   const avFactor = settings.universalTargetActuarialValue / hipmSilverReferenceActuarialValue
   const nonelderlyGrossAnnualPerPerson = nonelderlySilver2026 * avFactor *
@@ -99,7 +105,7 @@ export function universalHealthForYear(
   const ruralSupportBillions = settings.universalRuralSupportBillions2026 * cpi * nonelderlyGrowth
   return {
     year, populationMillions, nonelderlyPopulationMillions, seniorPopulationMillions,
-    sourceSilverAnnualPerPerson2024: under65Source.annualPremiumPerPerson,
+    sourceSilverAnnualPerPerson2024: source.annualPremiumPerPerson,
     nonelderlyGrossAnnualPerPerson, seniorGrossAnnualPerPerson,
     averageBidMonthly, benchmarkMonthly, memberPremiumMonthly,
     grossBenchmarkBillions, memberContributionsBillions, publicBenchmarkBillions,
