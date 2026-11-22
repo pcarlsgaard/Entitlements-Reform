@@ -17,6 +17,23 @@ export interface SourceRecord {
 
 export const sources: readonly SourceRecord[] = [
   {
+    id: 'cms-part-b-beneficiary-premium-2026', kind: 'empirical input',
+    agency: 'Centers for Medicare & Medicaid Services',
+    datasetOrReport: '2026 Medicare Parts A and B Premiums and Deductibles',
+    publicationDate: '2025-11', relevantTable: 'Standard 2026 Part B monthly premium',
+    url: 'https://www.cms.gov/newsroom/fact-sheets/2026-medicare-parts-b-premiums-deductibles',
+    notes: 'The $202.90/month Medicare Part B member premium is used solely as the default universal Advantage for All household contribution. It does not approximate the full gross Medicare Advantage capitated plan payment. The policy extends the same flat contribution to children from birth, indexed by CPI.',
+  },
+  {
+    id: 'universal-advantage-premium-scenario-2026', kind: 'modeling assumption',
+    agency: 'Entitlements Reform simulator (illustrative scenario)',
+    datasetOrReport: 'Advantage for All benchmark and financing sensitivity',
+    publicationDate: '2026-11-22', relevantTable: 'hypothetical average standardized bid and second-lowest reference',
+    url: 'https://www.cms.gov/data-research/statistics-trends-and-reports/national-health-expenditure-data/projected',
+    notes: 'The $1,092/person-month average all-age gross bid, 0.96 second-lowest/average factor, 1% annual real bid growth, and $70 billion 2026 supplemental rural spending are exploratory reform inputs, not observed competing bids or official CMS projections. Gross plan bids are assumed to include insurance admin, risk adjustment and reinsurance; those transfers must not be duplicated. Census/SSA-area population is used as a proxy for universal covered lives. Existing federal Medicare and Medicaid/CHIP/Marketplace spending are displaced, not double-counted, but state/local Medicaid budgets are NOT federal offset receipts. Full end-to-end household premium matching and prefunding reserves are absent.',
+  },
+
+  {
     id: 'ssa-2026-projected-demographics', kind: 'empirical input', agency: 'Social Security Administration',
     datasetOrReport: '2026 Trustees Alternative II death probabilities and Social Security area population',
     publicationDate: '2026', relevantTable: 'DeathProbsE_M/F_Alt2_TR2026 and SSPopJul_Alt2_TR2026',
