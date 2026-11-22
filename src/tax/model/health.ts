@@ -237,6 +237,42 @@ interface CellResult {
 
 export const healthSnapshot = healthData as unknown as HealthSnapshot;
 export const nongroupHealthSnapshot = nongroupHealthData as unknown as NongroupHealthSnapshot;
+/**
+ * Returns the existing 2024 HIPM age/location Silver benchmark, weighted
+ * across ESI covered lives and CBO-calibrated nongroup insured lives. The ESI
+ * benchmark is already a sum over people covered by the ESI tax unit.
+ *
+ * This is a MARKET PREMIUM reference, not medical claims, and is intentionally
+ * kept separate from the current-law ESI employee/employer contributions.
+ * Medicaid/CHIP, uninsured risk, plan AV and bidding dynamics remain explicit
+ * coverage-model assumptions rather than invented microdata observations.
+ */
+export function nonelderlySilverBenchmarkPerPerson2024(): {
+  esiCoveredMillions: number
+  nongroupCoveredMillions: number
+  annualPremiumPerPerson: number
+} {
+  const esiCoveredMillions = healthSnapshot.browserReconciliation.weightedEsiCoveredPeopleMillions
+  const esiBenchmarkBillions = healthSnapshot.browserReconciliation.benchmarkPremium2024Billions
+  let nongroupCovered = 0
+  let nongroupPremium = 0
+  for (const [status, adults, children, benchmark, , weight] of nongroupHealthSnapshot.distribution) {
+    if (status !== 1 && status !== 2) continue
+    const calibratedWeight = weight! * (nongroupHealthSnapshot.statusWeightScales[String(status)] ?? 1)
+    nongroupCovered += (adults! + children!) * calibratedWeight
+    nongroupPremium += benchmark! * calibratedWeight
+  }
+  const nongroupCoveredMillions = nongroupCovered / 1e6
+  const totalCoveredMillions = esiCoveredMillions + nongroupCoveredMillions
+  return {
+    esiCoveredMillions,
+    nongroupCoveredMillions,
+    annualPremiumPerPerson: totalCoveredMillions > 0
+      ? (esiBenchmarkBillions * 1e9 + nongroupPremium) / (totalCoveredMillions * 1e6)
+      : 0,
+  }
+}
+
 
 export const defaultHealthPolicySettings: HealthPolicySettings = {
   pathway: 'purchaseCredits',
