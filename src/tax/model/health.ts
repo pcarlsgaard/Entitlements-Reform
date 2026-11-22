@@ -16,13 +16,15 @@ export type UniversalBenchmark = 'average' | 'secondLowest';
 export interface HealthPolicySettings {
   pathway: HealthPathway;
   universalBenchmark: UniversalBenchmark;
-  /** Hypothetical nationwide 2026 average risk-standardized monthly bid, NOT a Part B premium. */
-  universalAverageBidMonthly2026: number;
+  /** Sensitivity multiplier on premium references derived from existing health cost engines. */
+  universalBidMultiplier: number;
+  /** Standardized plan actuarial value; HIPM source Silver is approximately 70%. */
+  universalTargetActuarialValue: number;
   /** Relative reference price for a second-lowest bid versus mean bid. */
   universalSecondLowestBidFactor: number;
   /** Per resident (including children) contribution, indexed by CPI; not government revenue. */
   universalMemberPremiumMonthly2026: number;
-  /** Annual real increase in gross health-plan bids. */
+  /** Annual real increase in nonelderly benchmark prices; seniors follow CBO/Medicare Trustees. */
   universalBidRealGrowth: number;
   /** Supplemental federal payment for essential rural capacity; separate from the bid. */
   universalRuralSupportBillions2026: number;  adultHealthCredit: number;
@@ -277,7 +279,8 @@ export function nonelderlySilverBenchmarkPerPerson2024(): {
 export const defaultHealthPolicySettings: HealthPolicySettings = {
   pathway: 'purchaseCredits',
   universalBenchmark: 'secondLowest',
-  universalAverageBidMonthly2026: 1092,
+  universalBidMultiplier: 1,
+  universalTargetActuarialValue: 0.90,
   universalSecondLowestBidFactor: 0.96,
   universalMemberPremiumMonthly2026: 202.90,
   universalBidRealGrowth: 0.01,
