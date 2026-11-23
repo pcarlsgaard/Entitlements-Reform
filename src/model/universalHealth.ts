@@ -52,6 +52,8 @@ export interface UniversalHealthYear {
   grossBenchmarkBillions: number
   memberContributionsBillions: number
   publicBenchmarkBillions: number
+  estimatedOutOfPocketBillions: number
+  estimatedCoveredSpendingBillions: number
   ruralSupportBillions: number
   federalOutlayBillions: number
 }
@@ -115,6 +117,11 @@ export function universalHealthForYear(
   )
   const memberContributionsBillions = populationMillions * memberPremiumMonthly * 12 / 1000
   const publicBenchmarkBillions = grossBenchmarkBillions - memberContributionsBillions
+  // The model has no separate claims and administrative load series.
+  // Use the gross benchmark as a proxy for the plan-paid share of covered costs.
+  const estimatedOutOfPocketBillions = grossBenchmarkBillions *
+    (1 - settings.universalTargetActuarialValue) / settings.universalTargetActuarialValue
+  const estimatedCoveredSpendingBillions = grossBenchmarkBillions + estimatedOutOfPocketBillions
   const ruralSupportBillions = settings.universalRuralSupportBillions2026 * cpi * realCostGrowth
   return {
     year, populationMillions, nonelderlyPopulationMillions, seniorPopulationMillions,
@@ -122,6 +129,7 @@ export function universalHealthForYear(
     nonelderlyGrossAnnualPerPerson, seniorGrossAnnualPerPerson,
     averageBidMonthly, benchmarkMonthly, memberPremiumMonthly,
     grossBenchmarkBillions, memberContributionsBillions, publicBenchmarkBillions,
+    estimatedOutOfPocketBillions, estimatedCoveredSpendingBillions,
     ruralSupportBillions, federalOutlayBillions: publicBenchmarkBillions + ruralSupportBillions,
   }
 }
