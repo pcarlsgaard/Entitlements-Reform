@@ -9,6 +9,7 @@ import { defaultCombinedPolicy, scoreCombined } from './model/combined'
 import HouseholdsTab from './HouseholdsTab'
 import ConsumptionAuditPanel from './ConsumptionAuditPanel'
 import UniversalHealthPanel from './UniversalHealthPanel'
+import { universalHealthForYear } from './model/universalHealth'
 import { calculateConsumptionAudit } from './tax/model/consumptionAudit'
 import SavedConfigurationsPanel from './SavedConfigurationsPanel'
 import type { ScenarioState } from './model/savedConfigurations'
@@ -217,6 +218,18 @@ export default function CombinedGame() {
     row=>row.year,row=>row.overallDeficit,a.inflation)
   const staticDecadeDeficit = sumIn2026Dollars(score.staticCombined.years.slice(0,10),
     row=>row.year,row=>row.overallDeficit,a.inflation)
+  const coveredHealth = tab === 'results' && score.universal2026
+    ? score.combined.years.map(({ year, nominalGDP }) => {
+      const health = universalHealthForYear(year, score.combined.assumptions, deferred.health)
+      return {
+        year,
+        'Member premiums': 100 * health.memberContributionsBillions / nominalGDP,
+        'Government premium support': 100 * health.publicBenchmarkBillions / nominalGDP,
+        'Estimated out-of-pocket': 100 * health.estimatedOutOfPocketBillions / nominalGDP,
+        'Total': 100 * health.estimatedCoveredSpendingBillions / nominalGDP,
+      }
+    })
+    : []
   const sampled = score.combined.years.filter(row => row.year === 2026 || row.year % 5 === 0 || row.year === 2056 || row.year === 2095)
   const graph = sampled.map(row => {
     const index = row.year - a.reformYear, b = score.baseline.years[index]!, tx = score.taxOnly.years[index]!, en = score.benefitsOnly.years[index]!, sp = score.spendingOnly.years[index]!
@@ -502,6 +515,32 @@ export default function CombinedGame() {
       {tab === 'results' && <div className="game-results"><div className="game-score-grid"><article className="game-card game-score"><span>2026–2035 budget improvement · 2026 $</span><strong className={decadeImprovement2026>=0?'good':'bad'}>{dollars(decadeImprovement2026)}</strong><small>Sum of annually inflation-adjusted differences versus current law · 2026 dollars</small></article><article className="game-card game-score"><span>2035 debt / GDP</span><strong>{ratio(decade.terminalDebtGDP)}</strong><small>Current law {ratio(decade.baselineTerminalDebtGDP)}</small></article><article className="game-card game-score"><span>2095 debt / GDP</span><strong>{ratio(horizon.terminalDebtGDP)}</strong><small>Current law {ratio(horizon.baselineTerminalDebtGDP)}</small></article><article className="game-card game-score"><span>70-year budget improvement</span><strong>{pp(horizon.fiscalImprovementGDP)}</strong><small>GDP-weighted annual average, includes interest</small></article></div>
         <section className="game-card game-goal"><div><span>Debt challenge · {pct(a.policyHorizonDebtTargetGDP,0)} in 2095 and peak under {pct(a.peakDebtCeilingGDP,0)}</span><strong>{!Number.isFinite(score.additionalFiscalAdjustmentGDP) ? 'Debt goal outside the modeled adjustment range' : score.additionalFiscalAdjustmentGDP>0.00001?`${pp(score.additionalFiscalAdjustmentGDP)} GDP more annual fiscal adjustment needed`:`Goal met · ${pp(-score.additionalFiscalAdjustmentGDP)} GDP headroom`}</strong></div><small>Equivalent permanent revenue or spending adjustment from 2026.</small></section>
         {dynamicReady && <section className="game-card game-goal"><div><span>Dynamic feedback · CPS-weighted labor + illustrative capital response</span><strong>GDP level {pct(score.steadyGDPLevelChange+score.steadyCapitalGDPLevelChange,2)} · 10-year deficit feedback (2026 $) {dollars(staticDecadeDeficit-dynamicDecadeDeficit)}</strong></div><small>Labor {pct(score.steadyGDPLevelChange,2)} + capital {pct(score.steadyCapitalGDPLevelChange,2)} versus static. Program spending stays on its baseline dollar path; receipts follow the changed GDP.</small></section>}
+        {coveredHealth.length > 0 && <>
+          <Chart title="Covered healthcare spending" data={coveredHealth} stacked lines={[
+            {key:'Member premiums',color:'#477fb8'},
+            {key:'Government premium support',color:'#168565'},
+            {key:'Estimated out-of-pocket',color:'#c58a3d'},
+          ]} />
+          <section className="game-card">
+            <h2>Covered healthcare spending by payer · % of GDP</h2>
+            <div className="game-table-wrap"><table className="game-table">
+              <thead><tr><th>Year</th><th>Member premiums</th><th>Government premium support</th>
+                <th>Estimated out-of-pocket</th><th>Total</th></tr></thead>
+              <tbody>{coveredHealth.filter(row => [2026, 2035, 2050, 2075, 2095].includes(row.year))
+                .map(row => <tr key={row.year}><th scope="row">{row.year}</th>
+                  <td>{row['Member premiums'].toFixed(2)}%</td>
+                  <td>{row['Government premium support'].toFixed(2)}%</td>
+                  <td>{row['Estimated out-of-pocket'].toFixed(2)}%</td>
+                  <td><strong>{row.Total.toFixed(2)}%</strong></td>
+                </tr>)}</tbody>
+            </table></div>
+            <small>Member premiums and government premium support together fund the benchmark.
+              At {pct(deferred.health.universalTargetActuarialValue, 0)} actuarial value, estimated
+              out-of-pocket spending uses the gross benchmark premium as a proxy for plan-paid claims.
+              The estimate includes any administrative costs embedded in premiums and excludes rural
+              support, retained Medicaid spending, and services outside the benchmark.</small>
+          </section>
+        </>}
         <section className="game-card"><h2>Social Security comparison basis</h2><Select label="Use as the fiscal and household comparator" value={policy.baselineMode} options={[{value:'scheduled',label:'Current law · scheduled benefits'},{value:'payable',label:'Current law · trust-fund payable'}]} onChange={v=>setPolicy(p=>({...p,baselineMode:v as CombinedPolicy['baselineMode']}))} /><small>Scheduled assumes full promised benefits; payable limits OASI after its modeled 2032 trust-fund depletion. This selection also limits the Medicare Part A component after its modeled 2033 depletion. Both OASI reference paths appear below.</small></section>
         <Toggle label="Show official CBO reference (2026–2056)" checked={showCBO} onChange={setShowCBO} note="February 2026 published debt path, with CBO's own economic assumptions. It is independent of these controls and is not extrapolated to 2095." /><div className="game-plots"><Chart title="Debt / GDP" note={dynamicReady ? 'Static combined is shown for comparison with the scored dynamic path.' : 'Tax, benefit, and other-spending reforms are shown independently against a common economic path.'} data={graph} lines={[...(showCBO ? [{key:'Official CBO',color:'#8a4dab'}] : []),{key:'Current law',color:'#8292a6'},{key:'Tax only',color:'#477fb8'},{key:'Benefits only',color:'#c58a3d'},{key:'Spending only',color:'#b06a8f'},...(dynamicReady ? [{key:'Static combined',color:'#96a7a0'}] : []),{key:'Combined',color:'#168565'}]} />
           {dynamicReady && <Chart title="GDP level effect" unit="Difference from static GDP" data={graph} lines={[{key:'GDP level effect',color:'#168565'}]} />}

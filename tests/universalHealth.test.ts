@@ -34,6 +34,19 @@ describe('Advantage for All alternative to health purchase credits', () => {
     expect(y.populationMillions).toBeGreaterThan(300)
   })
 
+  it('combines member premiums, public support and cost sharing without counting support twice', () => {
+    for (const av of [.70, .90, 1]) {
+      const year = universalHealthForYear(2035, base.assumptions,
+        { ...universal.health, universalTargetActuarialValue: av })
+      expect(year.estimatedOutOfPocketBillions).toBeCloseTo(
+        year.grossBenchmarkBillions * (1 - av) / av, 8)
+      expect(year.estimatedCoveredSpendingBillions).toBeCloseTo(
+        year.memberContributionsBillions + year.publicBenchmarkBillions +
+        year.estimatedOutOfPocketBillions, 8)
+      expect(year.estimatedCoveredSpendingBillions * av).toBeCloseTo(year.grossBenchmarkBillions, 8)
+    }
+  })
+
   it('grows per-enrollee plan costs at the same default 1.8% real rate for both ages', () => {
     expect(universal.health.universalBidRealGrowth).toBe(.018)
     expect(universal.health.universalMemberPremiumRealGrowth).toBe(0)
