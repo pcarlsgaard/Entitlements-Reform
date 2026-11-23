@@ -87,7 +87,7 @@ describe('Advantage for All alternative to health purchase credits', () => {
     expect(higherMember.federalOutlayBillions).toBeLessThan(baseline.federalOutlayBillions)
   })
 
-  it('replaces federal Medicare and Medicaid instead of stacking an extra credit', () => {
+  it('replaces Medicare and retains the Medicaid wraparound by default', () => {
     const score = scoreCombined(universal)
     const y = score.combined.years[0]!
     const b = score.baseline.years[0]!
@@ -97,13 +97,25 @@ describe('Advantage for All alternative to health purchase credits', () => {
     expect(y.legacySeniorMedicare).toBe(0)
     expect(y.premiumSupportPaygo).toBe(0)
     expect(y.under65Medicare).toBe(0)
-    expect(y.medicaidChipMarketplace).toBe(0)
+    expect(universal.health.universalMedicaidOffset).toBe('acuteOnly')
+    expect(y.medicaidChipMarketplace).toBeGreaterThan(0)
+    expect(y.medicaidChipMarketplace).toBeLessThan(b.medicaidChipMarketplace)
+    expect(score.combined.years[69]!.medicaidChipMarketplace).toBeGreaterThan(0)
     expect(b.legacySeniorMedicare + b.under65Medicare + b.medicaidChipMarketplace).toBeGreaterThan(0)
     expect(score.universalFederalIncrement2026Billions).toBeCloseTo(
-      score.universal2026!.federalOutlayBillions -
+      score.universal2026!.federalOutlayBillions + y.medicaidChipMarketplace -
       b.legacySeniorMedicare - b.premiumSupportPaygo - b.under65Medicare - b.medicaidChipMarketplace, 8)
     expect(primaryComponentSum(y)).toBeCloseTo(y.totalPrimarySpending, 8)
     expect(y.newCohortPrefunding).toBe(0)
+  })
+
+  it('allows full Medicaid replacement without changing the plan price', () => {
+    const score = scoreCombined({ ...universal, health: {
+      ...universal.health, universalMedicaidOffset: 'full',
+    } })
+    expect(score.combined.years.every(row => row.medicaidChipMarketplace === 0)).toBe(true)
+    expect(score.universal2026!.federalOutlayBillions).toBeCloseTo(
+      universalHealthForYear(2026, base.assumptions, universal.health).federalOutlayBillions, 8)
   })
 
   it('links benchmark choice and household premium to federal cost, not government receipts', () => {
@@ -169,7 +181,9 @@ describe('Advantage for All alternative to health purchase credits', () => {
     }
     delete (payload.scenario.policy.health as unknown as Record<string, unknown>)
       .universalMemberPremiumRealGrowth
+    delete (payload.scenario.policy.health as unknown as Record<string, unknown>).universalMedicaidOffset
     const parsed = parseConfiguration(JSON.stringify(payload))
+    expect(parsed.scenario.policy.health.universalMedicaidOffset).toBe('acuteOnly')
     expect(parsed.scenario.policy.health.universalBidRealGrowth).toBe(.015)
     expect(parsed.scenario.policy.health.universalMemberPremiumRealGrowth).toBe(0)
   })

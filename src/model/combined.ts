@@ -187,7 +187,10 @@ export function scoreCombined(policy: CombinedPolicy, taxIndexingMode: TaxIndexi
     savingsScaleForYear: (year: number) => 1 / realGDPPerCapitaGrowthFactor(year, assumptions),
     otherMandatorySavingsGDP: policy.taxEnabled ? (tax.refundableTaxCreditOutlaySavings + programSavingsBillions) / tax.gdp : 0,
     medicaidMarketplaceSavingsGDP: policy.taxEnabled && !universalActive ? health.estimatedExistingAptcSavingsBillions / tax.gdp : 0,
-    ...(universalOutlay ? { universalHealthPremiumSupportBillionsForYear: universalOutlay } : {}),
+    ...(universalOutlay ? {
+      universalHealthPremiumSupportBillionsForYear: universalOutlay,
+      retainUniversalMedicaid: policy.health.universalMedicaidOffset !== 'full',
+    } : {}),
   }
   const defenseNominalGrowth = policy.spendingEnabled
     ? discretionaryNominalGrowth(policy.otherSpending.defenseMode, policy.otherSpending.defenseCustomNominalGrowth)
@@ -296,7 +299,7 @@ export function scoreCombined(policy: CombinedPolicy, taxIndexingMode: TaxIndexi
     health,
     universal2026,
     universalFederalIncrement2026Billions: universal2026
-      ? universal2026.federalOutlayBillions - (
+      ? universal2026.federalOutlayBillions + combined.years[0]!.medicaidChipMarketplace - (
         baseline.years[0]!.legacySeniorMedicare + baseline.years[0]!.premiumSupportPaygo +
         baseline.years[0]!.under65Medicare + baseline.years[0]!.medicaidChipMarketplace
       ) : 0,

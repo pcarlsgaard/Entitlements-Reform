@@ -48,6 +48,16 @@ const medicaidChipMarketplacePercent = [
   2.611, 2.617, 2.625, 2.631,
 ] as const
 
+// February 2026 CBO budget outlook, table 3-1. Standalone Medicaid excludes
+// separately funded CHIP and marketplace coverage.
+const medicaidBillionsThrough2036 = [708, 726, 746, 754, 777, 804, 834, 870, 905, 941, 981] as const
+
+export function cboMedicaidShareOfCombinedHealthLine(year: number): number {
+  const sourceYear = Math.min(2036, Math.max(2026, year))
+  return medicaidBillionsThrough2036[sourceYear - 2026]! /
+    (cboMedicaidChipMarketplaceGDP(sourceYear) * cboCalibrationNominalGDPBillions(sourceYear))
+}
+
 const otherMandatoryPercent = [
   2.994, 3.088, 2.732, 2.905, 2.767, 2.642, 2.587, 2.536, 2.541,
   2.509, 2.497, 2.484, 2.473, 2.456, 2.443, 2.433, 2.42, 2.41,

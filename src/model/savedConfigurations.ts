@@ -90,7 +90,7 @@ export function parseConfiguration(json: string): SavedConfiguration {
         'pathway', 'universalBenchmark', 'universalBidMultiplier', 'universalTargetActuarialValue',
         'universalSecondLowestBidFactor', 'universalMemberPremiumMonthly2026',
         'universalBidRealGrowth', 'universalMemberPremiumRealGrowth',
-        'universalRuralSupportBillions2026',
+        'universalRuralSupportBillions2026', 'universalMedicaidOffset',
       ] as const) {
         if (health[key] === undefined) health[key] = defaultHealthPolicySettings[key]
       }
@@ -162,6 +162,7 @@ export function parseConfiguration(json: string): SavedConfiguration {
   oneOf(policy.tax.adultCreditMode, ['earned', 'universal'], 'adult credit mode')
   oneOf(policy.tax.adultCreditEarningsBase, ['cash', 'compensation'], 'earnings base')
   oneOf(policy.health.pathway, ['purchaseCredits', 'advantageForAll'], 'health coverage pathway')
+  oneOf(policy.health.universalMedicaidOffset, ['acuteOnly', 'full'], 'Medicaid spending offset')
   oneOf(policy.health.universalBenchmark, ['average', 'secondLowest'], 'universal benchmark')
   within(policy.health.universalBidMultiplier, 0.5, 2, 'gross plan bid multiplier')
   within(policy.health.universalTargetActuarialValue, 0.7, 1, 'standard plan actuarial value')
