@@ -6,6 +6,7 @@ import { currentLawRetirementAge } from './defaults'
 import {
   defenseDiscretionaryBillions,
   medicaidChipMarketplaceBillions,
+  retainedMedicaidBillions,
   nonDefenseDiscretionaryBillions,
   otherMandatoryBillions,
 } from './budget'
@@ -64,6 +65,7 @@ export interface FiscalBridge {
   otherMandatorySavingsGDP: number
   medicaidMarketplaceSavingsGDP?: number
   /** Universal coverage federal outlays, net of members' premiums, in billions. */
+  retainUniversalMedicaid?: boolean
   universalHealthPremiumSupportBillionsForYear?: (year: number) => number
   /** Independent policy savings in other mandatory programs, held as a baseline-GDP share. */
   otherMandatoryPolicySavingsGDP?: number
@@ -217,7 +219,9 @@ export function simulate(
       legacySeniorMedicare: universal ? 0 : medicare.legacyBillions * deliveryShares.seniorMedicare,
       premiumSupportPaygo: universal ? 0 : medicare.premiumSupportPaygoBillions,
       under65Medicare: universal ? 0 : assumptions.under65MedicareGDP * baselineNominalGDP,
-      medicaidChipMarketplace: universal ? 0 : medicaidChipMarketplaceBillions(
+      medicaidChipMarketplace: universal
+        ? (fiscalBridge.retainUniversalMedicaid ? retainedMedicaidBillions(year, assumptions) : 0)
+        : medicaidChipMarketplaceBillions(
         year, assumptions,
       ) - (fiscalBridge?.medicaidMarketplaceSavingsGDP ?? 0) * baselineNominalGDP * (fiscalBridge?.savingsScaleForYear?.(year) ?? 1),
       otherMandatory: otherMandatoryBillions(year, assumptions) -

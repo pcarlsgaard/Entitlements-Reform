@@ -35,16 +35,25 @@ function Numeric({ label, value, onChange, min = 0, max, step = 1, suffix }: {
 const billions = (value: number) => '$' + Math.round(value).toLocaleString() + 'B'
 const dollars = (value: number) => '$' + Math.round(value).toLocaleString()
 
-export default function UniversalHealthPanel({settings, onChange, opening, increment}: {
+export default function UniversalHealthPanel({settings, onChange, opening, retainedMedicaid, increment}: {
   settings: HealthPolicySettings
   onChange: (patch: Partial<HealthPolicySettings>) => void
   opening: UniversalHealthYear | null
+  retainedMedicaid: number
   increment: number
 }) {
   return <>
     <p>Risk-adjusted, standardized private health plans for all ages. Premium support
-      replaces federal Medicare, Medicaid/CHIP and Marketplace coverage outlays;
-      ACA and flat purchase credits do not stack with this pathway.</p>
+      replaces federal Medicare, CHIP and Marketplace coverage outlays. Select how much
+      federal Medicaid spending the new coverage displaces.</p>
+    <label className="game-field"><span>Federal Medicaid spending offset</span>
+      <select value={settings.universalMedicaidOffset} onChange={e => onChange({
+        universalMedicaidOffset: e.target.value === 'full' ? 'full' : 'acuteOnly',
+      })}>
+        <option value="acuteOnly">Preserve disability and long-term care</option>
+        <option value="full">Replace all federal Medicaid spending</option>
+      </select>
+    </label>
     <label className="game-field"><span>Premium-support benchmark</span>
       <select value={settings.universalBenchmark} onChange={e => onChange({
         universalBenchmark: e.target.value as HealthPolicySettings['universalBenchmark'],
@@ -131,6 +140,7 @@ export default function UniversalHealthPanel({settings, onChange, opening, incre
       <div><dt>Gross plan benchmark premiums</dt><dd>{billions(opening.grossBenchmarkBillions)}</dd></div>
       <div><dt>Resident contributions paid to plans</dt><dd>−{billions(opening.memberContributionsBillions)}</dd></div>
       <div><dt>Federal premium grants plus rural support</dt><dd>{billions(opening.federalOutlayBillions)}</dd></div>
+      <div><dt>Federal Medicaid spending retained</dt><dd>{billions(retainedMedicaid)}</dd></div>
       <div className="game-total"><dt>Additional federal healthcare spending net of replaced programs</dt>
         <dd>{billions(increment)}</dd></div>
     </dl>}
@@ -147,13 +157,10 @@ export default function UniversalHealthPanel({settings, onChange, opening, incre
       not observed savings. The default $202.90 member contribution is the 2026
       standard Part B premium; by default it grows with CPI alone, but its separate
       real growth control allows financing scenarios. It is paid to insurers,
-      not Treasury, and earns no investment return. State Medicaid spending is
-      not counted as federal savings. The provisional
-      fiscal score assumes the new plan also displaces all existing federal
-      Medicaid/CHIP/Marketplace outlays. Because HIPM premiums do not directly
-      price Medicaid long-term services, and the nonelderly high-risk/disabled
-      population may be more costly than the privately insured benchmark,
-      those obligations still require explicit reconciliation before treating
-      this as a comprehensive actuarial budget score.</small>
+      not Treasury, and earns no investment return. The default retains estimated spending
+      for disability-based eligibility, separately identified long-term services and Medicare
+      premium assistance. Managed care can contain additional long-term services that the
+      source does not separate. State Medicaid savings are outside the federal ledger.
+      Under-65 benchmark bids still use a privately insured population as the pricing proxy.</small>
   </>
 }

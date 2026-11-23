@@ -17,6 +17,22 @@ export interface SourceRecord {
 
 export const sources: readonly SourceRecord[] = [
   {
+    id: 'medicaid-wraparound-calibration', kind: 'empirical input',
+    agency: 'MACPAC',
+    datasetOrReport: 'MACStats Medicaid and CHIP Data Book',
+    publicationDate: '2026-02', relevantTable: 'Exhibits 6, 16 and 18',
+    url: 'https://www.macpac.gov/wp-content/uploads/2026/02/MACSTATS_Feb2026_WEB_508.pdf',
+    notes: 'Retained Medicaid uses FY2023 benefit expenditures by eligibility group and service. Count all disability eligibility spending, plus separately identified LTSS and Medicare premiums in the other groups without overlap. Apply the 90% expansion match and infer a regular match from the 64.7% FY2024 aggregate federal benefit share. Managed care may include unidentified LTSS. Apply the resulting federal Medicaid share to CBO standalone Medicaid, within the existing combined line.',
+  },
+  {
+    id: 'cbo-standalone-medicaid', kind: 'empirical input',
+    agency: 'Congressional Budget Office',
+    datasetOrReport: 'The Budget and Economic Outlook: 2026 to 2036',
+    publicationDate: '2026-02', relevantTable: 'Baseline projections of outlays',
+    url: 'https://www.cbo.gov/publication/62105/',
+    notes: 'Standalone Medicaid outlays calibrate the Medicaid portion of the combined Medicaid/CHIP/Marketplace line through 2036. The 2036 portion is held constant thereafter.',
+  },
+  {
     id: 'cms-part-b-beneficiary-premium-2026', kind: 'empirical input',
     agency: 'Centers for Medicare & Medicaid Services',
     datasetOrReport: '2026 Medicare Parts A and B Premiums and Deductibles',
@@ -30,7 +46,7 @@ export const sources: readonly SourceRecord[] = [
     datasetOrReport: 'Advantage for All benchmark and financing sensitivity',
     publicationDate: '2026-11-22', relevantTable: 'hypothetical average standardized bid and second-lowest reference',
     url: 'https://www.cms.gov/data-research/statistics-trends-and-reports/national-health-expenditure-data/projected',
-    notes: 'Under-65 2026 gross reference bids are built from the existing weighted Census HIPM 2024 ESI/nongroup second-lowest Silver prices, projected using the shared benchmark scale and CPI, adjusted from 70% Silver AV to an editable 90% default standardized benefit, and given an editable 1% real trend. Over-65 reference cost uses the existing CBO/2026 Medicare Trustees calibrated scheduled-current-law net federal Medicare per enrollee, plus $202.90/month of beneficiary Part B financing as a gross-up, then applies a shared gross-bid multiplier. The 0.96 second-lowest/average bidding factor and $70 billion rural supplement are UNVERIFIED exploratory assumptions, not measured universal bidding effects. The Medicare gross-up excludes some patient and supplemental payments; the HIPM under-65 population risk mix differs from the actual full U.S. population. Risk adjustment/reinsurance are assumed internal to all-in insurer bids, not an additional fiscal line. Federal Medicare and Medicaid/CHIP/Marketplace outlays are replaced; state Medicaid budget savings are not counted as federal receipts. Household premiums are matched only for ESI policyholders; universal prefunding reserves and state offsets are not modeled.',
+    notes: 'Under-65 2026 gross reference bids are built from the existing weighted Census HIPM 2024 ESI/nongroup second-lowest Silver prices, projected using the shared benchmark scale and CPI, adjusted from 70% Silver AV to an editable 90% default standardized benefit, and given an editable real trend. Over-65 reference cost uses the existing CBO/2026 Medicare Trustees calibrated scheduled-current-law net federal Medicare per enrollee, plus $202.90/month of beneficiary Part B financing as a gross-up, then applies a shared gross-bid multiplier. The 0.96 second-lowest/average bidding factor and $70 billion rural supplement are UNVERIFIED exploratory assumptions, not measured universal bidding effects. The Medicare gross-up excludes some patient and supplemental payments; the HIPM under-65 population risk mix differs from the actual full U.S. population. Risk adjustment/reinsurance are assumed internal to all-in insurer bids, not an additional fiscal line. Federal Medicare, CHIP and Marketplace coverage outlays are replaced. The default retains the estimated Medicaid wraparound; full replacement is selectable. State savings remain outside the federal ledger. Household premiums are matched only for ESI policyholders; universal prefunding reserves and state offsets are not modeled.',
   },
 
   {

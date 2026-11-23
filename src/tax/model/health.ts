@@ -31,6 +31,7 @@ export interface HealthPolicySettings {
   universalBidRealGrowth: number;
   /** Annual real growth in member contributions beyond CPI; independent of plan costs. */
   universalMemberPremiumRealGrowth: number;
+  universalMedicaidOffset: 'acuteOnly' | 'full';
   /** Supplemental federal payment for essential rural capacity; separate from the bid. */
   universalRuralSupportBillions2026: number;
   adultHealthCredit: number;
@@ -291,6 +292,7 @@ export const defaultHealthPolicySettings: HealthPolicySettings = {
   universalMemberPremiumMonthly2026: 202.90,
   universalBidRealGrowth: 0.018,
   universalMemberPremiumRealGrowth: 0,
+  universalMedicaidOffset: 'acuteOnly',
   universalRuralSupportBillions2026: 70,  adultHealthCredit: 3250,
   childHealthCredit: 750,
   uninsuredTakeUpRate: 0.15,
