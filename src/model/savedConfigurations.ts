@@ -89,7 +89,8 @@ export function parseConfiguration(json: string): SavedConfiguration {
       for (const key of [
         'pathway', 'universalBenchmark', 'universalBidMultiplier', 'universalTargetActuarialValue',
         'universalSecondLowestBidFactor', 'universalMemberPremiumMonthly2026',
-        'universalBidRealGrowth', 'universalRuralSupportBillions2026',
+        'universalBidRealGrowth', 'universalMemberPremiumRealGrowth',
+        'universalRuralSupportBillions2026',
       ] as const) {
         if (health[key] === undefined) health[key] = defaultHealthPolicySettings[key]
       }
@@ -166,7 +167,8 @@ export function parseConfiguration(json: string): SavedConfiguration {
   within(policy.health.universalTargetActuarialValue, 0.7, 1, 'standard plan actuarial value')
   within(policy.health.universalSecondLowestBidFactor, 0.5, 1, 'second-lowest bid factor')
   within(policy.health.universalMemberPremiumMonthly2026, 0, 10000, 'monthly member premium')
-  within(policy.health.universalBidRealGrowth, -0.03, 0.10, 'real health-plan bid growth')
+  within(policy.health.universalBidRealGrowth, -0.03, 0.10, 'all-age real healthcare cost growth')
+  within(policy.health.universalMemberPremiumRealGrowth, -0.03, 0.10, 'real member-premium growth')
   within(policy.health.universalRuralSupportBillions2026, 0, 500, 'rural capacity support')
   oneOf(policy.health.redistributionRule, ['nationalEqual', 'employerCellEqual', 'ownContribution'], 'redistribution')
   oneOf(policy.health.recipientScope, ['policyholders', 'coveredWorkers'], 'recipient scope')

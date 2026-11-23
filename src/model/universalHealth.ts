@@ -7,13 +7,15 @@ import type { HealthPolicySettings } from '../tax/model/health'
 /**
  * Universal private-plan pricing derived from the existing health engines:
  *   - under 65: ESI + nongroup Census HIPM Silver benchmark-per-covered-life;
- *   - 65+: CBO/Trustees-calibrated current-law Medicare net federal cost,
- *      grossed up by the published Part B beneficiary premium.
+ *   - 65+: 2026 CBO/Trustees-calibrated current-law Medicare net federal cost,
+ *      grossed up by the published Part B beneficiary premium ONCE at the anchor.
  *
- * HIPM Silver is roughly 70% actuarial value; the standard benefit defaults
- * to 90% AV, making the conversion an EXPLICIT scenario assumption. The
- * Medicare gross-up omits other patient payments and supplemental insurance.
- * This is a benchmark premium reference, not a prediction of universal bidding.
+ * From 2027, both age groups use the same CPI + real per-enrollee plan-cost
+ * growth. Population projections supply the changing under/over-65 weights.
+ * The senior anchor is treated as a 90%-AV-equivalent reference for AV scenario
+ * scaling, NOT a measured actuarial value for traditional Medicare.
+ * The Medicare gross-up omits other patient payments and supplemental insurance.
+ * Source prices are proxies, not predicted universal insurer bids.
  *
  * Competitive bids change the price of the reference benchmark, not underlying
  * health spending. Risk-adjustment/reinsurance transfers remain inside insurer
@@ -39,9 +41,9 @@ export interface UniversalHealthYear {
   seniorPopulationMillions: number
   /** Current HIPM market Silver reference, source year 2024, before AV adjustment. */
   sourceSilverAnnualPerPerson2024: number
-  /** Counterfactual 90%-AV risk-standardized nonelderly bid, in year dollars. */
+  /** Standardized nonelderly bid, in year dollars, using the selected AV. */
   nonelderlyGrossAnnualPerPerson: number
-  /** Medicare-derived senior gross annual plan-price proxy, in year dollars. */
+  /** 2026 Medicare-derived senior reference, then same all-age real growth. */
   seniorGrossAnnualPerPerson: number
   /** All-age population-weighted gross reference price, before bidding factor. */
   averageBidMonthly: number
@@ -60,7 +62,10 @@ export function universalHealthForYear(
   const source = under65Source()
   const elapsed = year - assumptions.reformYear
   const cpi = (1 + assumptions.inflation) ** elapsed
-  const nonelderlyGrowth = (1 + settings.universalBidRealGrowth) ** elapsed
+  // One plan-cost growth assumption for the entire population. Age mix is
+  // still modeled through annual enrollee population counts.
+  const realCostGrowth = (1 + settings.universalBidRealGrowth) ** elapsed
+  const memberPremiumGrowth = (1 + settings.universalMemberPremiumRealGrowth) ** elapsed
   const nonelderlyPopulationMillions = eligiblePopulationMillions(year, 0, assumptions) -
     eligiblePopulationMillions(year, 65, assumptions)
   const seniorPopulationMillions = eligiblePopulationMillions(year, 65, assumptions)
@@ -72,20 +77,28 @@ export function universalHealthForYear(
     Math.max(0, settings.benchmarkPremiumScale) * (1 + assumptions.inflation)
   const avFactor = settings.universalTargetActuarialValue / hipmSilverReferenceActuarialValue
   const nonelderlyGrossAnnualPerPerson = nonelderlySilver2026 * avFactor *
-    settings.universalBidMultiplier * cpi * nonelderlyGrowth
+    settings.universalBidMultiplier * cpi * realCostGrowth
 
-  // Medicare's existing calibrated cohort engine projects NET federal Medicare
-  // costs from CBO/Trustees. The 2026 Part B premium is added to approximate
-  // gross insured cost; it is independent of the selected NEW member premium.
-  const medicareNetSpendingBillions = medicareForYear(
-    year, assumptions, undefined, 'currentLaw',
+  // Current-law Medicare is an INITIAL-LEVEL CALIBRATION only; importing its
+  // projected spending here would silently impose a different growth curve on
+  // seniors than on younger universal-plan members.
+  const openingMedicareNetBillions = medicareForYear(
+    assumptions.reformYear, assumptions, undefined, 'currentLaw',
   ).legacyBillions
-  const medicareBeneficiariesMillions = medicareEligiblePopulationMillions(year, assumptions)
-  const seniorGrossAnnualPerPerson = (
-    (medicareBeneficiariesMillions > 0
-      ? medicareNetSpendingBillions * 1000 / medicareBeneficiariesMillions : 0)
-    + referencePartBMonthlyPremium2026 * 12 * cpi
-  ) * settings.universalBidMultiplier
+  const openingMedicareMembersMillions = medicareEligiblePopulationMillions(
+    assumptions.reformYear, assumptions,
+  )
+  const seniorGross2026 = (
+    (openingMedicareMembersMillions > 0
+      ? openingMedicareNetBillions * 1000 / openingMedicareMembersMillions : 0)
+    + referencePartBMonthlyPremium2026 * 12
+  )
+  // There is no observed traditional-Medicare AV comparable to HIPM Silver;
+  // the 90% standard is explicitly a sensitivity reference, not a claim that
+  // the original Medicare benefits are exactly 90% actuarial value.
+  const seniorAvSensitivity = settings.universalTargetActuarialValue / 0.90
+  const seniorGrossAnnualPerPerson = seniorGross2026 * seniorAvSensitivity *
+    settings.universalBidMultiplier * cpi * realCostGrowth
 
   const grossReferenceBillions = (
     nonelderlyPopulationMillions * nonelderlyGrossAnnualPerPerson +
@@ -98,11 +111,11 @@ export function universalHealthForYear(
     ? grossReferenceBillions * 1000 / (populationMillions * 12) : 0
   const benchmarkMonthly = averageBidMonthly * benchmarkFactor
   const memberPremiumMonthly = Math.min(
-    benchmarkMonthly, settings.universalMemberPremiumMonthly2026 * cpi,
+    benchmarkMonthly, settings.universalMemberPremiumMonthly2026 * cpi * memberPremiumGrowth,
   )
   const memberContributionsBillions = populationMillions * memberPremiumMonthly * 12 / 1000
   const publicBenchmarkBillions = grossBenchmarkBillions - memberContributionsBillions
-  const ruralSupportBillions = settings.universalRuralSupportBillions2026 * cpi * nonelderlyGrowth
+  const ruralSupportBillions = settings.universalRuralSupportBillions2026 * cpi * realCostGrowth
   return {
     year, populationMillions, nonelderlyPopulationMillions, seniorPopulationMillions,
     sourceSilverAnnualPerPerson2024: source.annualPremiumPerPerson,

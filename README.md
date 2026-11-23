@@ -40,6 +40,34 @@ The project is designed to answer a central fiscal question:
 - Year B: 2035 — all senior beneficiaries use premium-support payment rules
 - Expected community-rating, risk-adjustment, and reinsurance costs are included in the all-in premium-support amount
 
+### Advantage for All (universal private-plan premium support)
+
+- The under-65 2026 cost reference comes from HIPM Silver premiums, scaled from
+  70% AV to the chosen standardized benefit (90% default). The 65+ 2026
+  reference is calibrated from net Medicare spending plus the Part B premium,
+  with 90% treated as an explicit AV sensitivity reference rather than a
+  measured traditional-Medicare actuarial value.
+- **One real cost-per-enrollee growth assumption applies to all ages: 1.8% by
+  default**, in addition to CPI. Choose 1.0%, 1.8%, 2.5%, 3.0% or a custom rate.
+  Separate SSA cohort-population projections update the under-65 and 65+ shares;
+  changing the population's age mix changes total plan spending.
+- The initial $202.90/month **member premium** grows with CPI alone by default,
+  with a separately editable real growth rate (0% default). Premiums pay insurers
+  directly and reduce federal grants, but cannot exceed the selected bid benchmark.
+  This preserves the option to compare a fixed real premium with higher-premium
+  financing and its effects on public outlays.
+- The 2026 Medicare spending reference is **only an initial price anchor**.
+  Later CBO/Trustees spending projections remain the current-law comparator and
+  do not supply another growth curve to the reformed 65+ population. Medicare
+  reform inputs are inactive while Advantage for All is enabled and are restored
+  when switching to purchase credits. The bid multiplier, competitive benchmark
+  factor, AV sensitivity and member financing apply to both age groups.
+- The initial gross cost anchors are incomplete proxies, not a claims-based
+  specification of real MA benefits. Medicare's beneficiary out-of-pocket and
+  supplementary costs, Medicaid LTSS, and high-risk enrollee spending still
+  require separate calibration before interpreting these scenarios as actuarial
+  forecasts.
+
 ### Fiscal environment
 
 - Starting public debt: 101% of GDP
