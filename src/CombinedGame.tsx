@@ -455,7 +455,12 @@ export default function CombinedGame() {
         <small>Initial-benefit reform, retirement age, COLA index, dollar COLA cap, and total benefit cap are independent. Selecting the current-law initial formula therefore allows a COLA-only or retirement-age-only reform. The total annual benefit cap is expressed in 2026 dollars and rises with CPI. The percentile COLA option caps the dollar increase for higher-benefit recipients at the selected beneficiary percentile; it can be combined with chained CPI. PPI preserves current-law initial-benefit growth through the selected percentile and progressively slows growth above it. PPI uses the SSA 2025 retired-worker benefit distribution as a transparent proxy for AIME rank; it is not an SSA microdata score.</small>
       </section>
         <section className="game-card"><h2>Medicare</h2>{policy.taxEnabled && h.pathway==='advantageForAll'
-          ? <p>All-age Advantage for All replaces the separate senior Medicare policy. Senior Medicare support and prefunding settings are preserved if you switch back to purchase credits.</p>
+          ? <p>Advantage for All replaces the separate senior Medicare policy for every age.
+            The universal all-age real cost-per-enrollee growth and member-premium
+            growth controls are on the Tax / Health tab. Senior costs use only the
+            2026 Medicare benchmark; later Medicare Trustees/CBO projections are
+            retained for comparison with current law. These Medicare reform settings
+            are preserved if you switch back to purchase credits.</p>
           : <><Toggle label="Reform Medicare" checked={policy.benefits.medicareReform} onChange={v=>setBenefits({medicareReform:v})} /><fieldset disabled={!policy.benefits.medicareReform}>
           <Select label="Premium-support budget rule" value={a.medicareFundingMode} options={[{value:'gdpShare',label:'Fixed GDP share / eligible population'},{value:'perPerson',label:'Fixed real per-person path'}]} onChange={v=>setA({medicareFundingMode:v as ModelAssumptions['medicareFundingMode']})} />
           {a.medicareFundingMode === 'gdpShare' ? <>{numA('medicareSupportGDPShare','Senior support pool',100,0,15,.1,'% GDP', 'Federal contribution after beneficiary financing. Under-65 Medicare is separate. Population aging changes support per eligible senior.')}<p>2026 average federal support: ${Math.round(premiumSupportPerPersonNominal(2026,a)).toLocaleString()} per eligible senior. Income and wealth allocation rules remain unspecified; the model shows the average grant.</p></> : <>{numA('premiumSupport2026','Federal support / senior',1,0,60000,500,'$')}{numA('premiumSupportRealGrowth','Real support growth',100,-2,8,.1,'%')}</>}

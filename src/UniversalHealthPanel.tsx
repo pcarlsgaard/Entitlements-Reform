@@ -56,6 +56,9 @@ export default function UniversalHealthPanel({settings, onChange, opening, incre
     <Numeric label="Monthly member contribution · each resident, including children"
       value={settings.universalMemberPremiumMonthly2026} min={0} max={3000} step={0.1} suffix="$"
       onChange={universalMemberPremiumMonthly2026 => onChange({universalMemberPremiumMonthly2026})} />
+    <p>Plan costs for both age groups grow using one real cost-per-enrollee rule after 2026.
+      The number and age distribution of enrolled residents are projected separately.
+      Member contributions can grow at a different rate, changing the federal share.</p>
     <details className="game-more"><summary>Coverage, cost and competitive-bid assumptions</summary>
       <Numeric label="Standardized benefit actuarial value" value={settings.universalTargetActuarialValue*100}
         min={70} max={100} step={1} suffix="%"
@@ -66,9 +69,26 @@ export default function UniversalHealthPanel({settings, onChange, opening, incre
         min={50} max={100} suffix="%" onChange={n => onChange({universalSecondLowestBidFactor:n/100})}/>
       <Numeric label="HIPM 2024-to-2025 premium scaling" value={settings.benchmarkPremiumScale*100}
         min={0} max={300} suffix="%" onChange={n => onChange({benchmarkPremiumScale:n/100})}/>
-      <Numeric label="Under-65 annual real price growth" value={settings.universalBidRealGrowth*100}
+      <label className="game-field"><span>All-age cost-growth scenario</span>
+        <select value={[.01,.018,.025,.03].includes(settings.universalBidRealGrowth)
+          ? String(settings.universalBidRealGrowth) : 'custom'}
+          onChange={e => {if (e.target.value !== 'custom')
+            onChange({universalBidRealGrowth:Number(e.target.value)})}}>
+          <option value="0.01">Cost containment · 1.0% real</option>
+          <option value="0.018">Central · 1.8% real</option>
+          <option value="0.025">High growth · 2.5% real</option>
+          <option value="0.03">Adverse growth · 3.0% real</option>
+          <option value="custom" disabled>Custom rate below</option>
+        </select>
+      </label>
+      <Numeric label="Universal plan annual real cost growth · all ages, per enrollee"
+        value={Math.round(settings.universalBidRealGrowth*1000)/10}
         min={-3} max={10} step={0.1} suffix="%"
         onChange={n => onChange({universalBidRealGrowth:n/100})}/>
+      <Numeric label="Member contribution annual real growth · beyond CPI"
+        value={Math.round(settings.universalMemberPremiumRealGrowth*1000)/10}
+        min={-3} max={10} step={0.1} suffix="%"
+        onChange={n => onChange({universalMemberPremiumRealGrowth:n/100})}/>
       <Numeric label="Additional rural access support · 2026" value={settings.universalRuralSupportBillions2026}
         min={0} max={500} step={5} suffix="$B"
         onChange={universalRuralSupportBillions2026 => onChange({universalRuralSupportBillions2026})}/>
@@ -114,16 +134,21 @@ export default function UniversalHealthPanel({settings, onChange, opening, incre
       <div className="game-total"><dt>Additional federal healthcare spending net of replaced programs</dt>
         <dd>{billions(increment)}</dd></div>
     </dl>}
-    <small>Under-65 plan costs are computed from the app's existing Census HIPM
-      ESI and nongroup premium source and scaled from a roughly 70% Silver actuarial
-      value to the selected standardized benefit. Senior costs follow the existing
-      CBO/Medicare Trustees cohort projection, with a Part B premium gross-up.
-      They do not include every form of supplemental patient spending. The 4%
-      second-lowest bid advantage and rural support are modeling assumptions,
-      not estimated outcomes of a new auction. The default $202.90 contribution
-      equals the 2026 standard Part B premium; the contribution is paid to
-      insurers and earns no investment return in this PAYGO version. Current-law
-      state Medicaid spending is not counted as federal savings. The provisional
+    <small>2026 under-65 plan costs are computed from the app's Census HIPM
+      ESI and nongroup premium source and scaled from approximately 70% Silver AV
+      to the chosen benefit. The 2026 senior anchor uses CBO/Medicare Trustees
+      current-law net Medicare spending plus a Part B premium gross-up; its 90%-AV
+      normalization is an explicit sensitivity assumption, not a measured
+      traditional-Medicare actuarial value. Both anchors subsequently grow at the
+      selected single real per-enrollee rate plus CPI. Changes in the number of
+      younger and older enrollees still affect aggregate spending. Current-law
+      Medicare projections remain in the comparator only.
+      The 4% second-lowest bid advantage and rural support are model assumptions,
+      not observed savings. The default $202.90 member contribution is the 2026
+      standard Part B premium; by default it grows with CPI alone, but its separate
+      real growth control allows financing scenarios. It is paid to insurers,
+      not Treasury, and earns no investment return. State Medicaid spending is
+      not counted as federal savings. The provisional
       fiscal score assumes the new plan also displaces all existing federal
       Medicaid/CHIP/Marketplace outlays. Because HIPM premiums do not directly
       price Medicaid long-term services, and the nonelderly high-risk/disabled

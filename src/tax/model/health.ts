@@ -20,16 +20,20 @@ export interface HealthPolicySettings {
   universalBenchmark: UniversalBenchmark;
   /** Sensitivity multiplier on premium references derived from existing health cost engines. */
   universalBidMultiplier: number;
-  /** Standardized plan actuarial value; HIPM source Silver is approximately 70%. */
+  /** Standardized all-age benefit AV sensitivity; under-65 HIPM Silver starts at 70% AV.
+   * Senior Medicare-derived 2026 costs are normalized at the default 90% setting. */
   universalTargetActuarialValue: number;
   /** Relative reference price for a second-lowest bid versus mean bid. */
   universalSecondLowestBidFactor: number;
-  /** Per resident (including children) contribution, indexed by CPI; not government revenue. */
+  /** Initial 2026 per-resident member contribution (including children); paid to plans. */
   universalMemberPremiumMonthly2026: number;
-  /** Annual real increase in nonelderly benchmark prices; seniors follow CBO/Medicare Trustees. */
+  /** Annual real growth in standardized plan costs per enrollee for every age, beyond CPI. */
   universalBidRealGrowth: number;
+  /** Annual real growth in member contributions beyond CPI; independent of plan costs. */
+  universalMemberPremiumRealGrowth: number;
   /** Supplemental federal payment for essential rural capacity; separate from the bid. */
-  universalRuralSupportBillions2026: number;  adultHealthCredit: number;
+  universalRuralSupportBillions2026: number;
+  adultHealthCredit: number;
   childHealthCredit: number;
   uninsuredTakeUpRate: number;
   employerHealthPassThroughRate: number;
@@ -285,7 +289,8 @@ export const defaultHealthPolicySettings: HealthPolicySettings = {
   universalTargetActuarialValue: 0.90,
   universalSecondLowestBidFactor: 0.96,
   universalMemberPremiumMonthly2026: 202.90,
-  universalBidRealGrowth: 0.01,
+  universalBidRealGrowth: 0.018,
+  universalMemberPremiumRealGrowth: 0,
   universalRuralSupportBillions2026: 70,  adultHealthCredit: 3250,
   childHealthCredit: 750,
   uninsuredTakeUpRate: 0.15,

@@ -34,6 +34,46 @@ describe('Advantage for All alternative to health purchase credits', () => {
     expect(y.populationMillions).toBeGreaterThan(300)
   })
 
+  it('grows per-enrollee plan costs at the same default 1.8% real rate for both ages', () => {
+    expect(universal.health.universalBidRealGrowth).toBe(.018)
+    expect(universal.health.universalMemberPremiumRealGrowth).toBe(0)
+    const opening = universalHealthForYear(2026, base.assumptions, universal.health)
+    const later = universalHealthForYear(2036, base.assumptions, universal.health)
+    const nominalFactor = ((1 + base.assumptions.inflation) * 1.018) ** 10
+    expect(later.nonelderlyGrossAnnualPerPerson / opening.nonelderlyGrossAnnualPerPerson)
+      .toBeCloseTo(nominalFactor, 8)
+    expect(later.seniorGrossAnnualPerPerson / opening.seniorGrossAnnualPerPerson)
+      .toBeCloseTo(nominalFactor, 8)
+    expect(later.ruralSupportBillions / opening.ruralSupportBillions)
+      .toBeCloseTo(nominalFactor, 8)
+    expect(later.memberPremiumMonthly / opening.memberPremiumMonthly)
+      .toBeCloseTo((1 + base.assumptions.inflation) ** 10, 8)
+  })
+
+  it('applies all-age cost growth to both age groups without changing 2026 anchors', () => {
+    const slow = { ...universal.health, universalBidRealGrowth: .01 }
+    const fast = { ...universal.health, universalBidRealGrowth: .03 }
+    const initialSlow = universalHealthForYear(2026, base.assumptions, slow)
+    const initialFast = universalHealthForYear(2026, base.assumptions, fast)
+    expect(initialSlow.grossBenchmarkBillions).toBeCloseTo(initialFast.grossBenchmarkBillions, 8)
+    const laterSlow = universalHealthForYear(2046, base.assumptions, slow)
+    const laterFast = universalHealthForYear(2046, base.assumptions, fast)
+    expect(laterFast.nonelderlyGrossAnnualPerPerson).toBeGreaterThan(laterSlow.nonelderlyGrossAnnualPerPerson)
+    expect(laterFast.seniorGrossAnnualPerPerson).toBeGreaterThan(laterSlow.seniorGrossAnnualPerPerson)
+    expect(laterFast.grossBenchmarkBillions).toBeGreaterThan(laterSlow.grossBenchmarkBillions)
+    expect(laterFast.federalOutlayBillions).toBeGreaterThan(laterSlow.federalOutlayBillions)
+  })
+
+  it('indexes member contributions separately from all-age healthcare spending', () => {
+    const baseline = universalHealthForYear(2046, base.assumptions, universal.health)
+    const higherMember = universalHealthForYear(2046, base.assumptions,
+      { ...universal.health, universalMemberPremiumRealGrowth: .02 })
+    expect(higherMember.grossBenchmarkBillions).toBeCloseTo(baseline.grossBenchmarkBillions, 8)
+    expect(higherMember.memberPremiumMonthly).toBeGreaterThan(baseline.memberPremiumMonthly)
+    expect(higherMember.memberContributionsBillions).toBeGreaterThan(baseline.memberContributionsBillions)
+    expect(higherMember.federalOutlayBillions).toBeLessThan(baseline.federalOutlayBillions)
+  })
+
   it('replaces federal Medicare and Medicaid instead of stacking an extra credit', () => {
     const score = scoreCombined(universal)
     const y = score.combined.years[0]!
@@ -65,7 +105,9 @@ describe('Advantage for All alternative to health purchase credits', () => {
     const higherAV = universalHealthForYear(2026, base.assumptions,
       { ...universal.health, universalTargetActuarialValue: 0.95 })
     expect(higherAV.nonelderlyGrossAnnualPerPerson).toBeGreaterThan(low.nonelderlyGrossAnnualPerPerson)
-    expect(higherAV.seniorGrossAnnualPerPerson).toBeCloseTo(low.seniorGrossAnnualPerPerson, 8)
+    expect(higherAV.seniorGrossAnnualPerPerson).toBeGreaterThan(low.seniorGrossAnnualPerPerson)
+    expect(higherAV.seniorGrossAnnualPerPerson / low.seniorGrossAnnualPerPerson)
+      .toBeCloseTo(.95 / .90, 8)
     const higherMember = universalHealthForYear(2026, base.assumptions,
       { ...universal.health, universalMemberPremiumMonthly2026: 302.90 })
     expect(higherMember.grossBenchmarkBillions).toBeCloseTo(low.grossBenchmarkBillions, 8)
@@ -100,6 +142,25 @@ describe('Advantage for All alternative to health purchase credits', () => {
     }
   })
 
+  it('preserves explicitly saved pre-change premium growth while adding member growth', () => {
+    const payload = {
+      format: 'entitlements-reform-configuration', version: 1,
+      id: 'pre-growth-config', name: 'Universal old setting',
+      savedAt: '2026-11-22T00:00:00.000Z',
+      scenario: {
+        policy: { ...universal,
+          health: { ...universal.health, universalBidRealGrowth: .015 } },
+        householdProfiles: structuredClone(exampleHouseholds),
+        householdYear: 2026, householdSelectedId: exampleHouseholds[0]!.id,
+      },
+    }
+    delete (payload.scenario.policy.health as unknown as Record<string, unknown>)
+      .universalMemberPremiumRealGrowth
+    const parsed = parseConfiguration(JSON.stringify(payload))
+    expect(parsed.scenario.policy.health.universalBidRealGrowth).toBe(.015)
+    expect(parsed.scenario.policy.health.universalMemberPremiumRealGrowth).toBe(0)
+  })
+
   it('migrates previously saved policies to purchase credits rather than universal insurance', () => {
     const payload = {
       format: 'entitlements-reform-configuration',version: 1,
@@ -113,10 +174,13 @@ describe('Advantage for All alternative to health purchase credits', () => {
     for(const key of [
       'pathway', 'universalBenchmark', 'universalBidMultiplier', 'universalTargetActuarialValue',
       'universalSecondLowestBidFactor', 'universalMemberPremiumMonthly2026',
-      'universalBidRealGrowth', 'universalRuralSupportBillions2026',
+      'universalBidRealGrowth', 'universalMemberPremiumRealGrowth',
+      'universalRuralSupportBillions2026',
     ]) delete health[key]
     const parsed = parseConfiguration(JSON.stringify(payload))
     expect(parsed.scenario.policy.health.pathway).toBe('purchaseCredits')
     expect(parsed.scenario.policy.health.universalMemberPremiumMonthly2026).toBe(202.90)
+    expect(parsed.scenario.policy.health.universalBidRealGrowth).toBe(.018)
+    expect(parsed.scenario.policy.health.universalMemberPremiumRealGrowth).toBe(0)
   })
 })
